@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { LayoutDashboard, Gamepad2, Users, Monitor, ShoppingCart, Tag, FileText, Wrench, Settings, ChevronLeft, ChevronRight, Package } from 'lucide-react'
+import { LayoutDashboard, Gamepad2, Users, Monitor, ShoppingCart, Tag, FileText, Wrench, Settings, ChevronLeft, ChevronRight, Package, LogOut } from 'lucide-react'
+import { getAuthClient } from '../lib/supabase-auth'
+import { useRouter } from 'next/navigation'
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard' },
@@ -16,6 +18,13 @@ const navItems = [
 
 export default function Sidebar({ activePage, setActivePage, darkMode, collapsed, setCollapsed, orderNotificationCount }) {
   const [hoveredItem, setHoveredItem] = useState(null)
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    const supabase = getAuthClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   const bg = darkMode ? '#1e1e1e' : '#FDF4DC'
   const border = darkMode ? '#2e2e2e' : '#e8d9b8'
@@ -143,6 +152,26 @@ export default function Sidebar({ activePage, setActivePage, darkMode, collapsed
         >
           <Settings size={18} />
           {!collapsed && <span>Settings</span>}
+        </button>
+
+        <button
+          onClick={handleLogout}
+          onMouseEnter={() => setHoveredItem('logout')}
+          onMouseLeave={() => setHoveredItem(null)}
+          style={{
+            width: 'calc(100% - 16px)',
+            display: 'flex', alignItems: 'center', gap: '12px',
+            padding: collapsed ? '12px 0' : '11px 20px',
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            background: hoveredItem === 'logout' ? '#fee2e222' : 'transparent',
+            border: 'none', cursor: 'pointer',
+            color: hoveredItem === 'logout' ? '#dc2626' : mutedText,
+            fontSize: '14px', borderRadius: '8px',
+            margin: '2px 8px', transition: 'all 0.2s ease',
+          }}
+        >
+          <LogOut size={18} />
+          {!collapsed && <span>Logout</span>}
         </button>
 
         <button

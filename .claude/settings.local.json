@@ -27,7 +27,13 @@
       "PowerShell(Copy-Item \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\tools\\\\vault-scanner\\\\aio-tool-v0.2.exe\" \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\public\\\\aio-tool-v0.2.exe\")",
       "PowerShell(Copy-Item \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\tools\\\\vault-scanner\\\\aio-tool-v0.3.exe\" \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\public\\\\aio-tool-v0.3.exe\")",
       "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\app\\\\overview\\\\[id]\\\\page.js\" | Measure-Object -Line\\).Lines)",
-      "PowerShell($f = \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\app\\\\overview\\\\``[id``]\\\\page.js\"; \\(Get-Content $f | Measure-Object -Line\\).Lines)"
+      "PowerShell($f = \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\app\\\\overview\\\\``[id``]\\\\page.js\"; \\(Get-Content $f | Measure-Object -Line\\).Lines)",
+      "Bash(git config *)",
+      "PowerShell(cmdkey /delete:git:https://github.com)",
+      "Bash(git reset *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }

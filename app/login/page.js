@@ -1,0 +1,96 @@
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { getAuthClient } from '../lib/supabase-auth'
+
+export default function LoginPage() {
+  const [email, setEmail]       = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError]       = useState(null)
+  const [loading, setLoading]   = useState(false)
+  const router = useRouter()
+
+  const handleLogin = async e => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+    const supabase = getAuthClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setError('Invalid email or password.')
+      setLoading(false)
+    } else {
+      router.push('/')
+      router.refresh()
+    }
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: '#FDF4DC', fontFamily: 'Inter, sans-serif',
+    }}>
+      <div style={{
+        background: '#fff', border: '1px solid #e8d9b8', borderRadius: '16px',
+        padding: '40px 36px', width: '100%', maxWidth: '380px',
+        boxShadow: '0 4px 24px #7E655114',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{
+            width: '48px', height: '48px', borderRadius: '50%', background: '#7E6551',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px', color: '#FDF4DC', fontSize: '20px', fontWeight: '700',
+          }}>V</div>
+          <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#151515', margin: 0 }}>Vault Admin</h1>
+          <p style={{ fontSize: '13px', color: '#7E6551', marginTop: '6px' }}>Sign in to continue</p>
+        </div>
+
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: '#7E6551' }}>Email</label>
+            <input
+              type="email" value={email} onChange={e => setEmail(e.target.value)} required
+              placeholder="admin@example.com"
+              style={{
+                padding: '10px 12px', border: '1px solid #e8d9b8', borderRadius: '8px',
+                fontSize: '14px', outline: 'none', background: '#fff', color: '#151515',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: '#7E6551' }}>Password</label>
+            <input
+              type="password" value={password} onChange={e => setPassword(e.target.value)} required
+              placeholder="••••••••"
+              style={{
+                padding: '10px 12px', border: '1px solid #e8d9b8', borderRadius: '8px',
+                fontSize: '14px', outline: 'none', background: '#fff', color: '#151515',
+              }}
+            />
+          </div>
+
+          {error && (
+            <div style={{
+              background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '8px',
+              padding: '10px 12px', fontSize: '13px', color: '#dc2626',
+            }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit" disabled={loading}
+            style={{
+              padding: '11px', background: loading ? '#a08570' : '#7E6551', color: '#FDF4DC',
+              border: 'none', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer', marginTop: '4px',
+              transition: 'background 0.2s',
+            }}
+          >
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
