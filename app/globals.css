@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --cream: #FDF4DC;
+  --dark: #151515;
+  --brown: #7E6551;
+  --brown-light: #a08570;
+  --brown-dark: #5a4538;
+  --cream-dark: #f0e4c4;
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 70px;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--cream);
+  color: var(--dark);
+}
+
+.dark body {
+  background: var(--dark);
+  color: var(--cream);
+}
+
+/* ── Custom scrollbar — Safari-style, dark brown ───────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #7E655166 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #7E655155;
+  border-radius: 100px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.2s;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #7E6551cc;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

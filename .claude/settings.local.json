@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(mkdir -p \"c:/Users/Mooses/Desktop/vault-admin/app/api/lol-skins/[id]\")",
+      "Bash(mkdir -p \"c:/Users/Mooses/Desktop/vault-admin/app/preview/[id]\")",
+      "Bash(node -e ' *)",
+      "PowerShell(Get-ChildItem \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\app\\\\overview\\\\[id]\\\\page.js\", \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\app\\\\preview\\\\[id]\\\\page.js\", \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\tools\\\\vault-scanner\\\\index.js\" | Select-Object FullName, @{Name=\"Size\";Expression={$_.Length}})",
+      "PowerShell(head -20)",
+      "Bash(Copy-Item \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\tools\\\\vault-scanner\\\\aio-tool-v0.1.exe\" \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\public\\\\aio-tool-v0.1.exe\" -Force)",
+      "Bash(Write-Host \"Copied\")",
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\tools\\\\vault-scanner\\\\aio-tool-v0.1.exe\" \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\public\\\\aio-tool-v0.1.exe\" -Force)",
+      "Bash(curl -s -I \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-1.svg\")",
+      "Bash(curl -s \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-1.svg\")",
+      "Bash(curl -s -I \"https://raw.communitydragon.org/latest/game/assets/ux/mastery/legendarychampionmastery/\")",
+      "Bash(curl -s \"https://raw.communitydragon.org/latest/game/assets/ux/mastery/legendarychampionmastery/\")",
+      "Bash(curl -s -I \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-4.svg\")",
+      "Bash(curl -s -I \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-5.svg\")",
+      "Bash(curl -s -I \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-7.svg\")",
+      "Bash(curl -s \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-4.svg\")",
+      "Bash(curl -s \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-5.svg\")",
+      "Bash(curl -s \"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-shared-components/global/default/mastery-banner-7.svg\")",
+      "Bash(curl -s \"https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json\" -o temp_skins.json)",
+      "Bash(python -c ' *)",
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\tools\\\\vault-scanner\\\\aio-tool-v0.2.exe\" \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\public\\\\aio-tool-v0.2.exe\")",
+      "PowerShell(Copy-Item \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\tools\\\\vault-scanner\\\\aio-tool-v0.3.exe\" \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\public\\\\aio-tool-v0.3.exe\")",
+      "PowerShell(\\(Get-Content \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\app\\\\overview\\\\[id]\\\\page.js\" | Measure-Object -Line\\).Lines)",
+      "PowerShell($f = \"c:\\\\Users\\\\Mooses\\\\Desktop\\\\vault-admin\\\\app\\\\overview\\\\``[id``]\\\\page.js\"; \\(Get-Content $f | Measure-Object -Line\\).Lines)"
+    ]
+  }
+}
