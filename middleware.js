@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
-const PUBLIC_PREFIXES = ['/login', '/preview', '/overview', '/buy']
+const PUBLIC_PREFIXES = ['/login', '/preview', '/overview', '/buy', '/api/lol-skins', '/api/border-skins', '/api/lol-checker']
 
 export async function middleware(request) {
   const { pathname } = request.nextUrl
