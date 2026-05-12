@@ -306,6 +306,19 @@ body {
   white-space: nowrap; height: 22px;
 }
 
+.ov-mob-search-bar {
+  display: none; position: fixed; top: 86px; left: 0; right: 0; z-index: 998;
+  padding: 6px 12px; background: rgba(6,10,18,0.92);
+  border-bottom: 1px solid rgba(200,155,60,0.1);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.ov-mob-search-bar input {
+  width: 100%; background: rgba(0,0,0,0.4); border: 1px solid #7a5c29;
+  color: #c99c3e; font-family: 'Inter', sans-serif; font-size: 13px;
+  padding: 8px 12px; outline: none;
+}
+.ov-mob-search-bar input::placeholder { color: #6a6a6a; }
+
 @media (max-width: 640px) {
   .ov-titlebar { height: 56px; padding: 0 10px; }
   .ov-avatar-wrapper { width: 40px; height: 40px; }
@@ -315,7 +328,8 @@ body {
   .ov-summoner-sub, .ov-rank-row { display: none; }
   .ov-currency, .ov-badge, .ov-generated { display: none; }
   .ov-tab-bar { top: 56px; }
-  .ov-content { top: 86px; flex-direction: column; }
+  .ov-mob-search-bar { display: flex; }
+  .ov-content { top: 124px; flex-direction: column; }
   .ov-panel { width: 100%; padding: 0 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
   .ov-panel.mob-open { max-height: 50vh; overflow-y: auto; padding: 12px 16px 8px; }
   .ov-cp-bg { display: none; }
@@ -671,6 +685,11 @@ function OverviewPageInner() {
             {panelOpen ? 'Hide ▲' : 'Stats ▼'}
           </button>
         )}
+      </div>
+
+      {/* ── Mobile Search Bar ── */}
+      <div className="ov-mob-search-bar">
+        <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {/* ── Content ── */}

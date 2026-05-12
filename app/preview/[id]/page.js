@@ -345,6 +345,19 @@ body {
   white-space: nowrap; height: 22px;
 }
 
+.rv-mob-search-bar {
+  display: none; position: fixed; top: 86px; left: 0; right: 0; z-index: 998;
+  padding: 6px 12px; background: rgba(6,10,18,0.92);
+  border-bottom: 1px solid rgba(200,155,60,0.1);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.rv-mob-search-bar input {
+  width: 100%; background: rgba(0,0,0,0.4); border: 1px solid #7a5c29;
+  color: #c99c3e; font-family: 'Inter', sans-serif; font-size: 13px;
+  padding: 8px 12px; outline: none;
+}
+.rv-mob-search-bar input::placeholder { color: #6a6a6a; }
+
 @media (max-width: 640px) {
   .rv-titlebar { height: 56px; padding: 0 10px; }
   .rv-avatar-wrapper { width: 40px; height: 40px; }
@@ -354,7 +367,8 @@ body {
   .rv-summoner-sub, .rv-rank-row { display: none; }
   .rv-currency, .rv-badge, .rv-hide-btn { display: none; }
   .rv-tab-bar { top: 56px; }
-  .rv-content { top: 86px; flex-direction: column; }
+  .rv-mob-search-bar { display: flex; }
+  .rv-content { top: 124px; flex-direction: column; }
   .rv-panel { width: 100%; padding: 0 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
   .rv-panel.mob-open { max-height: 50vh; overflow-y: auto; padding: 12px 16px 8px; }
   .rv-cp-bg { display: none; }
@@ -907,6 +921,11 @@ export default function PreviewPage() {
             {panelOpen ? 'Hide ▲' : 'Stats ▼'}
           </button>
         )}
+      </div>
+
+      {/* ── Mobile Search Bar ── */}
+      <div className="rv-mob-search-bar">
+        <input placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {/* ── Content ── */}
