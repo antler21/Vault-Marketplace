@@ -336,6 +336,42 @@ body {
 .rv-modal-close:hover { color: #e8e0d0; }
 .rv-modal-splash { width: 100%; max-height: 280px; object-fit: cover; object-position: top center; display: block; }
 .rv-modal-info { padding: 13px 16px 18px; }
+
+.rv-mob-toggle {
+  display: none; align-items: center; margin-left: auto; flex-shrink: 0;
+  background: transparent; border: 1px solid rgba(200,155,60,0.3);
+  color: #c89b3c; font-family: 'Inter', sans-serif; font-size: 10px;
+  font-weight: 600; padding: 0 10px; cursor: pointer; letter-spacing: 0.05em;
+  white-space: nowrap; height: 22px;
+}
+
+@media (max-width: 640px) {
+  .rv-titlebar { height: 56px; padding: 0 10px; }
+  .rv-avatar-wrapper { width: 40px; height: 40px; }
+  .rv-level-outer { width: 34px; height: 16px; }
+  .rv-level-inner { width: 30px; height: 12px; font-size: 8px; }
+  .rv-summoner-name { font-size: 14px; }
+  .rv-summoner-sub, .rv-rank-row { display: none; }
+  .rv-currency, .rv-badge, .rv-hide-btn { display: none; }
+  .rv-tab-bar { top: 56px; }
+  .rv-content { top: 86px; flex-direction: column; }
+  .rv-panel { width: 100%; padding: 0 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .rv-panel.mob-open { max-height: 50vh; overflow-y: auto; padding: 12px 16px 8px; }
+  .rv-cp-bg { display: none; }
+  .rv-cp-content { padding: 0; }
+  .rv-stats-ring-wrap { padding: 4px 0; }
+  .rv-rarity-gems { padding: 4px 0 8px; }
+  .rv-mini-stats { padding: 8px 0 4px; }
+  .rv-main { flex: 1; overflow-y: auto; min-height: 0; }
+  .rv-skin-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px 14px; padding: 14px 12px; justify-content: start; }
+  .rv-item-grid { padding: 14px 12px; }
+  .rv-mastery-list, .rv-loot-section { padding: 14px 12px; }
+  .rv-overview { padding: 14px 12px; max-width: 100%; }
+  .rv-modal-backdrop { padding: 0; align-items: flex-end; }
+  .rv-modal { max-width: 100%; width: 100%; max-height: 90vh; border-radius: 12px 12px 0 0; }
+  .rv-modal-splash { max-height: 180px; }
+  .rv-mob-toggle { display: flex; }
+}
 `
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -466,6 +502,7 @@ export default function PreviewPage() {
   const [manualBorderIds, setManualBorderIds]     = useState([])
   const [disclaimerEnabled, setDisclaimerEnabled] = useState(true)
   const [disclaimerMsg, setDisclaimerMsg]         = useState('Border detection is ~95% accurate — some skins may have a border but not be marked.')
+  const [panelOpen, setPanelOpen] = useState(false)
   useEffect(() => {
     const DDRAGON = 'https://ddragon.leagueoflegends.com'
 
@@ -859,12 +896,17 @@ export default function PreviewPage() {
       <div className="rv-tab-bar">
         {TABS.map(t => (
           <button key={t.id} className={`rv-tab-item${tab === t.id ? ' active' : ''}`}
-            onClick={() => { setTab(t.id); setSearch('') }}>
+            onClick={() => { setTab(t.id); setSearch(''); setPanelOpen(false) }}>
             <span className="rv-tab-icon">{t.icon}</span>
             <span>{t.label}</span>
             {tabCount[t.id] > 0 && <span className="rv-tab-count">{tabCount[t.id]}</span>}
           </button>
         ))}
+        {tab !== 'OVERVIEW' && (
+          <button className="rv-mob-toggle" onClick={() => setPanelOpen(o => !o)}>
+            {panelOpen ? 'Hide ▲' : 'Stats ▼'}
+          </button>
+        )}
       </div>
 
       {/* ── Content ── */}
@@ -872,7 +914,7 @@ export default function PreviewPage() {
 
         {/* ── Left Panel (hidden on Overview tab) ── */}
         {tab !== 'OVERVIEW' && (
-          <aside className="rv-panel">
+          <aside className={`rv-panel${panelOpen ? ' mob-open' : ''}`}>
             <div className="rv-control-pane">
               <div className="rv-cp-bg">
                 <div className="rv-cp-top" />

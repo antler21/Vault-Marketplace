@@ -297,6 +297,42 @@ body {
 .ov-modal-close:hover { color: #e8e0d0; }
 .ov-modal-splash { width: 100%; max-height: 280px; object-fit: cover; object-position: top center; display: block; }
 .ov-modal-info { padding: 13px 16px 18px; }
+
+.ov-mob-toggle {
+  display: none; align-items: center; margin-left: auto; flex-shrink: 0;
+  background: transparent; border: 1px solid rgba(200,155,60,0.3);
+  color: #c89b3c; font-family: 'Inter', sans-serif; font-size: 10px;
+  font-weight: 600; padding: 0 10px; cursor: pointer; letter-spacing: 0.05em;
+  white-space: nowrap; height: 22px;
+}
+
+@media (max-width: 640px) {
+  .ov-titlebar { height: 56px; padding: 0 10px; }
+  .ov-avatar-wrapper { width: 40px; height: 40px; }
+  .ov-level-outer { width: 34px; height: 16px; }
+  .ov-level-inner { width: 30px; height: 12px; font-size: 8px; }
+  .ov-summoner-name { font-size: 14px; }
+  .ov-summoner-sub, .ov-rank-row { display: none; }
+  .ov-currency, .ov-badge, .ov-generated { display: none; }
+  .ov-tab-bar { top: 56px; }
+  .ov-content { top: 86px; flex-direction: column; }
+  .ov-panel { width: 100%; padding: 0 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+  .ov-panel.mob-open { max-height: 50vh; overflow-y: auto; padding: 12px 16px 8px; }
+  .ov-cp-bg { display: none; }
+  .ov-cp-content { padding: 0; }
+  .ov-stats-ring-wrap { padding: 4px 0; }
+  .ov-rarity-gems { padding: 4px 0 8px; }
+  .ov-mini-stats { padding: 8px 0 4px; }
+  .ov-main { flex: 1; overflow-y: auto; min-height: 0; }
+  .ov-skin-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px 14px; padding: 14px 12px; justify-content: start; }
+  .ov-item-grid { padding: 14px 12px; }
+  .ov-mastery-list, .ov-loot-section { padding: 14px 12px; }
+  .ov-overview { padding: 14px 12px; max-width: 100%; }
+  .ov-modal-backdrop { padding: 0; align-items: flex-end; }
+  .ov-modal { max-width: 100%; width: 100%; max-height: 90vh; border-radius: 12px 12px 0 0; }
+  .ov-modal-splash { max-height: 180px; }
+  .ov-mob-toggle { display: flex; }
+}
 `
 
 function SkinCard({ skin, champName, chromaCount, isVintage, onClick }) {
@@ -394,6 +430,7 @@ function OverviewPageInner() {
   const [manualBorderIds, setManualBorderIds]   = useState([])
   const [disclaimerEnabled, setDisclaimerEnabled] = useState(true)
   const [disclaimerMsg, setDisclaimerMsg]         = useState('Border detection is ~95% accurate — some skins may have a border but not be marked.')
+  const [panelOpen, setPanelOpen] = useState(false)
 
   useEffect(() => {
     const DDRAGON = 'https://ddragon.leagueoflegends.com'
@@ -623,12 +660,17 @@ function OverviewPageInner() {
       <div className="ov-tab-bar">
         {TABS.map(t => (
           <button key={t.id} className={`ov-tab-item${tab === t.id ? ' active' : ''}`}
-            onClick={() => { setTab(t.id); setSearch('') }}>
+            onClick={() => { setTab(t.id); setSearch(''); setPanelOpen(false) }}>
             <span className="ov-tab-icon">{t.icon}</span>
             <span>{t.label}</span>
             {tabCount[t.id] > 0 && <span className="ov-tab-count">{tabCount[t.id]}</span>}
           </button>
         ))}
+        {tab !== 'OVERVIEW' && tab !== 'DETAILS' && (
+          <button className="ov-mob-toggle" onClick={() => setPanelOpen(o => !o)}>
+            {panelOpen ? 'Hide ▲' : 'Stats ▼'}
+          </button>
+        )}
       </div>
 
       {/* ── Content ── */}
@@ -636,7 +678,7 @@ function OverviewPageInner() {
 
         {/* Left Panel */}
         {tab !== 'OVERVIEW' && tab !== 'DETAILS' && (
-          <aside className="ov-panel">
+          <aside className={`ov-panel${panelOpen ? ' mob-open' : ''}`}>
             <div className="ov-control-pane">
               <div className="ov-cp-bg">
                 <div className="ov-cp-top" /><div className="ov-cp-mid" /><div className="ov-cp-bot" />
