@@ -54,6 +54,13 @@ const GEM_SRC = {
   kRare: '/tier-icons/standard.png', kNoRarity: '/tier-icons/standard.png',
 }
 
+const REGION_DISPLAY = {
+  SG2: 'SEA', PH2: 'SEA', TH2: 'SEA', VN2: 'SEA', TW2: 'SEA', MY2: 'SEA', ID1: 'SEA',
+  NA1: 'NA', EUW1: 'EUW', EUNE1: 'EUNE', KR: 'KR', JP1: 'JP',
+  BR1: 'BR', LA1: 'LAN', LA2: 'LAS', OC1: 'OCE', TR1: 'TR', RU: 'RU',
+}
+const fmtRegion = r => r ? (REGION_DISPLAY[r.toUpperCase()] || r) : '—'
+
 const TABS = [
   { id: 'OVERVIEW',  label: 'Overview',   icon: '⬡' },
   { id: 'MASTERY',   label: 'Mastery',    icon: '★' },
@@ -381,8 +388,8 @@ body {
   .rv-item-grid { padding: 14px 12px; }
   .rv-mastery-list, .rv-loot-section { padding: 14px 12px; }
   .rv-overview { padding: 14px 12px; max-width: 100%; }
-  .rv-modal-backdrop { padding: 0; align-items: flex-end; }
-  .rv-modal { max-width: 100%; width: 100%; max-height: 90vh; border-radius: 12px 12px 0 0; }
+  .rv-modal-backdrop { padding: 12px; }
+  .rv-modal { max-width: 100%; width: 100%; max-height: 88vh; }
   .rv-modal-splash { max-height: 180px; }
   .rv-mob-toggle { display: flex; }
 }
@@ -1071,7 +1078,7 @@ export default function PreviewPage() {
                 </div>
                 <div className="rv-stat-card">
                   <div className="rv-stat-card-label">Server</div>
-                  <div className="rv-stat-card-value small">{scan.region || '—'}</div>
+                  <div className="rv-stat-card-value small">{fmtRegion(scan.region)}</div>
                 </div>
                 <div className="rv-stat-card">
                   <div className="rv-stat-card-label">Level</div>

@@ -51,6 +51,13 @@ const GEM_SRC = {
 }
 const RANK_COLORS = { CHALLENGER: '#f4c874', GRANDMASTER: '#f4c874', MASTER: '#c87db4', DIAMOND: '#6ec6e8', EMERALD: '#50c878', PLATINUM: '#4fc0a0', GOLD: '#d4a520', SILVER: '#b0b8c0', BRONZE: '#c07840', IRON: '#8a7a70' }
 
+const REGION_DISPLAY = {
+  SG2: 'SEA', PH2: 'SEA', TH2: 'SEA', VN2: 'SEA', TW2: 'SEA', MY2: 'SEA', ID1: 'SEA',
+  NA1: 'NA', EUW1: 'EUW', EUNE1: 'EUNE', KR: 'KR', JP1: 'JP',
+  BR1: 'BR', LA1: 'LAN', LA2: 'LAS', OC1: 'OCE', TR1: 'TR', RU: 'RU',
+}
+const fmtRegion = r => r ? (REGION_DISPLAY[r.toUpperCase()] || r) : '—'
+
 const TABS = [
   { id: 'OVERVIEW',  label: 'Overview',   icon: '⬡' },
   { id: 'DETAILS',   label: 'Details',    icon: '📋' },
@@ -342,8 +349,8 @@ body {
   .ov-item-grid { padding: 14px 12px; }
   .ov-mastery-list, .ov-loot-section { padding: 14px 12px; }
   .ov-overview { padding: 14px 12px; max-width: 100%; }
-  .ov-modal-backdrop { padding: 0; align-items: flex-end; }
-  .ov-modal { max-width: 100%; width: 100%; max-height: 90vh; border-radius: 12px 12px 0 0; }
+  .ov-modal-backdrop { padding: 12px; }
+  .ov-modal { max-width: 100%; width: 100%; max-height: 88vh; }
   .ov-modal-splash { max-height: 180px; }
   .ov-mob-toggle { display: flex; }
 }
@@ -632,7 +639,7 @@ function OverviewPageInner() {
               {scan.summoner_name || <span style={{ color: '#3c4a5c' }}>Hidden Account</span>}
               {scan.tag_line && <span className="ov-summoner-tag">#{scan.tag_line}</span>}
             </div>
-            <div className="ov-summoner-sub">{scan.region || 'Unknown Server'}</div>
+            <div className="ov-summoner-sub">{fmtRegion(scan.region)}</div>
             {ranks.length > 0 && (
               <div className="ov-rank-row">
                 {ranks.map(r => (
@@ -774,7 +781,7 @@ function OverviewPageInner() {
               <div className="ov-overview-section">Account</div>
               <div className="ov-overview-grid">
                 <div className="ov-stat-card"><div className="ov-stat-card-label">Name</div><div className="ov-stat-card-value small">{scan.summoner_name || '—'}{scan.tag_line && <span style={{ color: '#5b6a7e', fontSize: 12 }}> #{scan.tag_line}</span>}</div></div>
-                <div className="ov-stat-card"><div className="ov-stat-card-label">Server</div><div className="ov-stat-card-value small">{scan.region || '—'}</div></div>
+                <div className="ov-stat-card"><div className="ov-stat-card-label">Server</div><div className="ov-stat-card-value small">{fmtRegion(scan.region)}</div></div>
                 <div className="ov-stat-card"><div className="ov-stat-card-label">Level</div><div className="ov-stat-card-value">{scan.summoner_level ?? '—'}</div></div>
                 {soloRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Solo Rank</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.solo_rank] || '#e8e0d0' }}>{soloRank}</div></div>}
                 {flexRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Flex Rank</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_rank] || '#e8e0d0' }}>{flexRank}</div></div>}
