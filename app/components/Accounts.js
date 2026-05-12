@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Plus, X, Gamepad2, ArrowLeft, Pencil, Eye, AlertCircle, Star, Upload, Link, ChevronLeft, ChevronRight, Download, Flag, Settings, Check } from 'lucide-react'
 import { convertAmount } from '../lib/currency'
 import FieldEditor from './FieldEditor'
@@ -772,6 +772,99 @@ function GachaAccountsView({ games, gameConfigs, saveGameConfig, card, border, t
 }
 
 // ─── Config Modal (OUTSIDE main component to prevent remount) ────
+function renderTemplate(template, fields, separator) {
+  if (!template) return ''
+  const sep = separator || ' | '
+  const segments = template.split(sep)
+  const rendered = segments.map(seg => {
+    const vars = seg.match(/\{\{([^}]+)\}\}/g) || []
+    for (const v of vars) {
+      const key = v.slice(2, -2)
+      const val = fields[key]
+      if (val === undefined || val === null || val === '') return null
+    }
+    return seg.replace(/\{\{([^}]+)\}\}/g, (_, key) => fields[key] ?? '')
+  }).filter(s => s !== null && s.trim() !== '')
+  return rendered.join(sep)
+}
+
+function TitleMakerTab({ configData, setConfigData, border, text, muted, inputBg, sectionBg }) {
+  const titleRef = useRef(null)
+  const descRef = useRef(null)
+  const [titleVar, setTitleVar] = useState('')
+  const [descVar, setDescVar] = useState('')
+
+  const allVars = [
+    ...(configData.customFields || []).map(f => ({ label: f.label, value: `{{${f.id}}}` })),
+    { label: 'Preview Link', value: '{{preview}}' },
+  ]
+
+  const insertAt = (ref, varVal, field) => {
+    const el = ref.current
+    if (!el || !varVal) return
+    const start = el.selectionStart ?? el.value.length
+    const end = el.selectionEnd ?? start
+    const cur = configData[field] || ''
+    const next = cur.slice(0, start) + varVal + cur.slice(end)
+    setConfigData(prev => ({ ...prev, [field]: next }))
+    setTimeout(() => { el.focus(); el.setSelectionRange(start + varVal.length, start + varVal.length) }, 0)
+  }
+
+  const sep = configData.titleSeparator ?? ' | '
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div>
+        <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Segment Separator</label>
+        <input value={sep} onChange={e => setConfigData(prev => ({ ...prev, titleSeparator: e.target.value }))}
+          placeholder=" | "
+          style={{ width: '160px', padding: '8px 10px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none' }} />
+        <div style={{ fontSize: '11px', color: muted, marginTop: '4px' }}>Segments split by this separator — if a variable in a segment is missing, the whole segment is dropped.</div>
+      </div>
+
+      <div>
+        <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Title Template</label>
+        <textarea ref={titleRef} value={configData.titleTemplate || ''} onChange={e => setConfigData(prev => ({ ...prev, titleTemplate: e.target.value }))}
+          placeholder={`e.g. [{{server}}]${sep}Lvl {{level}}${sep}{{rank}}`} rows={2}
+          style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none', resize: 'vertical', fontFamily: 'monospace' }} />
+        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+          <select value={titleVar} onChange={e => setTitleVar(e.target.value)}
+            style={{ flex: 1, padding: '6px 10px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '12px', outline: 'none' }}>
+            <option value=''>— pick a field —</option>
+            {allVars.map(v => <option key={v.value} value={v.value}>{v.label} → {v.value}</option>)}
+          </select>
+          <button onClick={() => { insertAt(titleRef, titleVar, 'titleTemplate'); setTitleVar('') }}
+            style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: '#7E6551', color: '#FDF4DC', fontSize: '12px', cursor: 'pointer' }}>+ Insert</button>
+        </div>
+      </div>
+
+      <div>
+        <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Description Template</label>
+        <textarea ref={descRef} value={configData.descriptionTemplate || ''} onChange={e => setConfigData(prev => ({ ...prev, descriptionTemplate: e.target.value }))}
+          placeholder={`e.g. Server: {{server}}${sep}Rank: {{rank}}${sep}Skins: {{total_skins}}`} rows={4}
+          style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none', resize: 'vertical', fontFamily: 'monospace' }} />
+        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+          <select value={descVar} onChange={e => setDescVar(e.target.value)}
+            style={{ flex: 1, padding: '6px 10px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '12px', outline: 'none' }}>
+            <option value=''>— pick a field —</option>
+            {allVars.map(v => <option key={v.value} value={v.value}>{v.label} → {v.value}</option>)}
+          </select>
+          <button onClick={() => { insertAt(descRef, descVar, 'descriptionTemplate'); setDescVar('') }}
+            style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', background: '#7E6551', color: '#FDF4DC', fontSize: '12px', cursor: 'pointer' }}>+ Insert</button>
+        </div>
+      </div>
+
+      {(configData.titleTemplate || configData.descriptionTemplate) && (
+        <div style={{ padding: '12px', background: sectionBg, borderRadius: '8px', border: `1px solid ${border}` }}>
+          <div style={{ fontSize: '11px', color: muted, marginBottom: '6px', fontWeight: '600' }}>PREVIEW (sample values)</div>
+          {configData.titleTemplate && <div style={{ fontSize: '13px', color: text, marginBottom: '4px' }}><span style={{ color: muted, fontSize: '11px' }}>Title: </span>{renderTemplate(configData.titleTemplate, Object.fromEntries((configData.customFields || []).map(f => [f.id, `[${f.label}]`])), sep) || <span style={{ color: muted, fontStyle: 'italic' }}>—</span>}</div>}
+          {configData.descriptionTemplate && <div style={{ fontSize: '13px', color: text }}><span style={{ color: muted, fontSize: '11px' }}>Desc: </span>{renderTemplate(configData.descriptionTemplate, Object.fromEntries((configData.customFields || []).map(f => [f.id, `[${f.label}]`])), sep) || <span style={{ color: muted, fontStyle: 'italic' }}>—</span>}</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ConfigModal({ card, border, text, muted, bg, inputBg, sectionBg, configTab, setConfigTab, configData, setConfigData, configuringGame, onSave, onClose }) {
   const toggleSummaryField = (id) => {
     setConfigData(prev => {
@@ -791,7 +884,7 @@ function ConfigModal({ card, border, text, muted, bg, inputBg, sectionBg, config
             <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: muted }}><X size={18} /></button>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
-            {[{ key: 'fields', label: 'Custom Fields' }, { key: 'summary', label: 'Summary Fields' }, { key: 'script', label: 'Script' }].map(tab => (
+            {[{ key: 'fields', label: 'Custom Fields' }, { key: 'summary', label: 'Summary Fields' }, { key: 'titles', label: 'Title / Description' }].map(tab => (
               <button key={tab.key} onClick={() => setConfigTab(tab.key)}
                 style={{ padding: '6px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '13px', background: configTab === tab.key ? '#7E6551' : sectionBg, color: configTab === tab.key ? '#FDF4DC' : muted, fontWeight: configTab === tab.key ? '500' : '400' }}>
                 {tab.label}
@@ -838,13 +931,8 @@ function ConfigModal({ card, border, text, muted, bg, inputBg, sectionBg, config
             </div>
           )}
 
-          {configTab === 'script' && (
-            <div>
-              <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Script URL</label>
-              <input value={configData.scriptUrl} onChange={e => setConfigData(prev => ({ ...prev, scriptUrl: e.target.value }))} placeholder="e.g. http://localhost:7432/lol/data"
-                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none' }} />
-              <div style={{ fontSize: '11px', color: muted, marginTop: '6px' }}>URL of the local script used when posting this game.</div>
-            </div>
+          {configTab === 'titles' && (
+            <TitleMakerTab configData={configData} setConfigData={setConfigData} border={border} text={text} muted={muted} inputBg={inputBg} sectionBg={sectionBg} />
           )}
         </div>
 
@@ -867,6 +955,31 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
     : platforms
   const customFields = gameConfig?.customFields || []
   const [uploadErrors, setUploadErrors] = useState({})
+  const [titleAutoFill, setTitleAutoFill] = useState(true)
+  const [descAutoFill, setDescAutoFill] = useState(true)
+
+  const titleTemplate = gameConfig?.titleTemplate || ''
+  const descTemplate = gameConfig?.descriptionTemplate || ''
+  const titleSeparator = gameConfig?.titleSeparator ?? ' | '
+
+  const fieldsJson = JSON.stringify(newAccount.fields)
+  useEffect(() => {
+    if (!titleAutoFill || !titleTemplate) return
+    const f = newAccount.fields || {}
+    const fields = { ...f, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
+    const rendered = renderTemplate(titleTemplate, fields, titleSeparator)
+    setNewAccount(prev => prev.title === rendered ? prev : { ...prev, title: rendered })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [titleAutoFill, titleTemplate, titleSeparator, fieldsJson])
+
+  useEffect(() => {
+    if (!descAutoFill || !descTemplate) return
+    const f = newAccount.fields || {}
+    const fields = { ...f, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
+    const rendered = renderTemplate(descTemplate, fields, titleSeparator)
+    setNewAccount(prev => prev.description === rendered ? prev : { ...prev, description: rendered })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descAutoFill, descTemplate, titleSeparator, fieldsJson])
 
   const scanId = newAccount.fields?._scanId || null
   const [scanShare, setScanShare] = useState({ expiresAt: null, hideName: false, loading: false, expiryOpt: 'never' })
@@ -991,11 +1104,34 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
 
           {/* Title */}
           <div>
-            <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>
-              Title <span style={{ fontSize: '10px', background: '#7E655122', color: '#7E6551', padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>used for order matching</span>
-            </label>
-            <input value={newAccount.title || ''} onChange={e => setNewAccount(prev => ({ ...prev, title: e.target.value }))} placeholder="e.g. [NA] Diamond II Account"
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', color: muted }}>
+                Title <span style={{ fontSize: '10px', background: '#7E655122', color: '#7E6551', padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>used for order matching</span>
+              </label>
+              {titleTemplate && (
+                <button type="button" onClick={() => setTitleAutoFill(v => !v)}
+                  style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: `1px solid ${titleAutoFill ? '#7E6551' : border}`, background: titleAutoFill ? '#7E655122' : 'transparent', color: titleAutoFill ? '#7E6551' : muted, cursor: 'pointer' }}>
+                  {titleAutoFill ? '⚡ Auto' : '✎ Manual'}
+                </button>
+              )}
+            </div>
+            <input value={newAccount.title || ''} onChange={e => { setTitleAutoFill(false); setNewAccount(prev => ({ ...prev, title: e.target.value })) }} placeholder="e.g. [NA] Diamond II Account"
               style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '14px', outline: 'none' }} />
+          </div>
+
+          {/* Description */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <label style={{ fontSize: '12px', color: muted }}>Description</label>
+              {descTemplate && (
+                <button type="button" onClick={() => setDescAutoFill(v => !v)}
+                  style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '10px', border: `1px solid ${descAutoFill ? '#7E6551' : border}`, background: descAutoFill ? '#7E655122' : 'transparent', color: descAutoFill ? '#7E6551' : muted, cursor: 'pointer' }}>
+                  {descAutoFill ? '⚡ Auto' : '✎ Manual'}
+                </button>
+              )}
+            </div>
+            <textarea value={newAccount.description || ''} onChange={e => { setDescAutoFill(false); setNewAccount(prev => ({ ...prev, description: e.target.value })) }} placeholder="Account description…" rows={4}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '14px', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
 
           {/* Preview Link (if created from scan) */}
@@ -1004,11 +1140,11 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <span style={{ fontSize: '12px', color: muted, fontWeight: '500' }}>Preview Link</span>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <a href={`/preview/${scanId}`} target="_blank" rel="noreferrer"
+                  <a href={`/preview/lol/${scanId}`} target="_blank" rel="noreferrer"
                     style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>
                     Open ↗
                   </a>
-                  <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/preview/${scanId}`)}
+                  <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/preview/lol/${scanId}`)}
                     style={{ fontSize: '11px', color: muted, background: 'transparent', border: `1px solid ${border}`, borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>
                     Copy
                   </button>
@@ -1233,7 +1369,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const [infoModal, setInfoModal]                             = useState(null) // 'oge' | 'ogi' | null
   const [editingAccount, setEditingAccount] = useState(null)
   const [saving, setSaving] = useState(false)
-  const [newAccount, setNewAccount] = useState({ title: '', status: 'Available', fields: {}, images: [], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
+  const [newAccount, setNewAccount] = useState({ title: '', description: '', status: 'Available', fields: {}, images: [], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
   const [mainImageIndex, setMainImageIndex] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(0)
@@ -1290,6 +1426,9 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       customFields: existing.customFields || [],
       summaryFields: existing.summaryFields || [],
       scriptUrl: existing.scriptUrl || '',
+      titleTemplate: existing.titleTemplate || '',
+      descriptionTemplate: existing.descriptionTemplate || '',
+      titleSeparator: existing.titleSeparator ?? ' | ',
     })
     setConfigTab('fields')
     setShowConfigModal(true)
@@ -1301,6 +1440,9 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       customFields: configData.customFields,
       summaryFields: configData.summaryFields,
       scriptUrl: configData.scriptUrl,
+      titleTemplate: configData.titleTemplate || '',
+      descriptionTemplate: configData.descriptionTemplate || '',
+      titleSeparator: configData.titleSeparator ?? ' | ',
     })
     setShowConfigModal(false)
     setConfiguringGame(null)
@@ -1571,14 +1713,14 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
 
   const handleOpenAdd = (prefillFields = {}) => {
     setEditingAccount(null)
-    setNewAccount({ title: '', status: 'Available', fields: prefillFields, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
+    setNewAccount({ title: '', description: '', status: 'Available', fields: prefillFields, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
     setShowModal(true)
   }
 
   const handleOpenEdit = (account) => {
     setEditingAccount(account.id)
     setNewAccount({
-      title: account.title || '', status: account.status, fields: { ...account.fields },
+      title: account.title || '', description: account.description || '', status: account.status, fields: { ...account.fields },
       images: account.images && account.images.length > 0 ? [...account.images] : [{ id: uid(), url: '', mode: 'url' }],
       thumbnailIndex: account.thumbnailIndex || 0, boughtFor: account.boughtFor || 0, soldFor: account.soldFor || 0,
       boughtForCurrency: account.boughtForCurrency || 'USD', soldForCurrency: account.soldForCurrency || 'USD',
@@ -1596,7 +1738,8 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       const saveCustomFields = saveConfig.customFields || []
       const cleanFields = stripHiddenConditionalValues(saveCustomFields, newAccount.fields)
       const payload = {
-        gameId: selectedGame.id, title: newAccount.title || '', status: newAccount.status,
+        gameId: selectedGame.id, title: newAccount.title || '', description: newAccount.description || '',
+        status: newAccount.status,
         fields: cleanFields, images: cleanImages, thumbnailIndex: newAccount.thumbnailIndex,
         boughtFor: newAccount.boughtFor || 0, soldFor,
         boughtForCurrency: newAccount.boughtForCurrency || 'USD', soldForCurrency: newAccount.soldForCurrency || 'USD',
@@ -1818,6 +1961,9 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                 <span style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '20px', background: STATUS_COLORS[selectedAccount.status]?.bg, color: STATUS_COLORS[selectedAccount.status]?.color, fontWeight: '500' }}>{selectedAccount.status}</span>
               </div>
               <div style={{ fontSize: '11px', color: muted }}>Added {selectedAccount.createdAt}</div>
+              {selectedAccount.description && (
+                <div style={{ marginTop: '8px', fontSize: '13px', color: text, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selectedAccount.description}</div>
+              )}
             </div>
             <div className="themed-scroll" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '4px' }}>
@@ -1847,6 +1993,30 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                   <div style={{ fontSize: '14px', fontWeight: '500', color: text }}>{field.type === 'Checkbox' ? (selectedAccount.fields[field.id] === 'true' ? '✓ Yes' : '✗ No') : (selectedAccount.fields[field.id] || '—')}</div>
                 </div>
               ))}
+              {selectedAccount.fields?._scanId && (
+                <>
+                  <div style={{ padding: '10px 12px', background: bg, borderRadius: '8px', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', color: muted }}>Preview Link</span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <a href={`/preview/lol/${selectedAccount.fields._scanId}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>Open ↗</a>
+                      <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/preview/lol/${selectedAccount.fields._scanId}`)}
+                        style={{ fontSize: '11px', color: muted, background: 'transparent', border: `1px solid ${border}`, borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>Copy</button>
+                    </div>
+                  </div>
+                  {selectedAccount.fields?._scanOwnerToken && (
+                    <div style={{ padding: '10px 12px', background: bg, borderRadius: '8px', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '11px', color: muted }}>Owner Link</span>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <a href={`/overview/lol/${selectedAccount.fields._scanId}?token=${selectedAccount.fields._scanOwnerToken}`} target="_blank" rel="noreferrer"
+                          style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>Open ↗</a>
+                        <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/overview/lol/${selectedAccount.fields._scanId}?token=${selectedAccount.fields._scanOwnerToken}`)}
+                          style={{ fontSize: '11px', color: muted, background: 'transparent', border: `1px solid ${border}`, borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>Copy</button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div style={{ padding: '14px 20px', borderTop: `1px solid ${border}`, display: 'flex', gap: '8px', flexShrink: 0 }}>
               <button onClick={() => handleOpenEdit(selectedAccount)} style={{ flex: 1, padding: '10px', background: '#7E655122', color: '#7E6551', border: `1px solid #7E655144`, borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
@@ -2265,14 +2435,14 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                           <>
                             <div style={{ padding: '10px 12px', background: '#7E655111', border: '1px solid #7E655133', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                               <span style={{ fontSize: '12px', color: muted }}>Preview</span>
-                              <a href={`/preview/${scanPreviewId}`} target="_blank" rel="noreferrer"
+                              <a href={`/preview/lol/${scanPreviewId}`} target="_blank" rel="noreferrer"
                                 style={{ fontSize: '12px', color: '#7E6551', fontWeight: '600', textDecoration: 'none' }}>
                                 Open ↗
                               </a>
                             </div>
                             <div style={{ padding: '10px 12px', background: '#7E655111', border: '1px solid #7E655133', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                               <span style={{ fontSize: '12px', color: muted }}>Owner Link</span>
-                              <a href={`/overview/${scanPreviewId}?token=${scanOwnerToken}`} target="_blank" rel="noreferrer"
+                              <a href={`/overview/lol/${scanPreviewId}?token=${scanOwnerToken}`} target="_blank" rel="noreferrer"
                                 style={{ fontSize: '12px', color: '#7E6551', fontWeight: '600', textDecoration: 'none' }}>
                                 Open ↗
                               </a>
@@ -2389,14 +2559,14 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                             <button onClick={() => {
                               const prefill = checkerData || {}
                               setShowAddChoice(false); setCheckerStep(0)
-                              handleOpenAdd({ ...prefill, _scanId: scanPreviewId })
+                              handleOpenAdd({ ...prefill, _scanId: scanPreviewId, _scanOwnerToken: scanOwnerToken })
                             }} style={{ flex: 2, padding: '11px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
                               ✓ Create Account
                             </button>
                             <button onClick={() => {
                               const prefill = checkerData || {}
                               setShowAddChoice(false); setCheckerStep(0)
-                              handleOpenAdd({ ...prefill, _scanId: scanPreviewId })
+                              handleOpenAdd({ ...prefill, _scanId: scanPreviewId, _scanOwnerToken: scanOwnerToken })
                             }} style={{ flex: 1, padding: '11px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', cursor: 'pointer' }}>
                               Edit Manually
                             </button>
