@@ -436,6 +436,74 @@ function GroupHeader({ name, count, total, complete, iconUrl }) {
   )
 }
 
+function LastMatchCard({ lastMatchFmt, isOwner, onEdit, saving, champMap }) {
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ champName: '', kills: '', deaths: '', assists: '', win: true, queue: '', date: '' })
+
+  const startEdit = () => {
+    setForm(lastMatchFmt
+      ? { champName: lastMatchFmt.champName || '', kills: String(lastMatchFmt.kda.split('/')[0]), deaths: String(lastMatchFmt.kda.split('/')[1]), assists: String(lastMatchFmt.kda.split('/')[2]), win: lastMatchFmt.result === 'WIN', queue: lastMatchFmt.queue, date: lastMatchFmt.date || '' }
+      : { champName: '', kills: '', deaths: '', assists: '', win: true, queue: '', date: '' })
+    setEditing(true)
+  }
+
+  const handleSave = async () => {
+    await onEdit({ championId: null, kills: parseInt(form.kills) || 0, deaths: parseInt(form.deaths) || 0, assists: parseInt(form.assists) || 0, win: form.win, queueLabel: form.queue, gameDate: form.date || null, edited: true, _champName: form.champName })
+    setEditing(false)
+  }
+
+  const cardStyle = { padding: '14px 16px', background: '#111b2a', border: '1px solid rgba(200,155,60,0.12)', borderRadius: 6, marginBottom: 8, fontFamily: 'Inter, sans-serif' }
+  const labelStyle = { fontSize: 10, color: '#3c4a5c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }
+  const inputStyle = { padding: '6px 10px', background: '#0d1520', border: '1px solid #2a3a4a', borderRadius: 4, color: '#e8e0d0', fontSize: 12, outline: 'none', width: '100%', boxSizing: 'border-box' }
+
+  if (editing) return (
+    <div style={cardStyle}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+        <div><div style={labelStyle}>Champion</div><input style={inputStyle} value={form.champName} onChange={e => setForm(p => ({ ...p, champName: e.target.value }))} placeholder="e.g. Ahri" /></div>
+        <div><div style={labelStyle}>Queue</div><input style={inputStyle} value={form.queue} onChange={e => setForm(p => ({ ...p, queue: e.target.value }))} placeholder="e.g. Ranked Solo" /></div>
+        <div><div style={labelStyle}>KDA (K / D / A)</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {['kills','deaths','assists'].map(k => <input key={k} style={{ ...inputStyle, width: 48, textAlign: 'center' }} value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} placeholder="0" />)}
+          </div>
+        </div>
+        <div><div style={labelStyle}>Result</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+            <button onClick={() => setForm(p => ({ ...p, win: true }))} style={{ flex: 1, padding: '5px 0', border: form.win ? '1px solid #4caf50' : '1px solid #2a3a4a', background: form.win ? '#4caf5022' : 'transparent', color: form.win ? '#4caf50' : '#5b6a7e', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}>WIN</button>
+            <button onClick={() => setForm(p => ({ ...p, win: false }))} style={{ flex: 1, padding: '5px 0', border: !form.win ? '1px solid #e05252' : '1px solid #2a3a4a', background: !form.win ? '#e0525222' : 'transparent', color: !form.win ? '#e05252' : '#5b6a7e', borderRadius: 4, cursor: 'pointer', fontSize: 11 }}>LOSS</button>
+          </div>
+        </div>
+        <div><div style={labelStyle}>Date</div><input style={inputStyle} type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} /></div>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={handleSave} disabled={saving} style={{ flex: 1, padding: '7px 0', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>{saving ? 'Saving…' : 'Save'}</button>
+        <button onClick={() => setEditing(false)} style={{ flex: 1, padding: '7px 0', background: 'transparent', color: '#5b6a7e', border: '1px solid #2a3a4a', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+      </div>
+    </div>
+  )
+
+  if (!lastMatchFmt) return (
+    <div style={{ ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <span style={{ fontSize: 13, color: '#3c4a5c', fontStyle: 'italic' }}>No match in the last 30 days</span>
+      {isOwner && <button onClick={startEdit} style={{ padding: '4px 10px', background: 'transparent', border: '1px solid #2a3a4a', color: '#5b6a7e', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>Edit</button>}
+    </div>
+  )
+
+  const resultColor = lastMatchFmt.result === 'WIN' ? '#4caf50' : '#e05252'
+  return (
+    <div style={{ ...cardStyle, display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ flex: 1, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div><div style={labelStyle}>Champion</div><div style={{ fontSize: 13, color: '#e8e0d0' }}>{lastMatchFmt.champName || '—'}</div></div>
+        <div><div style={labelStyle}>KDA</div><div style={{ fontSize: 13, color: '#e8e0d0' }}>{lastMatchFmt.kda}</div></div>
+        <div><div style={labelStyle}>Result</div><div style={{ fontSize: 13, fontWeight: 600, color: resultColor }}>{lastMatchFmt.result}</div></div>
+        <div><div style={labelStyle}>Mode</div><div style={{ fontSize: 13, color: '#e8e0d0' }}>{lastMatchFmt.queue}</div></div>
+        {lastMatchFmt.date && <div><div style={labelStyle}>Date</div><div style={{ fontSize: 13, color: '#7b8a9e' }}>{lastMatchFmt.date}</div></div>}
+        {lastMatchFmt.edited && <span style={{ fontSize: 10, color: '#5b6a7e', padding: '2px 6px', border: '1px solid #2a3a4a', borderRadius: 10 }}>edited</span>}
+      </div>
+      {isOwner && <button onClick={startEdit} style={{ padding: '4px 10px', background: 'transparent', border: '1px solid #2a3a4a', color: '#5b6a7e', borderRadius: 4, fontSize: 11, cursor: 'pointer', flexShrink: 0 }}>Edit</button>}
+    </div>
+  )
+}
+
 function OverviewPageInner() {
   const { id } = useParams()
   const searchParams = useSearchParams()
@@ -452,6 +520,9 @@ function OverviewPageInner() {
   const [disclaimerEnabled, setDisclaimerEnabled] = useState(true)
   const [disclaimerMsg, setDisclaimerMsg]         = useState('Border detection is ~95% accurate — some skins may have a border but not be marked.')
   const [panelOpen, setPanelOpen] = useState(false)
+  const [lastMatchEdit, setLastMatchEdit] = useState(null)
+  const [lastMatchSaving, setLastMatchSaving] = useState(false)
+  const isOwner = !!token
 
   useEffect(() => {
     const DDRAGON = 'https://ddragon.leagueoflegends.com'
@@ -573,7 +644,29 @@ function OverviewPageInner() {
   const soloRank = fmtTier(scan?.solo_rank)
   const flexRank = fmtTier(scan?.flex_rank)
   const tftRank  = fmtTier(scan?.tft_rank)
+  const soloPeakRank = fmtTier(scan?.solo_peak_rank)
+  const flexPeakRank = fmtTier(scan?.flex_peak_rank)
+  const soloPrevRank = fmtTier(scan?.solo_prev_rank)
+  const flexPrevRank = fmtTier(scan?.flex_prev_rank)
   const ranks = [soloRank && { label: 'SOLO', tier: scan?.solo_rank, display: soloRank }, flexRank && { label: 'FLEX', tier: scan?.flex_rank, display: flexRank }, tftRank && { label: 'TFT', tier: scan?.tft_rank, display: tftRank }].filter(Boolean)
+
+  const lastMatch = lastMatchEdit !== null ? lastMatchEdit : (scan?.last_match || null)
+  const fmtLastMatch = m => {
+    if (!m) return null
+    const champName = m._champName || (m.championId ? (champMap[m.championId]?.name || `Champion ${m.championId}`) : null)
+    return { champName, kda: `${m.kills}/${m.deaths}/${m.assists}`, result: m.win ? 'WIN' : 'LOSS', queue: m.queueLabel || 'Unknown', date: m.gameDate || null, edited: m.edited || false }
+  }
+  const lastMatchFmt = fmtLastMatch(lastMatch)
+
+  const saveLastMatch = async (data) => {
+    setLastMatchSaving(true)
+    try {
+      await fetch(`/api/lol-skins/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lastMatch: data }) })
+      setLastMatchEdit(data)
+    } finally {
+      setLastMatchSaving(false)
+    }
+  }
 
   const ogeFlag = !!scan?.oge
   const ogiFlag = !!scan?.ogi
@@ -784,9 +877,16 @@ function OverviewPageInner() {
                 <div className="ov-stat-card"><div className="ov-stat-card-label">Server</div><div className="ov-stat-card-value small">{fmtRegion(scan.region)}</div></div>
                 <div className="ov-stat-card"><div className="ov-stat-card-label">Level</div><div className="ov-stat-card-value">{scan.summoner_level ?? '—'}</div></div>
                 {soloRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Solo Rank</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.solo_rank] || '#e8e0d0' }}>{soloRank}</div></div>}
+                {soloPeakRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Solo Peak</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.solo_peak_rank] || '#7b8a9e' }}>{soloPeakRank}</div></div>}
+                {soloPrevRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Solo Last Season</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.solo_prev_rank] || '#7b8a9e' }}>{soloPrevRank}</div></div>}
                 {flexRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Flex Rank</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_rank] || '#e8e0d0' }}>{flexRank}</div></div>}
+                {flexPeakRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Flex Peak</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_peak_rank] || '#7b8a9e' }}>{flexPeakRank}</div></div>}
+                {flexPrevRank && <div className="ov-stat-card"><div className="ov-stat-card-label">Flex Last Season</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_prev_rank] || '#7b8a9e' }}>{flexPrevRank}</div></div>}
                 {tftRank && <div className="ov-stat-card"><div className="ov-stat-card-label">TFT Rank</div><div className="ov-stat-card-value small" style={{ color: RANK_COLORS[scan.tft_rank] || '#e8e0d0' }}>{tftRank}</div></div>}
               </div>
+
+              <div className="ov-overview-section">Last Match</div>
+              <LastMatchCard lastMatchFmt={lastMatchFmt} isOwner={isOwner} onEdit={saveLastMatch} saving={lastMatchSaving} champMap={champMap} />
 
               <div className="ov-overview-section">Collection</div>
               <div className="ov-overview-grid">

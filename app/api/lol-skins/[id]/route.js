@@ -31,6 +31,7 @@ export async function PATCH(request, { params }) {
     if ('ogiVerified'  in body) update.ogi_verified  = !!body.ogiVerified
     if ('priceAmount'  in body) update.price_amount  = body.priceAmount ?? null
     if ('priceCurrency' in body) update.price_currency = body.priceCurrency || null
+    if ('lastMatch'    in body) update.last_match    = body.lastMatch ?? null
 
     const { data, error } = await supabase
       .from('lol_skin_scans')

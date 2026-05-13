@@ -798,11 +798,23 @@ export default function PreviewPage() {
   const soloRank = fmtTier(scan?.solo_rank)
   const flexRank = fmtTier(scan?.flex_rank)
   const tftRank  = fmtTier(scan?.tft_rank)
+  const soloPeakRank = fmtTier(scan?.solo_peak_rank)
+  const flexPeakRank = fmtTier(scan?.flex_peak_rank)
+  const soloPrevRank = fmtTier(scan?.solo_prev_rank)
+  const flexPrevRank = fmtTier(scan?.flex_prev_rank)
   const ranks = [
     soloRank && { label: 'SOLO', tier: scan.solo_rank, display: soloRank },
     flexRank && { label: 'FLEX', tier: scan.flex_rank, display: flexRank },
     tftRank  && { label: 'TFT',  tier: scan.tft_rank,  display: tftRank },
   ].filter(Boolean)
+
+  const lastMatch = scan?.last_match || null
+  const fmtLastMatch = m => {
+    if (!m) return null
+    const champName = m._champName || (m.championId ? `Champion ${m.championId}` : null)
+    return { champName, kda: `${m.kills}/${m.deaths}/${m.assists}`, result: m.win ? 'WIN' : 'LOSS', queue: m.queueLabel || 'Unknown', date: m.gameDate || null }
+  }
+  const lastMatchFmt = fmtLastMatch(lastMatch)
 
   const ogeFlag = !!scan?.oge
   const ogiFlag = !!scan?.ogi
@@ -1085,9 +1097,26 @@ export default function PreviewPage() {
                   <div className="rv-stat-card-value">{scan.summoner_level ?? '—'}</div>
                 </div>
                 {soloRank && <div className="rv-stat-card"><div className="rv-stat-card-label">Solo Rank</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.solo_rank] || '#e8e0d0' }}>{soloRank}</div></div>}
+                {soloPeakRank && <div className="rv-stat-card"><div className="rv-stat-card-label">Solo Peak</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.solo_peak_rank] || '#7b8a9e' }}>{soloPeakRank}</div></div>}
+                {soloPrevRank && <div className="rv-stat-card"><div className="rv-stat-card-label">Solo Last Season</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.solo_prev_rank] || '#7b8a9e' }}>{soloPrevRank}</div></div>}
                 {flexRank && <div className="rv-stat-card"><div className="rv-stat-card-label">Flex Rank</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_rank] || '#e8e0d0' }}>{flexRank}</div></div>}
+                {flexPeakRank && <div className="rv-stat-card"><div className="rv-stat-card-label">Flex Peak</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_peak_rank] || '#7b8a9e' }}>{flexPeakRank}</div></div>}
+                {flexPrevRank && <div className="rv-stat-card"><div className="rv-stat-card-label">Flex Last Season</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_prev_rank] || '#7b8a9e' }}>{flexPrevRank}</div></div>}
                 {tftRank  && <div className="rv-stat-card"><div className="rv-stat-card-label">TFT Rank</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.tft_rank]  || '#e8e0d0' }}>{tftRank}</div></div>}
               </div>
+
+              <div className="rv-overview-section">Last Match</div>
+              {lastMatchFmt ? (
+                <div style={{ padding: '12px 14px', background: '#111b2a', border: '1px solid rgba(200,155,60,0.12)', borderRadius: 6, marginBottom: 8, fontFamily: 'Inter, sans-serif', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {lastMatchFmt.champName && <div><div style={{ fontSize: 10, color: '#3c4a5c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Champion</div><div style={{ fontSize: 13, color: '#e8e0d0' }}>{lastMatchFmt.champName}</div></div>}
+                  <div><div style={{ fontSize: 10, color: '#3c4a5c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>KDA</div><div style={{ fontSize: 13, color: '#e8e0d0' }}>{lastMatchFmt.kda}</div></div>
+                  <div><div style={{ fontSize: 10, color: '#3c4a5c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Result</div><div style={{ fontSize: 13, fontWeight: 600, color: lastMatchFmt.result === 'WIN' ? '#4caf50' : '#e05252' }}>{lastMatchFmt.result}</div></div>
+                  <div><div style={{ fontSize: 10, color: '#3c4a5c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Mode</div><div style={{ fontSize: 13, color: '#e8e0d0' }}>{lastMatchFmt.queue}</div></div>
+                  {lastMatchFmt.date && <div><div style={{ fontSize: 10, color: '#3c4a5c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Date</div><div style={{ fontSize: 13, color: '#7b8a9e' }}>{lastMatchFmt.date}</div></div>}
+                </div>
+              ) : (
+                <div style={{ padding: '12px 14px', background: '#111b2a', border: '1px solid rgba(200,155,60,0.08)', borderRadius: 6, marginBottom: 8, fontFamily: 'Inter, sans-serif', fontSize: 13, color: '#3c4a5c', fontStyle: 'italic' }}>No match in the last 30 days</div>
+              )}
 
               <div className="rv-overview-section">Collection</div>
               <div className="rv-overview-grid">

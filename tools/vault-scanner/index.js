@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 const PORT = 35199
-const VERSION = '0.3'
+const VERSION = '0.4'
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -227,27 +227,73 @@ async function runScan(lcuPort, password) {
     'TOURNAMENT_FLAG', 'TOURNAMENT_FRAME', 'TOURNAMENT_LOGO', 'TOURNAMENT_TROPHY',
     'TRANSFER', 'WARD_SKIN',
   ]
-  log('Running discovery scan (ranked + champion count + all-inventory dump + extra types)...')
-  const [rankedRes, champMinimalRes, invAllV1Res, invAllV2Res, invPlayerRes, ...discoveryResults] = await Promise.all([
+  log('Running discovery scan (ranked + champion count + all-inventory dump + extra types + last match)...')
+  const [rankedRes, champMinimalRes, invAllV1Res, invAllV2Res, invPlayerRes, matchHistoryRes, ...discoveryResults] = await Promise.all([
     lcuGet(lcuPort, password, '/lol-ranked/v1/current-ranked-stats'),
     lcuGet(lcuPort, password, '/lol-champions/v1/owned-champions-minimal'),
     lcuGet(lcuPort, password, '/lol-inventory/v1/inventory/all'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/all'),
     lcuGet(lcuPort, password, `/lol-inventory/v1/player/${summoner.puuid}`),
+    lcuGet(lcuPort, password, '/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=1'),
     ...DISCOVERY_TYPES.map(type => lcuGet(lcuPort, password, `/lol-inventory/v2/inventory/${type}`)),
   ])
 
-  // Ranked — store tier name only (e.g. "DIAMOND"), null if unranked
+  // Ranked — current tier + peak this season + previous season end
   let soloRank = null, flexRank = null, tftRank = null
+  let soloPeakRank = null, flexPeakRank = null
+  let soloPrevRank = null, flexPrevRank = null
   if (rankedRes.ok && rankedRes.data) {
     const qm = rankedRes.data.queueMap || {}
     const queues = rankedRes.data.queues || Object.entries(qm).map(([queueType, v]) => ({ queueType, ...v }))
     const toTier = q => (!q || !q.tier || q.tier === 'NA' || q.tier === 'NONE' || q.tier === 'UNRANKED') ? null : q.tier
-    soloRank = toTier(queues.find ? queues.find(q => q.queueType === 'RANKED_SOLO_5x5') : qm['RANKED_SOLO_5x5'])
-    flexRank = toTier(queues.find ? queues.find(q => q.queueType === 'RANKED_FLEX_SR')  : qm['RANKED_FLEX_SR'])
-    tftRank  = toTier(queues.find ? queues.find(q => q.queueType === 'RANKED_TFT')      : qm['RANKED_TFT'])
+    const toPeak = q => (!q || !q.highestTier || q.highestTier === 'NA' || q.highestTier === 'NONE' || q.highestTier === 'UNRANKED') ? null : q.highestTier
+    const toPrev = q => (!q || !q.previousSeasonEndTier || q.previousSeasonEndTier === 'NA' || q.previousSeasonEndTier === 'NONE' || q.previousSeasonEndTier === 'UNRANKED') ? null : q.previousSeasonEndTier
+    const solo = queues.find ? queues.find(q => q.queueType === 'RANKED_SOLO_5x5') : qm['RANKED_SOLO_5x5']
+    const flex = queues.find ? queues.find(q => q.queueType === 'RANKED_FLEX_SR')  : qm['RANKED_FLEX_SR']
+    const tft  = queues.find ? queues.find(q => q.queueType === 'RANKED_TFT')      : qm['RANKED_TFT']
+    soloRank = toTier(solo); flexRank = toTier(flex); tftRank = toTier(tft)
+    soloPeakRank = toPeak(solo); flexPeakRank = toPeak(flex)
+    soloPrevRank = toPrev(solo); flexPrevRank = toPrev(flex)
   }
-  log(`Ranked: solo=${soloRank || 'unranked'}, flex=${flexRank || 'unranked'}, tft=${tftRank || 'unranked'}`)
+  log(`Ranked: solo=${soloRank || 'unranked'} (peak=${soloPeakRank || '-'}, prev=${soloPrevRank || '-'}), flex=${flexRank || 'unranked'}, tft=${tftRank || 'unranked'}`)
+
+  // Last match
+  let lastMatch = null
+  try {
+    const games = matchHistoryRes.ok && matchHistoryRes.data
+      ? (matchHistoryRes.data.games?.games || matchHistoryRes.data.games || [])
+      : []
+    if (games.length > 0) {
+      const g = games[0]
+      const me = (g.participantIdentities || []).find(pi =>
+        pi.player?.summonerId === summonerId || pi.player?.puuid === summoner.puuid
+      )
+      const pid = me?.participantId
+      const p = pid != null ? (g.participants || []).find(x => x.participantId === pid) : (g.participants || [])[0]
+      const stats = p?.stats || {}
+      const QUEUE_LABELS = {
+        420: 'Ranked Solo', 440: 'Ranked Flex', 450: 'ARAM', 900: 'URF',
+        400: 'Normal Draft', 430: 'Normal Blind', 1700: 'Arena', 1900: 'URF',
+        720: 'ARAM Clash', 700: 'Clash',
+      }
+      lastMatch = {
+        championId:   p?.championId ?? null,
+        kills:        stats.kills ?? 0,
+        deaths:       stats.deaths ?? 0,
+        assists:      stats.assists ?? 0,
+        win:          stats.win ?? false,
+        queueId:      g.queueId ?? null,
+        queueLabel:   QUEUE_LABELS[g.queueId] || (g.gameMode ? g.gameMode.replace(/_/g, ' ') : 'Unknown'),
+        gameDate:     g.gameCreation ? new Date(g.gameCreation).toISOString().split('T')[0] : null,
+        gameDuration: g.gameDuration ?? null,
+      }
+      log(`Last match: ${lastMatch.queueLabel} | ${lastMatch.win ? 'WIN' : 'LOSS'} | ${lastMatch.kills}/${lastMatch.deaths}/${lastMatch.assists} on champion ${lastMatch.championId}`)
+    } else {
+      log('Last match: none found in match history')
+    }
+  } catch (e) {
+    log('Last match fetch failed: ' + e.message)
+  }
 
   // Champion count
   let champCount = null
@@ -399,6 +445,9 @@ async function runScan(lcuPort, password) {
     region,
     rp, be,
     soloRank, flexRank, tftRank,
+    soloPeakRank, flexPeakRank,
+    soloPrevRank, flexPrevRank,
+    lastMatch,
     champCount,
     ownedSkinIds: finalSkinIds,
     vintageSkinIds,
