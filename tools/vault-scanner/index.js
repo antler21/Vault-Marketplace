@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 const PORT = 35199
-const VERSION = '0.5'
+const VERSION = '0.5.1'
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -338,13 +338,15 @@ async function runScan(lcuPort, password) {
     'TRANSFER', 'WARD_SKIN',
   ]
   log('Running discovery scan (ranked + champion count + all-inventory dump + extra types + last match)...')
-  const [rankedRes, champMinimalRes, invAllV1Res, invAllV2Res, invPlayerRes, matchHistoryRes, ...discoveryResults] = await Promise.all([
+  const [rankedRes, champMinimalRes, invAllV1Res, invAllV2Res, invPlayerRes, matchHistoryRes, iconMetaRes, emoteMetaRes, ...discoveryResults] = await Promise.all([
     lcuGet(lcuPort, password, '/lol-ranked/v1/current-ranked-stats'),
     lcuGet(lcuPort, password, '/lol-champions/v1/owned-champions-minimal'),
     lcuGet(lcuPort, password, '/lol-inventory/v1/inventory/all'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/all'),
     lcuGet(lcuPort, password, `/lol-inventory/v1/player/${summoner.puuid}`),
     lcuGet(lcuPort, password, '/lol-match-history/v1/products/lol/current-summoner/matches?begIndex=0&endIndex=1'),
+    lcuGet(lcuPort, password, '/lol-game-data/assets/v1/summoner-icons.json'),
+    lcuGet(lcuPort, password, '/lol-game-data/assets/v1/summoner-emotes.json'),
     ...DISCOVERY_TYPES.map(type => lcuGet(lcuPort, password, `/lol-inventory/v2/inventory/${type}`)),
   ])
 
@@ -545,13 +547,30 @@ async function runScan(lcuPort, password) {
 
   log(`Vintage skins: ${vintageSkinIds.length} | Account est: ${accountCreatedEstimate || 'unknown'} | First RP non-skin: ${firstRpPurchaseDate || 'unknown'} (${firstRpPurchaseItemType}#${firstRpPurchaseItemId})`)
 
-  // Build rank history from owned emotes + icons localizedNames
+  // Build ID→name maps from game data (inventory items don't include localizedName)
+  const iconTitleMap = {}
+  if (iconMetaRes.ok && Array.isArray(iconMetaRes.data)) {
+    for (const icon of iconMetaRes.data) {
+      if (icon.id != null && (icon.title || icon.name)) iconTitleMap[icon.id] = icon.title || icon.name
+    }
+  }
+  log(`Icon metadata: ${Object.keys(iconTitleMap).length} entries`)
+  const emoteTitleMap = {}
+  if (emoteMetaRes.ok && Array.isArray(emoteMetaRes.data)) {
+    for (const emote of emoteMetaRes.data) {
+      if (emote.id != null && (emote.name || emote.title)) emoteTitleMap[emote.id] = emote.name || emote.title
+    }
+  }
+  log(`Emote metadata: ${Object.keys(emoteTitleMap).length} entries`)
+
+  // Build rank history from owned emotes + icons using game data name lookup
   const rankEntries = []
-  for (const item of [
-    ...(Array.isArray(_discovery.EMOTE?.data) ? _discovery.EMOTE.data : []),
-    ...(Array.isArray(_discovery.SUMMONER_ICON?.data) ? _discovery.SUMMONER_ICON.data : []),
-  ]) {
-    const parsed = parseRankItemName(item.localizedName || '')
+  for (const item of Array.isArray(_discovery.EMOTE?.data) ? _discovery.EMOTE.data : []) {
+    const parsed = parseRankItemName(emoteTitleMap[item.itemId] || '')
+    if (parsed) rankEntries.push(parsed)
+  }
+  for (const item of Array.isArray(_discovery.SUMMONER_ICON?.data) ? _discovery.SUMMONER_ICON.data : []) {
+    const parsed = parseRankItemName(iconTitleMap[item.itemId] || '')
     if (parsed) rankEntries.push(parsed)
   }
   const rankHistory = buildRankHistory(rankEntries, accountCreatedEstimate)
@@ -680,7 +699,7 @@ function log(msg) { console.log(`[${new Date().toLocaleTimeString()}] ${msg}`) }
 server.listen(PORT, '127.0.0.1', () => {
   console.clear()
   console.log('╔════════════════════════════════════════╗')
-  console.log('║           AIO TOOL  v0.5               ║')
+  console.log('║           AIO TOOL  v0.5.1             ║')
   console.log('╚════════════════════════════════════════╝')
   console.log(`\n  Running on http://localhost:${PORT}`)
   console.log('  Keep this window open while scanning.')
