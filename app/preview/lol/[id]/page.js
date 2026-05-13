@@ -809,12 +809,11 @@ export default function PreviewPage() {
   ].filter(Boolean)
 
   const lastMatch = scan?.last_match || null
-  const fmtLastMatch = m => {
-    if (!m) return null
-    const champName = m._champName || (m.championId ? `Champion ${m.championId}` : null)
+  const lastMatchFmt = lastMatch ? (() => {
+    const m = lastMatch
+    const champName = m._champName || (m.championId ? (champMap[m.championId]?.name || `Champion ${m.championId}`) : null)
     return { champName, kda: `${m.kills}/${m.deaths}/${m.assists}`, result: m.win ? 'WIN' : 'LOSS', queue: m.queueLabel || 'Unknown', date: m.gameDate || null }
-  }
-  const lastMatchFmt = fmtLastMatch(lastMatch)
+  })() : null
 
   const ogeFlag = !!scan?.oge
   const ogiFlag = !!scan?.ogi
