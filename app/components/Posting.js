@@ -35,7 +35,8 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
   // Selector picker (extension bridge)
   const [pickerTarget, setPickerTarget]         = useState(null) // { platformId, fieldLabel }
   const [pickerStatus, setPickerStatus]         = useState(null)
-  const [configPlatformUrls, setConfigPlatformUrls] = useState({}) // { [platformId]: url }
+  const getTemplateUrl = (platform, game) =>
+    (platform?.gameTemplates || []).find(t => String(t.gameId) === String(game?.id))?.url || ''
   const [showTestModal, setShowTestModal]         = useState(false)
   const [testSelections, setTestSelections]       = useState({}) // { [fieldLabel]: selectedOptionLabel }
 
@@ -363,17 +364,12 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
   // ── Posting Config Modal ──────────────────────────────────────────
   const openConfigModal = (game) => {
     setConfigGame(game)
-    // Load existing posting configs for all allowed platforms
     const allowedPlatforms = getAllowedPlatforms(game)
     const loaded = {}
-    const urls = {}
     for (const p of allowedPlatforms) {
-      const cfg = getPostingConfig(game.id, p.id)
-      loaded[p.id] = cfg
-      urls[p.id] = cfg.__gameUrl || ''
+      loaded[p.id] = getPostingConfig(game.id, p.id)
     }
     setConfigFields(loaded)
-    setConfigPlatformUrls(urls)
     setConfigPlatformTab(allowedPlatforms[0]?.id || null)
     setShowConfigModal(true)
   }
@@ -381,8 +377,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
   const saveConfigModal = async () => {
     const allowedPlatforms = getAllowedPlatforms(configGame)
     for (const p of allowedPlatforms) {
-      const data = { ...(configFields[p.id] || {}), __gameUrl: configPlatformUrls[p.id] || '' }
-      await saveGameConfig(configGame.id, `posting_${p.id}`, data)
+      await saveGameConfig(configGame.id, `posting_${p.id}`, configFields[p.id] || {})
     }
     setShowConfigModal(false)
   }
@@ -529,20 +524,6 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
 
                   return (
                     <>
-                      {/* Game URL for picker */}
-                      <div>
-                        <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '4px' }}>
-                          Game URL <span style={{ fontWeight: '300' }}>(for 🎯 Picker — opens this page when picking selectors)</span>
-                        </label>
-                        <input
-                          value={configPlatformUrls[platform.id] || ''}
-                          onChange={e => setConfigPlatformUrls(prev => ({ ...prev, [platform.id]: e.target.value }))}
-                          placeholder={`e.g. https://${platform.url || 'platform.com'}/${configGame.name.toLowerCase().replace(/\s+/g, '')}`}
-                          style={inputStyle}
-                        />
-                      </div>
-                      <div style={{ height: '1px', background: border }} />
-
                       {/* Field rows */}
                       {fields.map(field => {
                         const fieldCfg = platformCfg[field.label] || {}
@@ -584,7 +565,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                                   ))}
                                 </select>
                                 <button
-                                  onClick={() => openConfigPicker(platform.id, field.label, configPlatformUrls[platform.id], fieldCfg.pickType || 'text')}
+                                  onClick={() => openConfigPicker(platform.id, field.label, getTemplateUrl(platform, configGame), fieldCfg.pickType || 'text')}
                                   disabled={isWaiting}
                                   style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '0 10px', height: '36px', borderRadius: '8px', flexShrink: 0, border: `1px solid ${isWaiting ? '#7E6551' : border}`, background: isWaiting ? '#7E655122' : inputBg, color: isWaiting ? '#7E6551' : muted, cursor: isWaiting ? 'not-allowed' : 'pointer', fontSize: '12px', whiteSpace: 'nowrap' }}>
                                   {isWaiting ? <><div style={{ width: '10px', height: '10px', border: `2px solid ${muted}`, borderTop: `2px solid #7E6551`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Waiting…</> : <>🎯 Pick</>}
@@ -680,7 +661,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
           const fields = getConfigFields(configGame, platform)
           const platformCfg = configFields[platform.id] || {}
           const gameConfig = getGameConfig(configGame.id)
-          const url = configPlatformUrls[platform.id] || platform.url || ''
+          const url = getTemplateUrl(platform, configGame) || platform.url || ''
           const finalUrl = url.match(/^https?:\/\//) ? url : `https://${url}`
           const BUILTIN_MAP = { '__title': 'Account Title', '__soldFor': 'Selling Price', '__boughtFor': 'Cost Price' }
 
@@ -978,7 +959,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                         const status = scriptStatus[key]
                         const platform = platforms.find(p => p.name === target.platformName)
                         const postingCfg = platform ? getPostingConfig(account.gameId, platform.id) : {}
-                        const platformUrl = postingCfg.__gameUrl || platform?.url || ''
+                        const platformUrl = getTemplateUrl(platform, { id: account.gameId }) || postingCfg.__gameUrl || platform?.url || ''
                         const sheetRows = platform ? buildPostingSheet(account, platform) : []
                         const hasSheet = sheetRows.length > 0
                         const sheetKey = `${account.id}_${target.platformName}`
@@ -1267,7 +1248,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                                     <option key={t.v} value={t.v}>{t.l}</option>
                                   ))}
                                 </select>
-                                <button onClick={() => openConfigPicker(platform.id, field.label, configPlatformUrls[platform.id], fieldCfg.pickType || 'text')} disabled={isWaiting}
+                                <button onClick={() => openConfigPicker(platform.id, field.label, getTemplateUrl(platform, configGame), fieldCfg.pickType || 'text')} disabled={isWaiting}
                                 style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '0 10px', height: '36px', borderRadius: '8px', flexShrink: 0, border: `1px solid ${isWaiting ? '#7E6551' : border}`, background: isWaiting ? '#7E655122' : inputBg, color: isWaiting ? '#7E6551' : muted, cursor: isWaiting ? 'not-allowed' : 'pointer', fontSize: '12px', whiteSpace: 'nowrap' }}>
                                 {isWaiting ? <><div style={{ width: '10px', height: '10px', border: `2px solid ${muted}`, borderTop: `2px solid #7E6551`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Waiting…</> : <>🎯 Pick</>}
                               </button>
