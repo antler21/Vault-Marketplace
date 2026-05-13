@@ -61,7 +61,7 @@ export async function GET(request, { params }) {
   const displayName = scan.summoner_name || 'Unknown'
 
   const REGION_DISPLAY = {
-    SG2: 'SEA', PH2: 'SEA', TH2: 'SEA', VN2: 'SEA', TW2: 'SEA', MY2: 'SEA', ID1: 'SEA',
+    SG2: 'SEA', PH2: 'SEA', TH2: 'SEA', VN2: 'VN', TW2: 'TWN', MY2: 'SEA', ID1: 'SEA',
     NA1: 'NA', EUW1: 'EUW', EUNE1: 'EUNE', KR: 'KR', JP1: 'JP',
     BR1: 'BR', LA1: 'LAN', LA2: 'LAS', OC1: 'OCE', TR1: 'TR', RU: 'RU',
   }

@@ -52,7 +52,7 @@ const GEM_SRC = {
 const RANK_COLORS = { CHALLENGER: '#f4c874', GRANDMASTER: '#f4c874', MASTER: '#c87db4', DIAMOND: '#6ec6e8', EMERALD: '#50c878', PLATINUM: '#4fc0a0', GOLD: '#d4a520', SILVER: '#b0b8c0', BRONZE: '#c07840', IRON: '#8a7a70' }
 
 const REGION_DISPLAY = {
-  SG2: 'SEA', PH2: 'SEA', TH2: 'SEA', VN2: 'SEA', TW2: 'SEA', MY2: 'SEA', ID1: 'SEA',
+  SG2: 'SEA', PH2: 'SEA', TH2: 'SEA', VN2: 'VN', TW2: 'TWN', MY2: 'SEA', ID1: 'SEA',
   NA1: 'NA', EUW1: 'EUW', EUNE1: 'EUNE', KR: 'KR', JP1: 'JP',
   BR1: 'BR', LA1: 'LAN', LA2: 'LAS', OC1: 'OCE', TR1: 'TR', RU: 'RU',
 }
