@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { ArrowLeft, Flag, ExternalLink, Check, X, Gamepad2, ChevronDown, ChevronUp, Eye, EyeOff, Copy, Play, Settings, GripVertical, Crosshair, Pencil } from 'lucide-react'
 
 const scrollbarStyle = `
@@ -32,9 +32,6 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
   const [configPlatformTab, setConfigPlatformTab] = useState(null)
   const [configFields, setConfigFields]         = useState({}) // { [platformId]: { [fieldLabel]: { selector, fillMethod } } }
 
-  // Selector picker (extension bridge)
-  const [pickerTarget, setPickerTarget]         = useState(null) // { platformId, fieldLabel }
-  const [pickerStatus, setPickerStatus]         = useState(null)
   const getTemplateUrl = (platform, game) =>
     (platform?.gameTemplates || []).find(t => String(t.gameId) === String(game?.id))?.url || ''
   const [showTestModal, setShowTestModal]         = useState(false)
@@ -49,40 +46,39 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
   const sectionBg = darkMode ? '#252525' : '#f9f4ea'
   const inputStyle = { width: '100%', padding: '8px 11px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none', boxSizing: 'border-box' }
 
-  // ── Extension bridge for config modal picker ──────────────────────
+  // ── Extension bridge for config modal panel picker ────────────────
   useEffect(() => {
     const handler = (e) => {
       if (e.source !== window) return
       const msg = e.data
       if (!msg || !msg.__vaultExtension) return
-      if (msg.type === 'VAULT_SELECTOR_RESULT' && msg.fieldCtx?.target === 'postingConfig') {
-        const { platformId, fieldLabel } = msg.fieldCtx
-        const extra = {}
-        if (msg.pickType === 'radio' || msg.pickType === 'checkbox') extra.pickedOptions = msg.options || {}
-        if (msg.pickType === 'dropdown') {
-          // options is now { label: selector } dict from 3-step pick
-          extra.pickedOptions = msg.options || {}
-          extra.scrapedOptions = []  // deprecated — options dict replaces this
-        }
-        setConfigFields(prev => ({
-          ...prev,
-          [platformId]: { ...(prev[platformId] || {}), [fieldLabel]: { ...(prev[platformId]?.[fieldLabel] || {}), selector: msg.selector || (prev[platformId]?.[fieldLabel]?.selector || ''), ...extra } }
-        }))
-        setPickerTarget(null); setPickerStatus(null)
+      if (msg.type === 'VAULT_PANEL_RESULT') {
+        const { results, platformId } = msg
+        setConfigFields(prev => {
+          const platformPrev = prev[platformId] || {}
+          const updated = { ...platformPrev }
+          for (const [fieldLabel, pick] of Object.entries(results)) {
+            updated[fieldLabel] = {
+              ...(platformPrev[fieldLabel] || {}),
+              selector: pick.selector || platformPrev[fieldLabel]?.selector || '',
+              pickType: pick.pickType || platformPrev[fieldLabel]?.pickType || 'text',
+              ...(pick.options && Object.keys(pick.options).length > 0 ? { pickedOptions: pick.options } : {}),
+            }
+          }
+          return { ...prev, [platformId]: updated }
+        })
       }
-      if (msg.type === 'VAULT_SELECTOR_CANCELLED') { setPickerTarget(null); setPickerStatus(null) }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
   }, [])
 
-  const openConfigPicker = useCallback((platformId, fieldLabel, url, pickType) => {
-    // url comes from the game template's stored URL in platform data
-    if (!url) { alert('Add a Game URL at the top of this tab first so we know which page to open.'); return }
-    setPickerTarget({ platformId, fieldLabel })
-    setPickerStatus('waiting')
-    window.postMessage({ __vaultExtension: true, type: 'OPEN_PICKER', url, fieldType: pickType || 'text', fieldCtx: { target: 'postingConfig', platformId, fieldLabel } }, '*')
-  }, [])
+  const openPanelPicker = (platform) => {
+    const url = getTemplateUrl(platform, configGame)
+    if (!url) { alert('Add a Game URL in Platforms → Edit for this game first.'); return }
+    const fields = getConfigFields(configGame, platform).map(f => ({ label: f.label, source: f.source }))
+    window.postMessage({ __vaultExtension: true, type: 'OPEN_PANEL_PICKER', fields, platformId: platform.id, url }, '*')
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────
   // ── Title Rules ──────────────────────────────────────────────────────────
@@ -527,49 +523,39 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                       {/* Field rows */}
                       {fields.map(field => {
                         const fieldCfg = platformCfg[field.label] || {}
-                        const isWaiting = pickerTarget?.platformId === platform.id && pickerTarget?.fieldLabel === field.label && pickerStatus === 'waiting'
                         const FILL_METHODS = ['Type Text', 'Select Option', 'Click']
+                        const PICK_LABELS = { text: '📝 Text', dropdown: '📋 Dropdown', radio: '🔘 Radio', checkbox: '☑️ Checkbox', richtext: '✍️ Rich Text' }
 
                         return (
                           <div key={field.label} style={{ background: sectionBg, borderRadius: '10px', padding: '12px', border: `1px solid ${border}` }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                              <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: '13px', fontWeight: '500', color: text }}>{field.label}</span>
-                                <span style={{ fontSize: '11px', color: muted, marginLeft: '8px' }}>({field.source})</span>
-                                {field.accountFieldId && <span style={{ fontSize: '11px', color: '#4caf50', marginLeft: '6px' }}>● auto-mapped</span>}
+                                <span style={{ fontSize: '11px', color: muted }}>({field.source})</span>
+                                {field.accountFieldId && <span style={{ fontSize: '11px', color: '#4caf50' }}>● auto-mapped</span>}
+                                {fieldCfg.pickType && (
+                                  <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '8px', background: '#7E655115', color: '#7E6551', border: '1px solid #7E655133' }}>
+                                    {PICK_LABELS[fieldCfg.pickType] || fieldCfg.pickType}
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <div style={{ display: 'flex', gap: '12px', marginBottom: '2px' }}>
-                                <span style={{ fontSize: '11px', color: muted, flex: 1 }}>
-                                  {(fieldCfg.pickType === 'radio' || fieldCfg.pickType === 'checkbox') ? <><strong>Element Type</strong> (multi-pick via F2)</> : <>CSS Selector + <strong>Element Type</strong> (for picker)</>}
-                                </span>
-                                <span style={{ fontSize: '11px', color: muted }}>How to fill it</span>
-                              </div>
                               <div style={{ display: 'flex', gap: '6px' }}>
-                                {!(fieldCfg.pickType === 'radio' || fieldCfg.pickType === 'checkbox') && (
-                                  <input
-                                    value={fieldCfg.selector || ''}
-                                    onChange={e => setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), selector: e.target.value } } }))}
-                                    placeholder="CSS Selector e.g. #price-input"
-                                    style={inputStyle}
-                                  />
-                                )}
-<select
+                                <input
+                                  value={fieldCfg.selector || ''}
+                                  onChange={e => setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), selector: e.target.value } } }))}
+                                  placeholder={fieldCfg.selector ? '' : 'CSS Selector — use 🎯 Pick to configure'}
+                                  style={inputStyle}
+                                />
+                                <select
                                   value={fieldCfg.pickType || 'text'}
                                   onChange={e => setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), pickType: e.target.value } } }))}
-                                  disabled={isWaiting}
                                   style={{ padding: '0 4px', height: '36px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: muted, fontSize: '11px', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
                                   {[{v:'text',l:'📝 Text'},{v:'dropdown',l:'📋 Dropdown'},{v:'radio',l:'🔘 Radio'},{v:'checkbox',l:'☑️ Checkbox'},{v:'richtext',l:'✍️ Rich Text'}].map(t => (
                                     <option key={t.v} value={t.v}>{t.l}</option>
                                   ))}
                                 </select>
-                                <button
-                                  onClick={() => openConfigPicker(platform.id, field.label, getTemplateUrl(platform, configGame), fieldCfg.pickType || 'text')}
-                                  disabled={isWaiting}
-                                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '0 10px', height: '36px', borderRadius: '8px', flexShrink: 0, border: `1px solid ${isWaiting ? '#7E6551' : border}`, background: isWaiting ? '#7E655122' : inputBg, color: isWaiting ? '#7E6551' : muted, cursor: isWaiting ? 'not-allowed' : 'pointer', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                                  {isWaiting ? <><div style={{ width: '10px', height: '10px', border: `2px solid ${muted}`, borderTop: `2px solid #7E6551`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Waiting…</> : <>🎯 Pick</>}
-                                </button>
                               </div>
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 {FILL_METHODS.map(m => (
@@ -643,6 +629,10 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                   <button onClick={() => setShowTestModal(true)}
                     style={{ flex: 1, padding: '11px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
                     🧪 Test
+                  </button>
+                  <button onClick={() => { const p = platforms.find(p => p.id === configPlatformTab); if (p) openPanelPicker(p) }}
+                    style={{ flex: 1, padding: '11px', background: 'transparent', color: '#7E6551', border: `1px solid #7E6551`, borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
+                    🎯 Pick
                   </button>
                   <button onClick={saveConfigModal}
                     style={{ flex: 2, padding: '11px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
@@ -1221,37 +1211,37 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                 const FILL_METHODS = ['Type Text', 'Select Option', 'Click']
                 return (
                   <>
-  
                     {fields.map(field => {
                       const fieldCfg = platformCfg[field.label] || {}
-                      const isWaiting = pickerTarget?.platformId === platform.id && pickerTarget?.fieldLabel === field.label && pickerStatus === 'waiting'
+                      const PICK_LABELS = { text: '📝 Text', dropdown: '📋 Dropdown', radio: '🔘 Radio', checkbox: '☑️ Checkbox', richtext: '✍️ Rich Text' }
                       return (
                         <div key={field.label} style={{ background: sectionBg, borderRadius: '10px', padding: '12px', border: `1px solid ${border}` }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                               <span style={{ fontSize: '13px', fontWeight: '500', color: text }}>{field.label}</span>
-                              <span style={{ fontSize: '11px', color: muted, marginLeft: '8px' }}>({field.source})</span>
-                              {field.accountFieldId && <span style={{ fontSize: '11px', color: '#4caf50', marginLeft: '6px' }}>● auto-mapped</span>}
+                              <span style={{ fontSize: '11px', color: muted }}>({field.source})</span>
+                              {field.accountFieldId && <span style={{ fontSize: '11px', color: '#4caf50' }}>● auto-mapped</span>}
+                              {fieldCfg.pickType && (
+                                <span style={{ fontSize: '10px', padding: '1px 7px', borderRadius: '8px', background: '#7E655115', color: '#7E6551', border: '1px solid #7E655133' }}>
+                                  {PICK_LABELS[fieldCfg.pickType] || fieldCfg.pickType}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <div style={{ display: 'flex', gap: '6px' }}>
                               <input value={fieldCfg.selector || ''}
                                 onChange={e => setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), selector: e.target.value } } }))}
-                                placeholder="CSS Selector e.g. #price-input" style={inputStyle} />
+                                placeholder={fieldCfg.selector ? '' : 'CSS Selector — use 🎯 Pick to configure'}
+                                style={inputStyle} />
                               <select
-                                  value={fieldCfg.pickType || 'text'}
-                                  onChange={e => setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), pickType: e.target.value } } }))}
-                                  disabled={isWaiting}
-                                  style={{ padding: '0 4px', height: '36px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: muted, fontSize: '11px', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
-                                  {[{v:'text',l:'📝 Text'},{v:'dropdown',l:'📋 Dropdown'},{v:'radio',l:'🔘 Radio'},{v:'checkbox',l:'☑️ Checkbox'},{v:'richtext',l:'✍️ Rich Text'}].map(t => (
-                                    <option key={t.v} value={t.v}>{t.l}</option>
-                                  ))}
-                                </select>
-                                <button onClick={() => openConfigPicker(platform.id, field.label, getTemplateUrl(platform, configGame), fieldCfg.pickType || 'text')} disabled={isWaiting}
-                                style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '0 10px', height: '36px', borderRadius: '8px', flexShrink: 0, border: `1px solid ${isWaiting ? '#7E6551' : border}`, background: isWaiting ? '#7E655122' : inputBg, color: isWaiting ? '#7E6551' : muted, cursor: isWaiting ? 'not-allowed' : 'pointer', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                                {isWaiting ? <><div style={{ width: '10px', height: '10px', border: `2px solid ${muted}`, borderTop: `2px solid #7E6551`, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Waiting…</> : <>🎯 Pick</>}
-                              </button>
+                                value={fieldCfg.pickType || 'text'}
+                                onChange={e => setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), pickType: e.target.value } } }))}
+                                style={{ padding: '0 4px', height: '36px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: muted, fontSize: '11px', cursor: 'pointer', outline: 'none', flexShrink: 0 }}>
+                                {[{v:'text',l:'📝 Text'},{v:'dropdown',l:'📋 Dropdown'},{v:'radio',l:'🔘 Radio'},{v:'checkbox',l:'☑️ Checkbox'},{v:'richtext',l:'✍️ Rich Text'}].map(t => (
+                                  <option key={t.v} value={t.v}>{t.l}</option>
+                                ))}
+                              </select>
                             </div>
                             <div style={{ display: 'flex', gap: '6px' }}>
                               {FILL_METHODS.map(m => (
@@ -1274,6 +1264,10 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                 <button onClick={() => setShowTestModal(true)}
                   style={{ flex: 1, padding: '11px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
                   🧪 Test
+                </button>
+                <button onClick={() => { const p = platforms.find(p => p.id === configPlatformTab); if (p) openPanelPicker(p) }}
+                  style={{ flex: 1, padding: '11px', background: 'transparent', color: '#7E6551', border: `1px solid #7E6551`, borderRadius: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
+                  🎯 Pick
                 </button>
                 <button onClick={saveConfigModal} style={{ flex: 2, padding: '11px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
                   Save Configuration
