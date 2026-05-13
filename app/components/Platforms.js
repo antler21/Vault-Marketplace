@@ -216,6 +216,7 @@ export default function Platforms({ darkMode, platforms, games, gameConfigs, add
   const [emailPreviewError, setEmailPreviewError] = useState(null)
   const [emailCustomFields, setEmailCustomFields] = useState([]) // [{ id, label, keyword, selector }]
   const [templateUrls, setTemplateUrls]              = useState({}) // { [templateId]: url }
+  const [savedIndicator, setSavedIndicator]          = useState(false)
   const [newGlobalField, setNewGlobalField]             = useState({ label: '', accountFieldId: '' })
   const [selectedGameForTemplate, setSelectedGameForTemplate] = useState('')
   const [newTemplateFields, setNewTemplateFields]       = useState({}) // { [templateId]: { label, accountFieldId } }
@@ -293,6 +294,7 @@ export default function Platforms({ darkMode, platforms, games, gameConfigs, add
     setActiveStep(1)
     setCollapsedTemplates({})
     setTemplateUrls({})
+    setSavedIndicator(false)
     setImageMode('url')
     setShowModal(true)
   }
@@ -319,7 +321,13 @@ export default function Platforms({ darkMode, platforms, games, gameConfigs, add
     setEditingTemplateFieldId(null); setEditingTemplateFieldData(null)
     setCollapsedTemplates({})
     setCollapsedHtmlTemplates({})
-    setTemplateUrls({})
+    // Restore saved game URLs from existing template data
+    const existingUrls = {}
+    for (const t of platform.gameTemplates || []) {
+      if (t.url) existingUrls[t.id] = t.url
+    }
+    setTemplateUrls(existingUrls)
+    setSavedIndicator(false)
     setActiveStep(1)
     setImageMode('url')
     setShowModal(true)
@@ -335,7 +343,7 @@ export default function Platforms({ darkMode, platforms, games, gameConfigs, add
       globalFields: newPlatform.globalFields,
       titleRules: newPlatform.titleRules || {},
       enabledSections: newPlatform.enabledSections || {},
-      gameTemplates: newPlatform.gameTemplates, // each has htmlTemplate + placeholderMap
+      gameTemplates: newPlatform.gameTemplates.map(t => ({ ...t, url: templateUrls[t.id] || t.url || '' })),
       emailSender: newPlatform.emailSender || '',
       emailParsingRules: newPlatform.emailParsingRules || {},
     }
@@ -344,8 +352,8 @@ export default function Platforms({ darkMode, platforms, games, gameConfigs, add
     } else {
       await addPlatform(platformData)
     }
-    setShowModal(false)
-    setEditingPlatform(null)
+    setSavedIndicator(true)
+    setTimeout(() => setSavedIndicator(false), 3000)
   }
 
   const addGlobalField = () => {
@@ -1344,8 +1352,9 @@ export default function Platforms({ darkMode, platforms, games, gameConfigs, add
             </div>
 
             {/* Modal Footer */}
-            <div style={{ padding: '16px 28px', borderTop: `1px solid ${border}`, flexShrink: 0, display: 'flex', gap: '10px' }}>
-              <div style={{ display: 'flex', gap: '8px', marginRight: 'auto' }}>
+            <div style={{ padding: '16px 28px', borderTop: `1px solid ${border}`, flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ marginRight: 'auto', fontSize: '13px', color: '#4caf50', fontWeight: 500, opacity: savedIndicator ? 1 : 0, transition: 'opacity 0.3s' }}>
+                ✓ Saved
               </div>
               <button onClick={handleSave}
                 style={{ padding: '10px 24px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}>
