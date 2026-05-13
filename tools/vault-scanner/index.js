@@ -468,6 +468,16 @@ async function runScan(lcuPort, password) {
     _discovery,
     _inventoryDump,
     _champMinimal: champMinimalRes.data,
+    _rankedDebug: {
+      status: rankedRes.status,
+      ok: rankedRes.ok,
+      raw: rankedRes.data,
+    },
+    _matchHistoryDebug: {
+      status: matchHistoryRes.status,
+      ok: matchHistoryRes.ok,
+      raw: matchHistoryRes.data,
+    },
     _tftDebug: {
       companions_TFT_COMPANION: {
         status: tftCompanionsRes.status,
@@ -545,7 +555,7 @@ function log(msg) { console.log(`[${new Date().toLocaleTimeString()}] ${msg}`) }
 server.listen(PORT, '127.0.0.1', () => {
   console.clear()
   console.log('╔════════════════════════════════════════╗')
-  console.log('║           AIO TOOL  v0.3               ║')
+  console.log('║           AIO TOOL  v0.4               ║')
   console.log('╚════════════════════════════════════════╝')
   console.log(`\n  Running on http://localhost:${PORT}`)
   console.log('  Keep this window open while scanning.')
