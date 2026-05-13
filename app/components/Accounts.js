@@ -2229,8 +2229,8 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                       </div>
                     </div>
                     {!scannerOnline && (
-                      <a href="/aio-tool-v0.5.1.exe" download="aio-tool-v0.5.1.exe" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: '#7E6551', color: '#FDF4DC', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
-                        ↓ Download AIO Tool v0.5.1.exe
+                      <a href="/aio-tool-v0.5.2.exe" download="aio-tool-v0.5.2.exe" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: '#7E6551', color: '#FDF4DC', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
+                        ↓ Download AIO Tool v0.5.2.exe
                       </a>
                     )}
                     {scannerOnline && <div style={{ fontSize: '12px', color: '#4caf50' }}>AIO Tool is running on localhost:35199</div>}

@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 const PORT = 35199
-const VERSION = '0.5.1'
+const VERSION = '0.5.2'
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -91,7 +91,8 @@ function debugRes(name, res) {
 
 function parseRankItemName(name) {
   if (!name || typeof name !== 'string') return null
-  const n = name.trim()
+  // Normalize: en/em dashes → hyphen, "Grand Master" → "Grandmaster"
+  const n = name.trim().replace(/[–—]/g, '-').replace(/grand\s+master/gi, 'Grandmaster')
   const RANK_RE = /^(iron|bronze|silver|gold|platinum|emerald|diamond|master|grandmaster|challenger)$/i
   let m
 
@@ -565,12 +566,17 @@ async function runScan(lcuPort, password) {
 
   // Build rank history from owned emotes + icons using game data name lookup
   const rankEntries = []
+  const _rankDebugNames = []
   for (const item of Array.isArray(_discovery.EMOTE?.data) ? _discovery.EMOTE.data : []) {
-    const parsed = parseRankItemName(emoteTitleMap[item.itemId] || '')
+    const title = emoteTitleMap[item.itemId] || ''
+    if (title) _rankDebugNames.push(`emote:${item.itemId}="${title}"`)
+    const parsed = parseRankItemName(title)
     if (parsed) rankEntries.push(parsed)
   }
   for (const item of Array.isArray(_discovery.SUMMONER_ICON?.data) ? _discovery.SUMMONER_ICON.data : []) {
-    const parsed = parseRankItemName(iconTitleMap[item.itemId] || '')
+    const title = iconTitleMap[item.itemId] || ''
+    if (title) _rankDebugNames.push(`icon:${item.itemId}="${title}"`)
+    const parsed = parseRankItemName(title)
     if (parsed) rankEntries.push(parsed)
   }
   const rankHistory = buildRankHistory(rankEntries, accountCreatedEstimate)
@@ -599,6 +605,7 @@ async function runScan(lcuPort, password) {
     firstRpPurchaseItemType,
     rankHistory,
     rankHistoryPeak,
+    _rankDebugNames,
     ownedChromaIds,
     ownedEmoteIds,
     ownedIconIds,
@@ -699,7 +706,7 @@ function log(msg) { console.log(`[${new Date().toLocaleTimeString()}] ${msg}`) }
 server.listen(PORT, '127.0.0.1', () => {
   console.clear()
   console.log('╔════════════════════════════════════════╗')
-  console.log('║           AIO TOOL  v0.5.1             ║')
+  console.log('║           AIO TOOL  v0.5.2             ║')
   console.log('╚════════════════════════════════════════╝')
   console.log(`\n  Running on http://localhost:${PORT}`)
   console.log('  Keep this window open while scanning.')
