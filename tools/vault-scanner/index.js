@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 const PORT = 35199
-const VERSION = '0.4'
+const VERSION = '0.5'
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -85,6 +85,116 @@ function debugRes(name, res) {
   if (Array.isArray(d)) log(`  [${name}] array[${d.length}], first=${JSON.stringify(d[0])?.slice(0, 100)}`)
   else if (d && typeof d === 'object') log(`  [${name}] object keys=${Object.keys(d).join(',')}`)
   else log(`  [${name}] ${typeof d}: ${String(d).slice(0, 80)}`)
+}
+
+// ─── Rank History Parser ─────────────────────────────────────────────────────
+
+function parseRankItemName(name) {
+  if (!name || typeof name !== 'string') return null
+  const n = name.trim()
+  const RANK_RE = /^(iron|bronze|silver|gold|platinum|emerald|diamond|master|grandmaster|challenger)$/i
+  let m
+
+  // Season 1 icon: "Season 1 Reward - {rank}"
+  m = n.match(/^Season 1 Reward - (\w+)$/i)
+  if (m && RANK_RE.test(m[1])) return { year: 2011, split: null, rank: m[1].toUpperCase() }
+
+  // Season 1 icon silver exception: "Season 1 {rank}"
+  m = n.match(/^Season 1 (\w+)$/i)
+  if (m && RANK_RE.test(m[1])) return { year: 2011, split: null, rank: m[1].toUpperCase() }
+
+  // Season 2 icon: "Season 2 Reward - {rank} Solo"
+  m = n.match(/^Season 2 Reward - (\w+) Solo$/i)
+  if (m && RANK_RE.test(m[1])) return { year: 2012, split: null, rank: m[1].toUpperCase() }
+
+  // Season 3 icon: "Season 3 - {rank}"
+  m = n.match(/^Season 3 - (\w+)$/i)
+  if (m && RANK_RE.test(m[1])) return { year: 2013, split: null, rank: m[1].toUpperCase() }
+
+  // Season 2014-2016 icon: "Season {year} - Solo {rank}"
+  m = n.match(/^Season (201[4-6]) - Solo (\w+)$/i)
+  if (m && RANK_RE.test(m[2])) return { year: parseInt(m[1]), split: null, rank: m[2].toUpperCase() }
+
+  // Season 2017-2022 icon: "Season {year} - Solo/Duo {rank}"
+  m = n.match(/^Season (201[7-9]|202[0-2]) - Solo\/Duo (\w+)$/i)
+  if (m && RANK_RE.test(m[2])) return { year: parseInt(m[1]), split: null, rank: m[2].toUpperCase() }
+
+  // Season 2023 icon splits: "Season 2023 - Split {n} - Solo/Duo {rank}"
+  m = n.match(/^Season 2023 - Split (\d+) - Solo\/Duo (\w+)$/i)
+  if (m && RANK_RE.test(m[2])) return { year: 2023, split: parseInt(m[1]), rank: m[2].toUpperCase() }
+
+  // Season 2024+ icon: "Season Year {year} - {rank}"
+  m = n.match(/^Season Year (20\d{2}) - (\w+)$/i)
+  if (m && RANK_RE.test(m[2])) return { year: parseInt(m[1]), split: null, rank: m[2].toUpperCase() }
+
+  // Emote 2019-2023: "{year} - Split {n} - {rank}"
+  m = n.match(/^(20(?:19|2[0-3])) - Split (\d+) - (\w+)$/i)
+  if (m && RANK_RE.test(m[3])) return { year: parseInt(m[1]), split: parseInt(m[2]), rank: m[3].toUpperCase() }
+
+  // Emote 2024+: "Season {year} - End of Year - {rank}"
+  m = n.match(/^Season (20\d{2}) - End of Year - (\w+)$/i)
+  if (m && RANK_RE.test(m[2])) return { year: parseInt(m[1]), split: null, rank: m[2].toUpperCase() }
+
+  return null
+}
+
+function buildRankHistory(entries, accountCreatedEstimate) {
+  const TIERS = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER']
+  const currentYear = new Date().getFullYear()
+
+  let startYear = 2011
+  if (accountCreatedEstimate) {
+    const y = parseInt(accountCreatedEstimate.slice(0, 4))
+    if (!isNaN(y) && y >= 2011) startYear = y
+  }
+  const startSeason = startYear - 2010
+  const currentSeason = currentYear - 2010
+
+  // Group by year, separating split vs non-split entries
+  const byYear = {}
+  for (const e of entries) {
+    if (!byYear[e.year]) byYear[e.year] = { splits: [], noSplit: null }
+    if (e.split != null) {
+      byYear[e.year].splits.push(e)
+    } else {
+      const cur = byYear[e.year].noSplit
+      if (!cur || TIERS.indexOf(e.rank) > TIERS.indexOf(cur.rank)) {
+        byYear[e.year].noSplit = e
+      }
+    }
+  }
+
+  const seasons = []
+  for (let s = startSeason; s <= currentSeason; s++) {
+    const year = s + 2010
+    const yd = byYear[year]
+    if (!yd) {
+      seasons.push({ season: s, year, splits: [{ split: null, rank: null }] })
+    } else if (yd.splits.length > 0) {
+      const sorted = [...yd.splits].sort((a, b) => a.split - b.split)
+      seasons.push({ season: s, year, splits: sorted.map(e => ({ split: e.split, rank: e.rank })) })
+    } else {
+      seasons.push({ season: s, year, splits: [{ split: null, rank: yd.noSplit ? yd.noSplit.rank : null }] })
+    }
+  }
+  return seasons
+}
+
+function findPeakFromHistory(seasons) {
+  const TIERS = ['IRON', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'EMERALD', 'DIAMOND', 'MASTER', 'GRANDMASTER', 'CHALLENGER']
+  let peakTier = null, peakSeason = null, peakSplit = null
+  for (const s of seasons) {
+    for (const sp of s.splits) {
+      if (!sp.rank) continue
+      const idx = TIERS.indexOf(sp.rank)
+      if (idx === -1) continue
+      if (!peakTier || idx > TIERS.indexOf(peakTier)) {
+        peakTier = sp.rank; peakSeason = s.season; peakSplit = sp.split
+      }
+    }
+  }
+  if (!peakTier) return null
+  return `${peakTier} (S${peakSeason}${peakSplit != null ? ` Split ${peakSplit}` : ''})`
 }
 
 // ─── Scan Logic ──────────────────────────────────────────────────────────────
@@ -435,6 +545,19 @@ async function runScan(lcuPort, password) {
 
   log(`Vintage skins: ${vintageSkinIds.length} | Account est: ${accountCreatedEstimate || 'unknown'} | First RP non-skin: ${firstRpPurchaseDate || 'unknown'} (${firstRpPurchaseItemType}#${firstRpPurchaseItemId})`)
 
+  // Build rank history from owned emotes + icons localizedNames
+  const rankEntries = []
+  for (const item of [
+    ...(Array.isArray(_discovery.EMOTE?.data) ? _discovery.EMOTE.data : []),
+    ...(Array.isArray(_discovery.SUMMONER_ICON?.data) ? _discovery.SUMMONER_ICON.data : []),
+  ]) {
+    const parsed = parseRankItemName(item.localizedName || '')
+    if (parsed) rankEntries.push(parsed)
+  }
+  const rankHistory = buildRankHistory(rankEntries, accountCreatedEstimate)
+  const rankHistoryPeak = findPeakFromHistory(rankHistory)
+  log(`Rank history: ${rankHistory.length} seasons, ${rankEntries.length} matched items, peak=${rankHistoryPeak || 'none'}`)
+
   return {
     _scannerVersion: VERSION,
     summonerName: summoner.gameName || summoner.displayName || '',
@@ -455,6 +578,8 @@ async function runScan(lcuPort, password) {
     firstRpPurchaseDate,
     firstRpPurchaseItemId,
     firstRpPurchaseItemType,
+    rankHistory,
+    rankHistoryPeak,
     ownedChromaIds,
     ownedEmoteIds,
     ownedIconIds,
@@ -555,7 +680,7 @@ function log(msg) { console.log(`[${new Date().toLocaleTimeString()}] ${msg}`) }
 server.listen(PORT, '127.0.0.1', () => {
   console.clear()
   console.log('╔════════════════════════════════════════╗')
-  console.log('║           AIO TOOL  v0.4               ║')
+  console.log('║           AIO TOOL  v0.5               ║')
   console.log('╚════════════════════════════════════════╝')
   console.log(`\n  Running on http://localhost:${PORT}`)
   console.log('  Keep this window open while scanning.')

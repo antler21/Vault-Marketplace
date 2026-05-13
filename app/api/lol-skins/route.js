@@ -15,6 +15,7 @@ export async function POST(request) {
       tftCompanionIds, tftMapSkinIds, tftDamageSkinIds,
       lootSummary, championMastery,
       vintageSkinIds, accountCreatedEstimate, firstRpPurchaseDate, firstRpPurchaseItemId, firstRpPurchaseItemType,
+      rankHistory, rankHistoryPeak,
       // link-generation settings (set when user clicks Generate Link)
       hideName, expiresAt,
       oge, ogi, ogiPartial, ogiVerified,
@@ -58,6 +59,8 @@ export async function POST(request) {
         first_rp_purchase_date:      firstRpPurchaseDate || null,
         first_rp_purchase_item_id:   firstRpPurchaseItemId ?? null,
         first_rp_purchase_item_type: firstRpPurchaseItemType || null,
+        rank_history:                Array.isArray(rankHistory) && rankHistory.length > 0 ? rankHistory : null,
+        rank_history_peak:           rankHistoryPeak || null,
         hide_name:                hideName ?? false,
         expires_at:          expiresAt || null,
         oge:                 oge ?? false,

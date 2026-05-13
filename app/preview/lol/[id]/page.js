@@ -232,6 +232,14 @@ body {
 .rv-stat-card-value.small { font-size: 14px; font-family: 'Inter', sans-serif; color: #e8e0d0; font-weight: 600; }
 .rv-overview-section { font-family: 'Cinzel', serif; font-size: 11px; color: #7b8a9e; letter-spacing: 2px; text-transform: uppercase; border-bottom: 1px solid rgba(200,155,60,0.12); padding-bottom: 6px; margin-top: 4px; }
 
+.rv-rank-history-row { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 4px; }
+.rv-rank-history-row::-webkit-scrollbar { height: 4px; }
+.rv-rank-history-row::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 2px; }
+.rv-season-card { flex: 0 0 auto; background: #0d1520; border: 1px solid rgba(200,155,60,0.1); padding: 6px 10px; min-width: 52px; display: flex; flex-direction: column; gap: 2px; }
+.rv-season-label { font-family: 'Cinzel', serif; font-size: 9px; color: #3c4a5c; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+.rv-season-split { font-family: 'Inter', sans-serif; font-size: 8px; color: #3c4a5c; margin-bottom: 1px; }
+.rv-season-rank { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; }
+
 /* ── Skin Grid ── */
 .rv-skin-grid {
   padding: 22px 20px;
@@ -1103,6 +1111,32 @@ export default function PreviewPage() {
                 {flexPrevRank && <div className="rv-stat-card"><div className="rv-stat-card-label">Flex Last Season</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.flex_prev_rank] || '#7b8a9e' }}>{flexPrevRank}</div></div>}
                 {tftRank  && <div className="rv-stat-card"><div className="rv-stat-card-label">TFT Rank</div><div className="rv-stat-card-value small" style={{ color: RANK_COLORS[scan.tft_rank]  || '#e8e0d0' }}>{tftRank}</div></div>}
               </div>
+
+              {scan.rank_history && scan.rank_history.length > 0 && (
+                <>
+                  <div className="rv-overview-section">Season Rank History</div>
+                  <div className="rv-rank-history-row">
+                    {scan.rank_history.map(s => (
+                      <div key={s.season} className="rv-season-card">
+                        <div className="rv-season-label">S{s.season}</div>
+                        {s.splits.map((sp, i) => (
+                          <div key={i}>
+                            {sp.split != null && <div className="rv-season-split">Split {sp.split}</div>}
+                            <div className="rv-season-rank" style={{ color: sp.rank ? (RANK_COLORS[sp.rank] || '#e8e0d0') : '#2a3a4a' }}>
+                              {sp.rank ? sp.rank.charAt(0) + sp.rank.slice(1).toLowerCase() : 'Unranked'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                  {scan.rank_history_peak && (
+                    <div style={{ fontFamily: 'Inter, sans-serif', fontSize: 11, color: '#5b6a7e', marginTop: -4 }}>
+                      Historical peak: <span style={{ color: '#c89b3c', fontWeight: 600 }}>{scan.rank_history_peak}</span>
+                    </div>
+                  )}
+                </>
+              )}
 
               <div className="rv-overview-section">Last Match</div>
               {lastMatchFmt ? (
