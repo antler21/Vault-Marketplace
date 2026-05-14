@@ -19,7 +19,6 @@ export async function POST(request) {
     .insert([{
       game_id: body.gameId,
       title: body.title || '',
-      description: body.description || '',
       status: body.status,
       fields: body.fields || {},
       images: body.images || [],
