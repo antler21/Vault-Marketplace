@@ -729,7 +729,8 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                 // Checkbox: whether to check it
                 doCheck: row.pickType === 'checkbox' ? ((testSelections[row.label] ?? 'yes') === 'yes') : false,
                 // Text value
-                value: testSelections[row.label] || row.mappedTo || `(test ${row.label})`,
+                value: testSelections[row.label] ?? row.mappedTo ?? '',
+              skipEmpty: (row.pickType === 'text' || row.pickType === 'richtext') && !testSelections[row.label] && !row.mappedTo,
                 valueMap: row.valueMap,
               }
             })
@@ -1425,7 +1426,8 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                 : null,
               triggerSelector: row.pickType === 'dropdown' ? row.triggerSelector : null,
               doCheck: row.pickType === 'checkbox' ? ((testSelections[row.label] ?? 'yes') === 'yes') : false,
-              value: testSelections[row.label] || row.mappedTo || `(test ${row.label})`,
+              value: testSelections[row.label] ?? row.mappedTo ?? '',
+              skipEmpty: (row.pickType === 'text' || row.pickType === 'richtext') && !testSelections[row.label] && !row.mappedTo,
               valueMap: row.valueMap,
             }
           })
