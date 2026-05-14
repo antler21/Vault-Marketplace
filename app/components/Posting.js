@@ -76,7 +76,17 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
   const openPanelPicker = (platform) => {
     const url = getTemplateUrl(platform, configGame)
     if (!url) { alert('Add a Game URL in Platforms → Edit for this game first.'); return }
-    const fields = getConfigFields(configGame, platform).map(f => ({ label: f.label, source: f.source }))
+    const platformCfg = configFields[platform.id] || {}
+    const fields = getConfigFields(configGame, platform).map(f => {
+      const cfg = platformCfg[f.label] || {}
+      return {
+        label: f.label,
+        source: f.source,
+        currentSelector: cfg.selector || null,
+        currentPickType: cfg.pickType || null,
+        currentOptions: cfg.pickedOptions || null,
+      }
+    })
     window.postMessage({ __vaultExtension: true, type: 'OPEN_PANEL_PICKER', fields, platformId: platform.id, url }, '*')
   }
 
@@ -603,10 +613,20 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                                     )}
                                     {hasPicked && (
                                       <div style={{ background: '#2196f308', border: `1px solid #2196f333`, borderRadius: '8px', padding: '10px' }}>
-                                        <div style={{ fontSize: '11px', color: '#2196f3', fontWeight: '500', marginBottom: '6px' }}>🔘 Option selectors picked</div>
+                                        <div style={{ fontSize: '11px', color: '#2196f3', fontWeight: '500', marginBottom: '6px' }}>🔘 Option selectors picked <span style={{ color: muted, fontWeight: 400 }}>— names are editable</span></div>
                                         {Object.entries(fieldCfg.pickedOptions).map(([lbl, sel]) => (
-                                          <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
-                                            <span style={{ fontSize: '11px', color: text, minWidth: '80px', flexShrink: 0 }}>{lbl}</span>
+                                          <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                            <input
+                                              defaultValue={lbl}
+                                              onBlur={e => {
+                                                const newLbl = e.target.value.trim()
+                                                if (!newLbl || newLbl === lbl) return
+                                                const newOpts = {}
+                                                for (const [k, v] of Object.entries(fieldCfg.pickedOptions)) newOpts[k === lbl ? newLbl : k] = v
+                                                setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), pickedOptions: newOpts } } }))
+                                              }}
+                                              style={{ fontSize: '11px', color: text, minWidth: '80px', flexShrink: 0, background: inputBg, border: `1px solid ${border}`, borderRadius: '5px', padding: '2px 6px', outline: 'none', width: '100px' }}
+                                            />
                                             <code style={{ fontSize: '10px', color: '#2196f3', background: '#2196f311', padding: '2px 6px', borderRadius: '4px', flex: 1, wordBreak: 'break-all' }}>{sel}</code>
                                           </div>
                                         ))}
@@ -668,7 +688,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
             return {
               label: field.label, source: field.source,
               selector: cfg.selector || '',
-              triggerSelector: cfg.selector || '',  // for dropdown, selector IS the trigger
+              triggerSelector: cfg.selector || '',
               pickType: cfg.pickType || 'text',
               fillMethod: cfg.fillMethod || 'Type Text',
               pickedOptions: cfg.pickedOptions || null,
@@ -676,7 +696,18 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
               valueMap: cfg.valueMap || {},
               mappedTo: mappedLabel, isMulti, options
             }
-          })
+          }).filter(row => row.selector || (row.pickedOptions && Object.keys(row.pickedOptions).length > 0))
+
+          if (testRows.length === 0) return (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '20px' }}>
+              <div style={{ background: card, borderRadius: '16px', padding: '32px', border: `1px solid ${border}`, textAlign: 'center', minWidth: '300px' }}>
+                <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎯</div>
+                <div style={{ fontSize: '15px', fontWeight: '600', color: text, marginBottom: '6px' }}>No fields configured yet</div>
+                <div style={{ fontSize: '13px', color: muted, marginBottom: '20px' }}>Use <strong>🎯 Pick</strong> to scan fields on the platform first.</div>
+                <button onClick={() => setShowTestModal(false)} style={{ padding: '10px 24px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '13px', cursor: 'pointer' }}>Got it</button>
+              </div>
+            </div>
+          )
 
           const buildFillPayload = () => ({
             mode: 'fill',
@@ -1251,6 +1282,61 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                                 </button>
                               ))}
                             </div>
+                            {/* Value mapping / picked options */}
+                            {(() => {
+                              const hasScraped = (fieldCfg.scrapedOptions?.length > 0)
+                              const hasPicked  = fieldCfg.pickedOptions && Object.keys(fieldCfg.pickedOptions).length > 0
+                              if (!hasScraped && !hasPicked) return null
+                              const gameConfig2  = configGame ? getGameConfig(configGame.id) : {}
+                              const customField = (gameConfig2.customFields || []).find(cf => cf.id === field.accountFieldId)
+                              const appOptions  = customField?.options || []
+                              const platformOpts = hasScraped
+                                ? fieldCfg.scrapedOptions.map(o => o.value || o.label)
+                                : Object.keys(fieldCfg.pickedOptions)
+                              const valueMap = fieldCfg.valueMap || {}
+                              return (
+                                <div>
+                                  {appOptions.length > 0 && (
+                                    <div style={{ background: '#e8a02008', border: `1px solid #e8a02033`, borderRadius: '8px', padding: '10px', marginBottom: '6px' }}>
+                                      <div style={{ fontSize: '11px', color: '#e8a020', fontWeight: '500', marginBottom: '8px' }}>⚡ Value Mapping</div>
+                                      {appOptions.map(appVal => (
+                                        <div key={appVal} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                                          <span style={{ fontSize: '11px', color: text, minWidth: '80px', flexShrink: 0, background: sectionBg, padding: '3px 7px', borderRadius: '5px', border: `1px solid ${border}` }}>{appVal}</span>
+                                          <span style={{ fontSize: '11px', color: muted }}>→</span>
+                                          <select value={valueMap[appVal] || ''}
+                                            onChange={e => setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), valueMap: { ...(prev[platform.id]?.[field.label]?.valueMap || {}), [appVal]: e.target.value } } } }))}
+                                            style={{ flex: 1, padding: '3px 7px', borderRadius: '5px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '11px', outline: 'none' }}>
+                                            <option value="">— not mapped —</option>
+                                            {platformOpts.map(pv => <option key={pv} value={pv}>{pv}</option>)}
+                                          </select>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {hasPicked && (
+                                    <div style={{ background: '#2196f308', border: `1px solid #2196f333`, borderRadius: '8px', padding: '10px' }}>
+                                      <div style={{ fontSize: '11px', color: '#2196f3', fontWeight: '500', marginBottom: '6px' }}>🔘 Option selectors picked <span style={{ color: muted, fontWeight: 400 }}>— names are editable</span></div>
+                                      {Object.entries(fieldCfg.pickedOptions).map(([lbl, sel]) => (
+                                        <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                          <input
+                                            defaultValue={lbl}
+                                            onBlur={e => {
+                                              const newLbl = e.target.value.trim()
+                                              if (!newLbl || newLbl === lbl) return
+                                              const newOpts = {}
+                                              for (const [k, v] of Object.entries(fieldCfg.pickedOptions)) newOpts[k === lbl ? newLbl : k] = v
+                                              setConfigFields(prev => ({ ...prev, [platform.id]: { ...(prev[platform.id] || {}), [field.label]: { ...(prev[platform.id]?.[field.label] || {}), pickedOptions: newOpts } } }))
+                                            }}
+                                            style={{ fontSize: '11px', color: text, flexShrink: 0, background: inputBg, border: `1px solid ${border}`, borderRadius: '5px', padding: '2px 6px', outline: 'none', width: '100px' }}
+                                          />
+                                          <code style={{ fontSize: '10px', color: '#2196f3', background: '#2196f311', padding: '2px 6px', borderRadius: '4px', flex: 1, wordBreak: 'break-all' }}>{sel}</code>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
                         </div>
                       )
@@ -1277,6 +1363,171 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
           </div>
         </div>
       )}
+
+      {/* ── Test Modal (View 2) ── */}
+      {showTestModal && configGame && (() => {
+        const platform = platforms.find(p => p.id === configPlatformTab)
+        if (!platform) return null
+        const fields = getConfigFields(configGame, platform)
+        const platformCfg = configFields[platform.id] || {}
+        const gameConfig = getGameConfig(configGame.id)
+        const url = getTemplateUrl(platform, configGame) || platform.url || ''
+        const finalUrl = url.match(/^https?:\/\//) ? url : `https://${url}`
+        const BUILTIN_MAP = { '__title': 'Account Title', '__soldFor': 'Selling Price', '__boughtFor': 'Cost Price' }
+
+        const testRows = fields.map(field => {
+          const cfg = platformCfg[field.label] || {}
+          const mappedLabel = (() => {
+            if (!field.accountFieldId) return null
+            if (BUILTIN_MAP[field.accountFieldId]) return BUILTIN_MAP[field.accountFieldId]
+            const custom = (gameConfig.customFields || []).find(f => String(f.id) === String(field.accountFieldId))
+            return custom?.label || 'mapped'
+          })()
+          const isMulti = cfg.pickType === 'radio' || cfg.pickType === 'checkbox' || cfg.pickType === 'dropdown'
+          const options = isMulti && cfg.pickedOptions ? Object.keys(cfg.pickedOptions) : []
+          return {
+            label: field.label, source: field.source,
+            selector: cfg.selector || '',
+            triggerSelector: cfg.selector || '',
+            pickType: cfg.pickType || 'text',
+            fillMethod: cfg.fillMethod || 'Type Text',
+            pickedOptions: cfg.pickedOptions || null,
+            scrapedOptions: cfg.scrapedOptions || null,
+            valueMap: cfg.valueMap || {},
+            mappedTo: mappedLabel, isMulti, options
+          }
+        }).filter(row => row.selector || (row.pickedOptions && Object.keys(row.pickedOptions).length > 0))
+
+        if (testRows.length === 0) return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '20px' }}>
+            <div style={{ background: card, borderRadius: '16px', padding: '32px', border: `1px solid ${border}`, textAlign: 'center', minWidth: '300px' }}>
+              <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎯</div>
+              <div style={{ fontSize: '15px', fontWeight: '600', color: text, marginBottom: '6px' }}>No fields configured yet</div>
+              <div style={{ fontSize: '13px', color: muted, marginBottom: '20px' }}>Use <strong>🎯 Pick</strong> to scan fields on the platform first.</div>
+              <button onClick={() => setShowTestModal(false)} style={{ padding: '10px 24px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '13px', cursor: 'pointer' }}>Got it</button>
+            </div>
+          </div>
+        )
+
+        const buildFillPayload = () => ({
+          mode: 'fill',
+          url: finalUrl,
+          fields: testRows.map(row => {
+            const chosenOpt = testSelections[row.label] || row.options[0]
+            return {
+              label: row.label,
+              selector: row.selector,
+              pickType: row.pickType,
+              fillMethod: row.fillMethod,
+              selectedOption: chosenOpt || null,
+              selectedSelector: (row.pickType === 'radio' || row.pickType === 'dropdown')
+                ? (row.pickedOptions?.[chosenOpt] || null)
+                : null,
+              triggerSelector: row.pickType === 'dropdown' ? row.triggerSelector : null,
+              doCheck: row.pickType === 'checkbox' ? (testSelections[row.label] === 'yes') : false,
+              value: testSelections[row.label] || row.mappedTo || `(test ${row.label})`,
+              valueMap: row.valueMap,
+            }
+          })
+        })
+
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '20px' }}>
+            <div style={{ background: card, borderRadius: '16px', width: '100%', maxWidth: '660px', border: `1px solid ${border}`, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ padding: '20px 24px 14px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <h2 style={{ fontSize: '16px', fontWeight: '600', color: text }}>🧪 Test — {configGame.name} on {platform.name}</h2>
+                    <p style={{ fontSize: '12px', color: muted, marginTop: '3px' }}>Choose option values to test, then Launch Test.</p>
+                  </div>
+                  <button onClick={() => setShowTestModal(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: muted }}><X size={18} /></button>
+                </div>
+                <div style={{ marginTop: '10px', padding: '8px 12px', background: '#4caf5015', border: '1px solid #4caf5033', borderRadius: '8px', fontSize: '12px', color: '#4caf50', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span>⌨️</span>
+                  <span>After the page opens, press <strong>F3</strong> to trigger auto-fill. Press <strong>Esc</strong> to cancel.</span>
+                </div>
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {testRows.map(row => (
+                  <div key={row.label} style={{ background: sectionBg, borderRadius: '10px', padding: '12px', border: `1px solid ${border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '500', color: text }}>{row.label}</span>
+                        <span style={{ fontSize: '10px', color: muted }}>({row.source})</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '5px' }}>
+                        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: '#7E655115', color: '#7E6551' }}>{row.pickType}</span>
+                        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '8px', background: border, color: muted }}>{row.fillMethod}</span>
+                      </div>
+                    </div>
+                    {(row.pickType === 'radio' || row.pickType === 'dropdown') && row.options.length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '11px', color: muted, marginBottom: '6px' }}>Choose which option to test:</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {row.options.map(opt => {
+                            const isSelected = (testSelections[row.label] || row.options[0]) === opt
+                            const sel = row.pickedOptions?.[opt] || ''
+                            return (
+                              <button key={opt} onClick={() => setTestSelections(prev => ({ ...prev, [row.label]: opt }))}
+                                style={{ padding: '6px 14px', borderRadius: '8px', border: `1px solid ${isSelected ? '#7E6551' : border}`, background: isSelected ? '#7E6551' : 'transparent', color: isSelected ? '#FDF4DC' : muted, fontSize: '12px', cursor: 'pointer', fontWeight: isSelected ? '500' : '400', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+                                <span>{opt}</span>
+                                <code style={{ fontSize: '9px', opacity: 0.7, fontWeight: '400' }}>{sel.startsWith('__text__:') ? `text:"${sel.slice(9)}"` : sel.slice(0, 28) + (sel.length > 28 ? '…' : '')}</code>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {row.pickType === 'checkbox' && (
+                      <div>
+                        <div style={{ fontSize: '11px', color: muted, marginBottom: '6px' }}>Check or skip?</div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          {['yes', 'no'].map(v => {
+                            const isSelected = (testSelections[row.label] || 'yes') === v
+                            return (
+                              <button key={v} onClick={() => setTestSelections(prev => ({ ...prev, [row.label]: v }))}
+                                style={{ padding: '7px 20px', borderRadius: '8px', border: `1px solid ${isSelected ? '#7E6551' : border}`, background: isSelected ? '#7E6551' : 'transparent', color: isSelected ? '#FDF4DC' : muted, fontSize: '13px', cursor: 'pointer', fontWeight: isSelected ? '600' : '400', textTransform: 'capitalize' }}>
+                                {v === 'yes' ? '✓ Check it' : '– Skip'}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {(row.pickType === 'text' || row.pickType === 'richtext') && (
+                      <div>
+                        <div style={{ fontSize: '11px', color: muted, marginBottom: '5px' }}>
+                          Test value {row.mappedTo && <span style={{ color: '#4caf50' }}>(mapped to: <strong>{row.mappedTo}</strong>)</span>}:
+                        </div>
+                        <input
+                          value={testSelections[row.label] ?? (row.mappedTo || '')}
+                          onChange={e => setTestSelections(prev => ({ ...prev, [row.label]: e.target.value }))}
+                          placeholder={`Enter test value for ${row.label}…`}
+                          style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '12px', outline: 'none', boxSizing: 'border-box' }}
+                        />
+                        {row.selector && <code style={{ fontSize: '10px', color: '#a0c4ff', display: 'block', marginTop: '4px' }}>{row.selector}</code>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div style={{ padding: '14px 24px', borderTop: `1px solid ${border}`, flexShrink: 0, display: 'flex', gap: '8px' }}>
+                <button onClick={() => setShowTestModal(false)}
+                  style={{ flex: 1, padding: '11px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={() => {
+                  const payload = buildFillPayload()
+                  setShowTestModal(false)
+                  window.postMessage({ __vaultExtension: true, type: 'START_FILL', payload }, '*')
+                }} style={{ flex: 2, padding: '11px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  🚀 Launch Test
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
