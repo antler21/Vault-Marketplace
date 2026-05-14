@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 const PORT = 35199
-const VERSION = '0.5.3'
+const VERSION = '0.5.4'
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -523,9 +523,11 @@ async function runScan(lcuPort, password) {
     .map(i => i.itemId).filter(id => id != null)
 
   // Supplement skin IDs: picks up special milestone/reward skins missed by skins-minimal
+  // Exclude chroma IDs so they don't inflate the skin count
+  const chromaIdSet = new Set(ownedChromaIds)
   const supplSkinIds = skinInvItems
     .filter(i => (i.owned === true || i.ownershipType === 'OWNED') && !i.rental)
-    .map(i => i.itemId).filter(id => id != null && id !== 0)
+    .map(i => i.itemId).filter(id => id != null && id !== 0 && !chromaIdSet.has(id))
   const finalSkinIds = [...new Set([...ownedSkinIds, ...supplSkinIds])]
   if (finalSkinIds.length > ownedSkinIds.length) log(`Supplemental skins added: ${finalSkinIds.length - ownedSkinIds.length}`)
 
