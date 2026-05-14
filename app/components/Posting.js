@@ -727,7 +727,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                 // Dropdown: trigger selector to open the menu first
                 triggerSelector: row.pickType === 'dropdown' ? row.triggerSelector : null,
                 // Checkbox: whether to check it
-                doCheck: row.pickType === 'checkbox' ? (testSelections[row.label] === 'yes') : false,
+                doCheck: row.pickType === 'checkbox' ? ((testSelections[row.label] ?? 'yes') === 'yes') : false,
                 // Text value
                 value: testSelections[row.label] || row.mappedTo || `(test ${row.label})`,
                 valueMap: row.valueMap,
@@ -1424,7 +1424,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
                 ? (row.pickedOptions?.[chosenOpt] || null)
                 : null,
               triggerSelector: row.pickType === 'dropdown' ? row.triggerSelector : null,
-              doCheck: row.pickType === 'checkbox' ? (testSelections[row.label] === 'yes') : false,
+              doCheck: row.pickType === 'checkbox' ? ((testSelections[row.label] ?? 'yes') === 'yes') : false,
               value: testSelections[row.label] || row.mappedTo || `(test ${row.label})`,
               valueMap: row.valueMap,
             }
