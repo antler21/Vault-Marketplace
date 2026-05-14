@@ -1077,8 +1077,11 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
   const toggleTargetPlatform = (platformName) => {
     setNewAccount(prev => {
       const existing = (prev.targetPlatforms || []).find(p => p.platformName === platformName)
-      if (existing) return { ...prev, targetPlatforms: prev.targetPlatforms.filter(p => p.platformName !== platformName) }
-      return { ...prev, targetPlatforms: [...(prev.targetPlatforms || []), { platformName, posted: false }] }
+      const next = existing
+        ? { ...prev, targetPlatforms: prev.targetPlatforms.filter(p => p.platformName !== platformName) }
+        : { ...prev, targetPlatforms: [...(prev.targetPlatforms || []), { platformName, posted: false }] }
+      console.log('[TargetPlatform] toggled', platformName, '→', next.targetPlatforms)
+      return next
     })
   }
   const isTargeted = (platformName) => (newAccount.targetPlatforms || []).some(p => p.platformName === platformName)
@@ -1745,6 +1748,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         boughtForCurrency: newAccount.boughtForCurrency || 'USD', soldForCurrency: newAccount.soldForCurrency || 'USD',
         targetPlatforms: newAccount.targetPlatforms || [], postingPriority: newAccount.postingPriority || 0,
       }
+      console.log('[handleSave] saving targetPlatforms:', payload.targetPlatforms, 'editingAccount:', editingAccount)
       if (editingAccount) {
         await updateAccount({ ...payload, id: editingAccount })
         if (selectedAccount && selectedAccount.id === editingAccount) setSelectedAccount(prev => ({ ...prev, ...payload }))

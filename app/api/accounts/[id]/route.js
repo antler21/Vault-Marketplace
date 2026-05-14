@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 export async function PUT(request, context) {
   const params = await context.params
   const body = await request.json()
+  console.log('[PUT /api/accounts] targetPlatforms received:', body.targetPlatforms)
 
   const { data, error } = await supabase
     .from('accounts')
