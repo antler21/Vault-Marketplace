@@ -40,7 +40,7 @@ const CHECKER_KEY_MAP = {
   'chests': 'hexChests', 'hextech chests': 'hexChests',
   'keys': 'hexKeys', 'hextech keys': 'hexKeys',
   'champions': 'championsOwned', 'champion count': 'championsOwned', 'champs': 'championsOwned',
-  'skins': 'skinsOwned', 'skin count': 'skinsOwned',
+  'skins': 'skinCount', 'skin count': 'skinCount',
 }
 
 function mapCheckerToFields(checkerData, customFields) {
@@ -1850,6 +1850,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   }
 
   const handleDelete = async (id) => {
+    if (!window.confirm('Delete this account? This cannot be undone.')) return
     await deleteAccount(id)
     if (selectedAccount && selectedAccount.id === id) setSelectedAccount(null)
   }
