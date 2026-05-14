@@ -1582,6 +1582,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       hexKeys:            l.hexKeys          ?? null,
       capsules:           l.capsules         ?? null,
       skinCount:          (raw.ownedSkinIds       || []).length,
+      skinsOwned:         (raw.ownedSkinIds       || []).length,
       chromaCount:        (raw.ownedChromaIds     || []).length,
       emoteCount:         (raw.ownedEmoteIds      || []).length,
       iconCount:          (raw.ownedIconIds       || []).length,
