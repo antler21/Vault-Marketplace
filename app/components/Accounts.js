@@ -772,6 +772,15 @@ function GachaAccountsView({ games, gameConfigs, saveGameConfig, card, border, t
 }
 
 // ─── Config Modal (OUTSIDE main component to prevent remount) ────
+function convertTemplateToLabels(template, customFields) {
+  if (!template) return template
+  let result = template
+  for (const cf of (customFields || [])) {
+    result = result.replace(new RegExp(`\\{\\{${cf.id}\\}\\}`, 'g'), `{{${cf.label.toLowerCase()}}}`)
+  }
+  return result
+}
+
 function renderTemplate(template, fields, separator) {
   if (!template) return ''
   const sep = separator || ' | '
@@ -1498,13 +1507,14 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
     if (e) e.stopPropagation()
     const existing = getGameConfig(game.id)
     const catConfig = getCheckerCategoriesConfig(game.id)
+    const customFields = existing.customFields || []
     setConfiguringGame(game)
     setConfigData({
-      customFields: existing.customFields || [],
+      customFields,
       summaryFields: existing.summaryFields || [],
       scriptUrl: existing.scriptUrl || '',
-      titleTemplate: existing.titleTemplate || '',
-      descriptionTemplate: existing.descriptionTemplate || '',
+      titleTemplate: convertTemplateToLabels(existing.titleTemplate || '', customFields),
+      descriptionTemplate: convertTemplateToLabels(existing.descriptionTemplate || '', customFields),
       titleSeparator: existing.titleSeparator ?? ' | ',
       categoryLimits: existing.categoryLimits || {},
       checkerCategories: catConfig.categories || [],
