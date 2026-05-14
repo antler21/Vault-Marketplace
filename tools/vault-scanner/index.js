@@ -706,7 +706,7 @@ function log(msg) { console.log(`[${new Date().toLocaleTimeString()}] ${msg}`) }
 server.listen(PORT, '127.0.0.1', () => {
   console.clear()
   console.log('╔════════════════════════════════════════╗')
-  console.log('║           AIO TOOL  v0.5.2             ║')
+  console.log(`║           AIO TOOL  v${VERSION}             ║`)
   console.log('╚════════════════════════════════════════╝')
   console.log(`\n  Running on http://localhost:${PORT}`)
   console.log('  Keep this window open while scanning.')
