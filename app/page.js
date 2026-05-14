@@ -198,13 +198,11 @@ export default function Home() {
 
   const updateAccount = async (account) => {
     try {
-      console.log('[updateAccount] sending targetPlatforms:', account.targetPlatforms)
       const res = await fetch(`/api/accounts/${account.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(account) })
       const saved = await res.json()
-      if (saved.error) { console.error('[updateAccount] error:', saved.error); return }
-      console.log('[updateAccount] saved target_platforms:', saved.target_platforms)
+      if (saved.error) { console.error('updateAccount error:', saved.error); return }
       setAccountsState(prev => prev.map(a => a.id === saved.id ? normalizeAccountRaw(saved) : a))
-    } catch (err) { console.error('[updateAccount] exception:', err) }
+    } catch (err) { console.error('updateAccount exception:', err) }
   }
 
   const deleteAccount = async (id) => {

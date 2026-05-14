@@ -788,16 +788,66 @@ function renderTemplate(template, fields, separator) {
   return rendered.join(sep)
 }
 
+// Builds label-based field lookup: { 'level': '50', 'server': 'NA', ... }
+function buildLabelFields(accountFields, customFields) {
+  const result = { ...accountFields }
+  for (const cf of (customFields || [])) {
+    const val = accountFields[cf.id]
+    if (val != null) result[cf.label.toLowerCase()] = val
+  }
+  return result
+}
+
+// Builds category type variables: { 'skins category': 'Ahri + Kai\'Sa', 'icons category': 'S1 Chall', ... }
+function buildCategoryFields(categories, accountFields, categoryLimits, isDesc) {
+  const typeItems = {}
+  for (const cat of (categories || [])) {
+    const val = accountFields?.[`cat_${cat.id}`]
+    if (!val) continue
+    if (!typeItems[cat.type]) typeItems[cat.type] = []
+    typeItems[cat.type].push(...val.split(', ').filter(Boolean))
+  }
+  const result = {}
+  for (const [type, items] of Object.entries(typeItems)) {
+    const tabLabel = CAT_TABS.find(t => t.type === type)?.label || type
+    const varKey = `${tabLabel.toLowerCase()} category`
+    const limit = !isDesc && categoryLimits?.[type] ? parseInt(categoryLimits[type]) : null
+    const subset = (limit && limit > 0) ? items.slice(0, limit) : items
+    if (subset.length > 0) result[varKey] = isDesc ? subset.join(', ') : subset.join(' + ')
+  }
+  return result
+}
+
 function TitleMakerTab({ configData, setConfigData, border, text, muted, inputBg, sectionBg }) {
   const titleRef = useRef(null)
   const descRef = useRef(null)
   const [titleVar, setTitleVar] = useState('')
   const [descVar, setDescVar] = useState('')
 
+  // Build category type entries from checker categories (one per unique type, in encounter order)
+  const catTypesWithLabel = []
+  const seenTypes = new Set()
+  for (const cat of (configData.checkerCategories || [])) {
+    if (cat.type && !seenTypes.has(cat.type)) {
+      seenTypes.add(cat.type)
+      const tabLabel = CAT_TABS.find(t => t.type === cat.type)?.label || cat.type
+      catTypesWithLabel.push({ type: cat.type, label: tabLabel, varKey: `${tabLabel.toLowerCase()} category` })
+    }
+  }
+
   const allVars = [
-    ...(configData.customFields || []).map(f => ({ label: f.label, value: `{{${f.id}}}` })),
+    ...(configData.customFields || []).map(f => ({ label: f.label, value: `{{${f.label.toLowerCase()}}}` })),
+    ...catTypesWithLabel.map(ct => ({ label: `${ct.label} Category`, value: `{{${ct.varKey}}}` })),
     { label: 'Preview Link', value: '{{preview}}' },
   ]
+
+  // Sample fields map for preview: field labels + category samples
+  const previewFields = {
+    ...Object.fromEntries((configData.customFields || []).map(f => [f.id, `[${f.label}]`])),
+    ...Object.fromEntries((configData.customFields || []).map(f => [f.label.toLowerCase(), `[${f.label}]`])),
+    ...Object.fromEntries(catTypesWithLabel.map(ct => [ct.varKey, `[${ct.label} Category]`])),
+    preview: '[Preview Link]',
+  }
 
   const insertAt = (ref, varVal, field) => {
     const el = ref.current
@@ -841,7 +891,7 @@ function TitleMakerTab({ configData, setConfigData, border, text, muted, inputBg
       <div>
         <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Description Template</label>
         <textarea ref={descRef} value={configData.descriptionTemplate || ''} onChange={e => setConfigData(prev => ({ ...prev, descriptionTemplate: e.target.value }))}
-          placeholder={`e.g. Server: {{server}}${sep}Rank: {{rank}}${sep}Skins: {{total_skins}}`} rows={4}
+          placeholder={`e.g. Server: {{server}}${sep}Rank: {{rank}}${sep}Skins: {{total skins}}`} rows={4}
           style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none', resize: 'vertical', fontFamily: 'monospace' }} />
         <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
           <select value={descVar} onChange={e => setDescVar(e.target.value)}
@@ -854,11 +904,32 @@ function TitleMakerTab({ configData, setConfigData, border, text, muted, inputBg
         </div>
       </div>
 
+      {catTypesWithLabel.length > 0 && (
+        <div>
+          <label style={{ fontSize: '12px', color: muted, display: 'block', marginBottom: '6px' }}>Category Limits <span style={{ fontWeight: '400' }}>(title only — 0 or blank = no limit)</span></label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {catTypesWithLabel.map(ct => (
+              <div key={ct.type} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '12px', color: text, width: '120px' }}>{ct.label}</span>
+                <input type="number" min="0"
+                  value={configData.categoryLimits?.[ct.type] ?? ''}
+                  onChange={e => {
+                    const v = parseInt(e.target.value)
+                    setConfigData(prev => ({ ...prev, categoryLimits: { ...(prev.categoryLimits || {}), [ct.type]: isNaN(v) ? 0 : v } }))
+                  }}
+                  placeholder="0 = no limit"
+                  style={{ width: '100px', padding: '5px 8px', borderRadius: '6px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '12px', outline: 'none' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {(configData.titleTemplate || configData.descriptionTemplate) && (
         <div style={{ padding: '12px', background: sectionBg, borderRadius: '8px', border: `1px solid ${border}` }}>
           <div style={{ fontSize: '11px', color: muted, marginBottom: '6px', fontWeight: '600' }}>PREVIEW (sample values)</div>
-          {configData.titleTemplate && <div style={{ fontSize: '13px', color: text, marginBottom: '4px' }}><span style={{ color: muted, fontSize: '11px' }}>Title: </span>{renderTemplate(configData.titleTemplate, Object.fromEntries((configData.customFields || []).map(f => [f.id, `[${f.label}]`])), sep) || <span style={{ color: muted, fontStyle: 'italic' }}>—</span>}</div>}
-          {configData.descriptionTemplate && <div style={{ fontSize: '13px', color: text }}><span style={{ color: muted, fontSize: '11px' }}>Desc: </span>{renderTemplate(configData.descriptionTemplate, Object.fromEntries((configData.customFields || []).map(f => [f.id, `[${f.label}]`])), sep) || <span style={{ color: muted, fontStyle: 'italic' }}>—</span>}</div>}
+          {configData.titleTemplate && <div style={{ fontSize: '13px', color: text, marginBottom: '4px' }}><span style={{ color: muted, fontSize: '11px' }}>Title: </span>{renderTemplate(configData.titleTemplate, previewFields, sep) || <span style={{ color: muted, fontStyle: 'italic' }}>—</span>}</div>}
+          {configData.descriptionTemplate && <div style={{ fontSize: '13px', color: text }}><span style={{ color: muted, fontSize: '11px' }}>Desc: </span>{renderTemplate(configData.descriptionTemplate, previewFields, sep) || <span style={{ color: muted, fontStyle: 'italic' }}>—</span>}</div>}
         </div>
       )}
     </div>
@@ -948,7 +1019,7 @@ function ConfigModal({ card, border, text, muted, bg, inputBg, sectionBg, config
 }
 
 // ─── Account Modal (OUTSIDE main component to prevent remount) ───
-function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave, handleStatusChange, onClose, editingAccount, card, border, text, muted, inputBg, bg, getSoldForLabel, platforms, saving }) {
+function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave, handleStatusChange, onClose, editingAccount, card, border, text, muted, inputBg, bg, getSoldForLabel, platforms, saving, catConfig }) {
   // Filter platforms to only ones allowed for this game (empty = all allowed)
   const allowedPlatforms = (game?.allowedPlatformIds || []).length > 0
     ? platforms.filter(p => game.allowedPlatformIds.includes(p.id))
@@ -966,7 +1037,9 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
   useEffect(() => {
     if (!titleAutoFill || !titleTemplate) return
     const f = newAccount.fields || {}
-    const fields = { ...f, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
+    const base = buildLabelFields(f, customFields)
+    const cats = buildCategoryFields(catConfig?.categories, f, gameConfig?.categoryLimits, false)
+    const fields = { ...base, ...cats, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
     const rendered = renderTemplate(titleTemplate, fields, titleSeparator)
     setNewAccount(prev => prev.title === rendered ? prev : { ...prev, title: rendered })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -975,7 +1048,9 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
   useEffect(() => {
     if (!descAutoFill || !descTemplate) return
     const f = newAccount.fields || {}
-    const fields = { ...f, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
+    const base = buildLabelFields(f, customFields)
+    const cats = buildCategoryFields(catConfig?.categories, f, null, true)
+    const fields = { ...base, ...cats, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
     const rendered = renderTemplate(descTemplate, fields, titleSeparator)
     setNewAccount(prev => prev.description === rendered ? prev : { ...prev, description: rendered })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1077,11 +1152,9 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
   const toggleTargetPlatform = (platformName) => {
     setNewAccount(prev => {
       const existing = (prev.targetPlatforms || []).find(p => p.platformName === platformName)
-      const next = existing
+      return existing
         ? { ...prev, targetPlatforms: prev.targetPlatforms.filter(p => p.platformName !== platformName) }
         : { ...prev, targetPlatforms: [...(prev.targetPlatforms || []), { platformName, posted: false }] }
-      console.log('[TargetPlatform] toggled', platformName, '→', next.targetPlatforms)
-      return next
     })
   }
   const isTargeted = (platformName) => (newAccount.targetPlatforms || []).some(p => p.platformName === platformName)
@@ -1424,6 +1497,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const openConfigModal = (game, e) => {
     if (e) e.stopPropagation()
     const existing = getGameConfig(game.id)
+    const catConfig = getCheckerCategoriesConfig(game.id)
     setConfiguringGame(game)
     setConfigData({
       customFields: existing.customFields || [],
@@ -1432,6 +1506,8 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       titleTemplate: existing.titleTemplate || '',
       descriptionTemplate: existing.descriptionTemplate || '',
       titleSeparator: existing.titleSeparator ?? ' | ',
+      categoryLimits: existing.categoryLimits || {},
+      checkerCategories: catConfig.categories || [],
     })
     setConfigTab('fields')
     setShowConfigModal(true)
@@ -1446,6 +1522,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       titleTemplate: configData.titleTemplate || '',
       descriptionTemplate: configData.descriptionTemplate || '',
       titleSeparator: configData.titleSeparator ?? ' | ',
+      categoryLimits: configData.categoryLimits || {},
     })
     setShowConfigModal(false)
     setConfiguringGame(null)
@@ -1748,7 +1825,6 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         boughtForCurrency: newAccount.boughtForCurrency || 'USD', soldForCurrency: newAccount.soldForCurrency || 'USD',
         targetPlatforms: newAccount.targetPlatforms || [], postingPriority: newAccount.postingPriority || 0,
       }
-      console.log('[handleSave] saving targetPlatforms:', payload.targetPlatforms, 'editingAccount:', editingAccount)
       if (editingAccount) {
         await updateAccount({ ...payload, id: editingAccount })
         if (selectedAccount && selectedAccount.id === editingAccount) setSelectedAccount(prev => ({ ...prev, ...payload }))
@@ -2052,7 +2128,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
           </div>
         )}
 
-        {showModal && <AccountModal game={selectedGame} gameConfig={getGameConfig(selectedGame.id)} newAccount={newAccount} setNewAccount={setNewAccount} handleSave={handleSave} handleStatusChange={handleStatusChange} onClose={() => { if (!saving) setShowModal(false) }} editingAccount={editingAccount} card={card} border={border} text={text} muted={muted} inputBg={inputBg} bg={bg} getSoldForLabel={getSoldForLabel} platforms={platforms} saving={saving} />}
+        {showModal && <AccountModal game={selectedGame} gameConfig={getGameConfig(selectedGame.id)} newAccount={newAccount} setNewAccount={setNewAccount} handleSave={handleSave} handleStatusChange={handleStatusChange} onClose={() => { if (!saving) setShowModal(false) }} editingAccount={editingAccount} card={card} border={border} text={text} muted={muted} inputBg={inputBg} bg={bg} getSoldForLabel={getSoldForLabel} platforms={platforms} saving={saving} catConfig={getCheckerCategoriesConfig(selectedGame.id)} />}
         {showConfigModal && configuringGame && <ConfigModal {...configModalProps} />}
       </div>
     )
@@ -2604,7 +2680,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
           />
         )}
 
-        {showModal && <AccountModal game={selectedGame} gameConfig={getGameConfig(selectedGame.id)} newAccount={newAccount} setNewAccount={setNewAccount} handleSave={handleSave} handleStatusChange={handleStatusChange} onClose={() => { if (!saving) setShowModal(false) }} editingAccount={editingAccount} card={card} border={border} text={text} muted={muted} inputBg={inputBg} bg={bg} getSoldForLabel={getSoldForLabel} platforms={platforms} saving={saving} />}
+        {showModal && <AccountModal game={selectedGame} gameConfig={getGameConfig(selectedGame.id)} newAccount={newAccount} setNewAccount={setNewAccount} handleSave={handleSave} handleStatusChange={handleStatusChange} onClose={() => { if (!saving) setShowModal(false) }} editingAccount={editingAccount} card={card} border={border} text={text} muted={muted} inputBg={inputBg} bg={bg} getSoldForLabel={getSoldForLabel} platforms={platforms} saving={saving} catConfig={getCheckerCategoriesConfig(selectedGame.id)} />}
         {showConfigModal && configuringGame && <ConfigModal {...configModalProps} />}
 
 
