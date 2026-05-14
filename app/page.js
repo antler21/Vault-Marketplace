@@ -127,7 +127,7 @@ export default function Home() {
   useEffect(() => { loadData() }, [])
 
   const normalizeAccountRaw = (a) => ({
-    id: a.id, gameId: a.game_id, title: a.title || '', status: a.status,
+    id: a.id, gameId: a.game_id, title: a.title || '', description: a.description || '', status: a.status,
     fields: a.fields || {}, images: a.images || [], thumbnailIndex: a.thumbnail_index || 0,
     boughtFor: a.bought_for || 0, soldFor: a.sold_for || 0,
     boughtForCurrency: a.bought_for_currency || 'USD', soldForCurrency: a.sold_for_currency || 'USD',

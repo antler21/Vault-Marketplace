@@ -9,6 +9,7 @@ export async function PUT(request, context) {
     .from('accounts')
     .update({
       title: body.title || '',
+      description: body.description || '',
       status: body.status || 'Available',
       fields: body.fields || {},
       images: body.images || [],
