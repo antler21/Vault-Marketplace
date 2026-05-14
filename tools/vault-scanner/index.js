@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 
 const PORT = 35199
-const VERSION = '0.5.2'
+const VERSION = '0.5.3'
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -91,8 +91,8 @@ function debugRes(name, res) {
 
 function parseRankItemName(name) {
   if (!name || typeof name !== 'string') return null
-  // Normalize: en/em dashes → hyphen, "Grand Master" → "Grandmaster"
-  const n = name.trim().replace(/[–—]/g, '-').replace(/grand\s+master/gi, 'Grandmaster')
+  // Normalize: en/em dashes → hyphen, "Grand Master" → "Grandmaster", strip trailing " Icon"
+  const n = name.trim().replace(/[–—]/g, '-').replace(/grand\s+master/gi, 'Grandmaster').replace(/\s+Icon$/i, '')
   const RANK_RE = /^(iron|bronze|silver|gold|platinum|emerald|diamond|master|grandmaster|challenger)$/i
   let m
 
