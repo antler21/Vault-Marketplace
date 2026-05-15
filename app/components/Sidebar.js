@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { LayoutDashboard, Gamepad2, Users, Monitor, ShoppingCart, Tag, FileText, Wrench, Settings, ChevronLeft, ChevronRight, Package, LogOut } from 'lucide-react'
+import { LayoutDashboard, Gamepad2, Users, Monitor, FileText, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { getAuthClient } from '../lib/supabase-auth'
 import { useRouter } from 'next/navigation'
 
@@ -9,11 +9,11 @@ const navItems = [
   { icon: Gamepad2, label: 'Games' },
   { icon: Users, label: 'Accounts' },
   { icon: Monitor, label: 'Platforms' },
-  { icon: ShoppingCart, label: 'Orders' },
-  { icon: Tag, label: 'Offers' },
   { icon: FileText, label: 'Posting' },
-  { icon: Package, label: 'Services' },
-  { icon: Wrench, label: 'Tools' },
+  // { icon: ShoppingCart, label: 'Orders' },
+  // { icon: Tag, label: 'Offers' },
+  // { icon: Package, label: 'Services' },
+  // { icon: Wrench, label: 'Tools' },
 ]
 
 export default function Sidebar({ activePage, setActivePage, darkMode, collapsed, setCollapsed, orderNotificationCount }) {
