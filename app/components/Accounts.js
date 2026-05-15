@@ -1048,7 +1048,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
     const f = newAccount.fields || {}
     const base = buildLabelFields(f, customFields)
     const cats = buildCategoryFields(catConfig?.categories, f, gameConfig?.categoryLimits, false)
-    const fields = { ...base, ...cats, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
+    const fields = { ...base, ...cats, preview: f._scanId ? `https://lolprev.site/preview/lol/${f._scanId}` : '' }
     const rendered = renderTemplate(titleTemplate, fields, titleSeparator)
     setNewAccount(prev => prev.title === rendered ? prev : { ...prev, title: rendered })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1059,7 +1059,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
     const f = newAccount.fields || {}
     const base = buildLabelFields(f, customFields)
     const cats = buildCategoryFields(catConfig?.categories, f, null, true)
-    const fields = { ...base, ...cats, preview: f._scanId ? `${window.location.origin}/preview/lol/${f._scanId}` : '' }
+    const fields = { ...base, ...cats, preview: f._scanId ? `https://lolprev.site/preview/lol/${f._scanId}` : '' }
     const rendered = renderTemplate(descTemplate, fields, titleSeparator)
     setNewAccount(prev => prev.description === rendered ? prev : { ...prev, description: rendered })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1229,7 +1229,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
                     style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>
                     Open ↗
                   </a>
-                  <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/preview/lol/${scanId}`)}
+                  <button onClick={() => navigator.clipboard.writeText(`https://lolprev.site/preview/lol/${scanId}`)}
                     style={{ fontSize: '11px', color: muted, background: 'transparent', border: `1px solid ${border}`, borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>
                     Copy
                   </button>
@@ -2092,7 +2092,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <a href={`/preview/lol/${selectedAccount.fields._scanId}`} target="_blank" rel="noreferrer"
                         style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>Open ↗</a>
-                      <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/preview/lol/${selectedAccount.fields._scanId}`)}
+                      <button onClick={() => navigator.clipboard.writeText(`https://lolprev.site/preview/lol/${selectedAccount.fields._scanId}`)}
                         style={{ fontSize: '11px', color: muted, background: 'transparent', border: `1px solid ${border}`, borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>Copy</button>
                     </div>
                   </div>

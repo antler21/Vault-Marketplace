@@ -168,7 +168,7 @@ export async function GET(request, { params }) {
 
         {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 48px', borderTop: '1px solid rgba(200,155,60,0.1)' }}>
-          <span style={{ fontSize: 11, color: '#2a3a4a', letterSpacing: '0.1em', textTransform: 'uppercase' }}>antlervaults.store</span>
+          <span style={{ fontSize: 11, color: '#2a3a4a', letterSpacing: '0.1em', textTransform: 'uppercase' }}>lolprev.site</span>
           <span style={{ fontSize: 11, color: '#2a3a4a' }}>League of Legends Account</span>
         </div>
       </div>
