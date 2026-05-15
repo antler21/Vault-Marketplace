@@ -1225,7 +1225,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <span style={{ fontSize: '12px', color: muted, fontWeight: '500' }}>Preview Link</span>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <a href={`/preview/lol/${scanId}`} target="_blank" rel="noreferrer"
+                  <a href={`https://lolprev.site/preview/lol/${scanId}`} target="_blank" rel="noreferrer"
                     style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>
                     Open ↗
                   </a>
@@ -2090,7 +2090,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                   <div style={{ padding: '10px 12px', background: bg, borderRadius: '8px', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: '11px', color: muted }}>Preview Link</span>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <a href={`/preview/lol/${selectedAccount.fields._scanId}`} target="_blank" rel="noreferrer"
+                      <a href={`https://lolprev.site/preview/lol/${selectedAccount.fields._scanId}`} target="_blank" rel="noreferrer"
                         style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>Open ↗</a>
                       <button onClick={() => navigator.clipboard.writeText(`https://lolprev.site/preview/lol/${selectedAccount.fields._scanId}`)}
                         style={{ fontSize: '11px', color: muted, background: 'transparent', border: `1px solid ${border}`, borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>Copy</button>
@@ -2527,7 +2527,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                           <>
                             <div style={{ padding: '10px 12px', background: '#7E655111', border: '1px solid #7E655133', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                               <span style={{ fontSize: '12px', color: muted }}>Preview</span>
-                              <a href={`/preview/lol/${scanPreviewId}`} target="_blank" rel="noreferrer"
+                              <a href={`https://lolprev.site/preview/lol/${scanPreviewId}`} target="_blank" rel="noreferrer"
                                 style={{ fontSize: '12px', color: '#7E6551', fontWeight: '600', textDecoration: 'none' }}>
                                 Open ↗
                               </a>
