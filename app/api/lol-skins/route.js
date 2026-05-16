@@ -16,10 +16,12 @@ export async function POST(request) {
       lootSummary, championMastery,
       vintageSkinIds, accountCreatedEstimate, firstRpPurchaseDate, firstRpPurchaseItemId, firstRpPurchaseItemType,
       rankHistory, rankHistoryPeak,
-      // link-generation settings (set when user clicks Generate Link)
+      // link-generation settings
       hideName, expiresAt,
       oge, ogi, ogiPartial, ogiVerified,
       priceAmount, priceCurrency,
+      // account metadata
+      thumbnailUrl, accountTitle,
     } = body
 
     if (!ownedSkinIds?.length) return Response.json({ error: 'No skin data received' }, { status: 400 })
@@ -69,6 +71,8 @@ export async function POST(request) {
         ogi_verified:        ogiVerified ?? false,
         price_amount:        priceAmount ?? null,
         price_currency:      priceCurrency || null,
+        thumbnail_url:       thumbnailUrl || null,
+        account_title:       accountTitle || null,
       }])
       .select('id, owner_token')
       .single()

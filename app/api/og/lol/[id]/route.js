@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
   // Fetch scan data
   const { data: scan, error } = await supabase
     .from('lol_skin_scans')
-    .select('summoner_name,tag_line,profile_icon_id,summoner_level,region,solo_rank,flex_rank,solo_peak_rank,solo_prev_rank,rp,be,owned_skin_ids,loot_summary')
+    .select('summoner_name,tag_line,profile_icon_id,summoner_level,region,solo_rank,flex_rank,solo_peak_rank,solo_prev_rank,rp,be,owned_skin_ids,loot_summary,thumbnail_url,account_title')
     .eq('id', id)
     .single()
 
@@ -81,6 +81,11 @@ export async function GET(request, { params }) {
         {/* Gold border accent */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'linear-gradient(90deg, transparent, #c89b3c, transparent)' }} />
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '3px', background: 'linear-gradient(90deg, transparent, #c89b3c, transparent)' }} />
+
+        {/* Account thumbnail overlay */}
+        {scan.thumbnail_url && (
+          <img src={scan.thumbnail_url} style={{ position: 'absolute', top: 0, right: 0, width: '220px', height: '100%', objectFit: 'cover', opacity: 0.18 }} />
+        )}
 
         {/* Top section — profile + stats */}
         <div style={{ display: 'flex', alignItems: 'center', padding: '36px 48px 24px', gap: '32px' }}>

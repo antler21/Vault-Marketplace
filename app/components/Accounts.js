@@ -24,6 +24,7 @@ const scrollbarStyle = `
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36)
 const MAX_IMAGE_SIZE = 3 * 1024 * 1024 // 3MB
+const EXPECTED_SCANNER_VERSION = '0.5.4'
 
 const CHECKER_KEY_MAP = {
   'server': 'platform', 'platform': 'platform', 'region': 'platform',
@@ -1180,7 +1181,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
       <div style={{ background: card, borderRadius: '16px', width: '100%', maxWidth: '500px', border: `1px solid ${border}`, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '24px 28px 16px', borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <h2 style={{ fontSize: '17px', fontWeight: '600', color: text }}>{editingAccount ? 'Edit Account' : `Add Account — ${game.name}`}</h2>
+            <h2 style={{ fontSize: '17px', fontWeight: '600', color: text }}>{editingAccount ? 'Edit Account' : `Save Account — ${game.name}`}</h2>
             <button onClick={onClose} disabled={saving} style={{ background: 'transparent', border: 'none', cursor: saving ? 'not-allowed' : 'pointer', color: muted }}><X size={18} /></button>
           </div>
         </div>
@@ -1411,6 +1412,11 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
 
         {/* Save Button with saving state */}
         <div style={{ padding: '16px 28px', borderTop: `1px solid ${border}`, flexShrink: 0 }}>
+          {!editingAccount && (
+            <div style={{ fontSize: '11px', color: muted, textAlign: 'center', marginBottom: '-4px' }}>
+              Preview link will be generated automatically after saving.
+            </div>
+          )}
           {saving ? (
             <div style={{ width: '100%', padding: '12px', background: '#7E655188', color: '#FDF4DC', borderRadius: '10px', fontSize: '14px', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
               <div style={{ width: '16px', height: '16px', border: '2px solid #FDF4DC44', borderTop: '2px solid #FDF4DC', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -1419,7 +1425,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
           ) : (
             <button onClick={handleSave}
               style={{ width: '100%', padding: '12px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
-              {editingAccount ? 'Save Changes' : 'Add Account'}
+              {editingAccount ? 'Save Changes' : 'Save Account'}
             </button>
           )}
         </div>
@@ -1452,6 +1458,11 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const [generatingLinkError, setGeneratingLinkError]         = useState(null)
   const [editingLinkSettings, setEditingLinkSettings]         = useState(false)
   const [infoModal, setInfoModal]                             = useState(null) // 'oge' | 'ogi' | null
+  const [scanRetryActive, setScanRetryActive]                 = useState(false)
+  const [scanRetryElapsed, setScanRetryElapsed]               = useState(0)
+  const [versionMismatch, setVersionMismatch]                 = useState(false)
+  const [ownerLinkCopyWarning, setOwnerLinkCopyWarning]       = useState(false)
+  const scanCancelRef                                         = useRef(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [saving, setSaving] = useState(false)
   const [newAccount, setNewAccount] = useState({ title: '', description: '', status: 'Available', fields: {}, images: [], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
@@ -1708,32 +1719,66 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
 
   const handleScan = async () => {
     setCheckerStep(3); setCheckerError(null); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null)
-    try {
-      const res = await fetch('http://localhost:35199/scan', { signal: AbortSignal.timeout(120000) })
-      const raw = await res.json()
-      if (!res.ok) throw new Error(raw.error || 'Scan failed')
-      setScanData(raw)
+    setScanRetryActive(false); setScanRetryElapsed(0); setVersionMismatch(false)
+    scanCancelRef.current = false
+    const startTime = Date.now()
 
-      // Determine mapped data for account fields
-      const customFields = getGameConfig(selectedGame.id).customFields || []
-      const mapping = getScannerMapping(selectedGame.id)
-      const catConfig = getCheckerCategoriesConfig(selectedGame.id)
-      const catResults = evaluateCategories(raw, catConfig.categories || [])
-      const flat = { ...flattenScanData(raw), ...catResults }
-
-      const hasMappings = Object.keys(mapping.fieldMappings || {}).length > 0
-      if (hasMappings) {
-        const unmapped = findUnmappedValues(flat, mapping, customFields)
-        if (unmapped.length === 0) {
-          setCheckerData(applyMapping(flat, mapping, customFields))
-        } else {
-          setCheckerData(null)
-        }
+    while (true) {
+      if (scanCancelRef.current) {
+        setCheckerError('Scan cancelled.')
+        setCheckerStep(4)
+        return
       }
+      try {
+        const res = await fetch('http://localhost:35199/scan', { signal: AbortSignal.timeout(120000) })
+        const raw = await res.json()
+        if (!res.ok) throw new Error(raw.error || 'Scan failed')
 
-      setCheckerStep(4)
-    } catch (e) {
-      setCheckerError(e.message); setCheckerStep(4)
+        // Version check
+        if (raw._scannerVersion && raw._scannerVersion !== EXPECTED_SCANNER_VERSION) {
+          setVersionMismatch(true)
+          setCheckerError(`AIO Tool is outdated (found v${raw._scannerVersion}, need v${EXPECTED_SCANNER_VERSION}). Please download the latest version.`)
+          setCheckerStep(4)
+          return
+        }
+
+        const skinCount = (raw.ownedSkinIds || []).length
+        const elapsed = Date.now() - startTime
+
+        // Retry if no skins and still within 1 minute
+        if (skinCount === 0 && elapsed < 60000) {
+          setScanRetryActive(true)
+          setScanRetryElapsed(elapsed)
+          await new Promise(r => setTimeout(r, 5000))
+          continue
+        }
+
+        setScanRetryActive(false)
+        setScanData(raw)
+
+        // Determine mapped data for account fields
+        const customFields = getGameConfig(selectedGame.id).customFields || []
+        const mapping = getScannerMapping(selectedGame.id)
+        const catConfig = getCheckerCategoriesConfig(selectedGame.id)
+        const catResults = evaluateCategories(raw, catConfig.categories || [])
+        const flat = { ...flattenScanData(raw), ...catResults }
+
+        const hasMappings = Object.keys(mapping.fieldMappings || {}).length > 0
+        if (hasMappings) {
+          const unmapped = findUnmappedValues(flat, mapping, customFields)
+          if (unmapped.length === 0) {
+            setCheckerData(applyMapping(flat, mapping, customFields))
+          } else {
+            setCheckerData(null)
+          }
+        }
+
+        setCheckerStep(4)
+        return
+      } catch (e) {
+        setCheckerError(e.message); setCheckerStep(4)
+        return
+      }
     }
   }
 
@@ -1802,9 +1847,9 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
     }
   }
 
-  const handleOpenAdd = (prefillFields = {}) => {
+  const handleOpenAdd = (prefillFields = {}, prefillSoldFor = null, prefillSoldForCurrency = null) => {
     setEditingAccount(null)
-    setNewAccount({ title: '', description: '', status: 'Available', fields: prefillFields, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
+    setNewAccount({ title: '', description: '', status: 'Available', fields: prefillFields, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: prefillSoldFor ?? 0, boughtForCurrency: 'USD', soldForCurrency: prefillSoldForCurrency || 'USD', targetPlatforms: [], postingPriority: 0 })
     setShowModal(true)
   }
 
@@ -1841,6 +1886,42 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         if (selectedAccount && selectedAccount.id === editingAccount) setSelectedAccount(prev => ({ ...prev, ...payload }))
       } else {
         await addAccount(payload)
+
+        // Generate preview link if this came from a scan
+        if (scanData && !scanPreviewId) {
+          try {
+            let expiresAt = null
+            if (linkSettings.expiry === '1d') expiresAt = new Date(Date.now() + 86400000).toISOString()
+            else if (linkSettings.expiry === '1m') expiresAt = new Date(Date.now() + 30 * 86400000).toISOString()
+
+            const thumbnailUrl = cleanImages[newAccount.thumbnailIndex]?.url || selectedGame?.image || null
+            const accountTitle = newAccount.title || ''
+
+            const res = await fetch('/api/lol-skins', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...scanData,
+                hideName: linkSettings.hideIgn,
+                expiresAt,
+                oge: linkSettings.oge,
+                ogi: linkSettings.ogi,
+                ogiPartial: linkSettings.ogiPartial,
+                ogiVerified: linkSettings.ogiVerified,
+                priceAmount: linkSettings.showPrice && linkSettings.priceAmount ? parseFloat(linkSettings.priceAmount) : null,
+                priceCurrency: linkSettings.showPrice ? linkSettings.priceCurrency : null,
+                thumbnailUrl,
+                accountTitle,
+              }),
+            })
+            const stored = await res.json()
+            if (!stored.error) {
+              setScanPreviewId(stored.id)
+              setScanOwnerToken(stored.owner_token)
+              setCheckerStep(5)
+            }
+          } catch {}
+        }
       }
       setShowModal(false)
       setEditingAccount(null)
@@ -2268,7 +2349,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
 
         {/* ── Add Account Choice Modal ── */}
         {showAddChoice && selectedGame && (() => {
-          const closeModal = () => { setShowAddChoice(false); setCheckerStep(0); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setGeneratingLinkError(null); setEditingLinkSettings(false) }
+          const closeModal = () => { setShowAddChoice(false); setCheckerStep(0); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setVersionMismatch(false); setGeneratingLinkError(null); setEditingLinkSettings(false); setScanRetryActive(false); setScanRetryElapsed(0); scanCancelRef.current = false }
           const _rawFlat = scanData ? flattenScanData(scanData) : null
           const _catResults = scanData ? evaluateCategories(scanData, getCheckerCategoriesConfig(selectedGame.id).categories || []) : {}
           const flat = _rawFlat ? { ..._rawFlat, ..._catResults } : null
@@ -2397,8 +2478,20 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                 {checkerStep === 3 && (
                   <div style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', textAlign: 'center' }}>
                     <div style={{ width: '40px', height: '40px', border: `3px solid ${border}`, borderTop: '3px solid #7E6551', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                    <div style={{ fontSize: '15px', fontWeight: '600', color: text }}>Scanning…</div>
-                    <div style={{ fontSize: '13px', color: muted }}>Reading data from the League client. This may take up to 30 seconds.</div>
+                    <div style={{ fontSize: '15px', fontWeight: '600', color: text }}>
+                      {scanRetryActive ? 'Retrying scan…' : 'Scanning…'}
+                    </div>
+                    <div style={{ fontSize: '13px', color: muted }}>
+                      {scanRetryActive
+                        ? `No skins detected yet — retrying automatically. (${Math.floor(scanRetryElapsed / 1000)}s elapsed)`
+                        : 'Reading data from the League client. This may take up to 30 seconds.'}
+                    </div>
+                    {scanRetryElapsed >= 20000 && (
+                      <button onClick={() => { scanCancelRef.current = true }}
+                        style={{ padding: '8px 20px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -2406,12 +2499,19 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                 {checkerStep === 4 && (() => {
                   if (checkerError) return (
                     <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ padding: '14px', background: '#e0525210', border: '1px solid #e0525244', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '13px', color: '#e05252', marginBottom: '10px' }}>⚠ {checkerError}</div>
-                        <button onClick={() => { setCheckerStep(2); setCheckerError(null) }}
-                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: muted, fontSize: '12px', textDecoration: 'underline', padding: 0 }}>
-                          Try again
-                        </button>
+                      <div style={{ padding: '14px', background: '#e0525210', border: '1px solid #e0525244', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        <div style={{ fontSize: '13px', color: '#e05252' }}>⚠ {checkerError}</div>
+                        {versionMismatch ? (
+                          <a href={`/aio-tool-v${EXPECTED_SCANNER_VERSION}.exe`} download={`aio-tool-v${EXPECTED_SCANNER_VERSION}.exe`}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#7E6551', color: '#FDF4DC', borderRadius: 8, fontSize: 12, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
+                            ↓ Download AIO Tool v{EXPECTED_SCANNER_VERSION}.exe
+                          </a>
+                        ) : (
+                          <button onClick={() => { setCheckerStep(2); setCheckerError(null); setVersionMismatch(false) }}
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: muted, fontSize: '12px', textDecoration: 'underline', padding: 0, textAlign: 'left' }}>
+                            Try again
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
@@ -2542,101 +2642,71 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                           </>
                         )}
 
-                        {/* Settings form — always shown when no link yet, toggled via Edit when link exists */}
-                        {(!scanPreviewId || editingLinkSettings) && (
-                          <div style={{ background: sectionBg, borderRadius: '10px', border: `1px solid ${border}`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                            <div style={{ fontSize: '10px', color: muted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                              {scanPreviewId ? 'Edit Link Settings' : 'Generate Link'}
-                            </div>
+                        {/* Link settings — always shown in step 4 */}
+                        <div style={{ background: sectionBg, borderRadius: '10px', border: `1px solid ${border}`, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div style={{ fontSize: '10px', color: muted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Preview Link Settings</div>
 
-                            {/* Hide IGN */}
+                          {/* Hide IGN */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', color: text }}>Hide IGN</span>
+                            <Toggle on={linkSettings.hideIgn} onClick={() => setLink({ hideIgn: !linkSettings.hideIgn })} />
+                          </div>
+
+                          {/* Expiry */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '12px', color: text }}>Expiry</span>
+                            <select value={linkSettings.expiry} onChange={e => setLink({ expiry: e.target.value })}
+                              style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px', border: `1px solid ${border}`, background: inputBg, color: text, outline: 'none', cursor: 'pointer' }}>
+                              <option value="never">Never</option>
+                              <option value="1d">1 Day</option>
+                              <option value="1m">1 Month</option>
+                            </select>
+                          </div>
+
+                          {/* OGE */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <InfoLabel label="OGE (Original Email)" which="oge" />
+                            <Toggle on={linkSettings.oge} onClick={() => setLink({ oge: !linkSettings.oge })} />
+                          </div>
+
+                          {/* OGI */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontSize: '12px', color: text }}>Hide IGN</span>
-                              <Toggle on={linkSettings.hideIgn} onClick={() => setLink({ hideIgn: !linkSettings.hideIgn })} />
+                              <InfoLabel label="OGI (Original Information)" which="ogi" />
+                              <Toggle on={linkSettings.ogi} onClick={() => setLink({ ogi: !linkSettings.ogi, ogiPartial: false, ogiVerified: false })} />
                             </div>
-
-                            {/* Expiry */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontSize: '12px', color: text }}>Expiry</span>
-                              <select value={linkSettings.expiry} onChange={e => setLink({ expiry: e.target.value })}
-                                style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '6px', border: `1px solid ${border}`, background: inputBg, color: text, outline: 'none', cursor: 'pointer' }}>
-                                <option value="never">Never</option>
-                                <option value="1d">1 Day</option>
-                                <option value="1m">1 Month</option>
-                              </select>
-                            </div>
-
-                            {/* OGE */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <InfoLabel label="OGE (Original Email)" which="oge" />
-                              <Toggle on={linkSettings.oge} onClick={() => setLink({ oge: !linkSettings.oge })} />
-                            </div>
-
-                            {/* OGI */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <InfoLabel label="OGI (Original Information)" which="ogi" />
-                                <Toggle on={linkSettings.ogi} onClick={() => setLink({ ogi: !linkSettings.ogi, ogiPartial: false, ogiVerified: false })} />
-                              </div>
-                              {linkSettings.ogi && (
-                                <div style={{ paddingLeft: '12px', display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: `2px solid ${border}` }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <InfoLabel label="Partial" which="ogi_partial" />
-                                    <Toggle on={linkSettings.ogiPartial} onClick={() => setLink({ ogiPartial: !linkSettings.ogiPartial, ogiVerified: linkSettings.ogiPartial ? linkSettings.ogiVerified : false })} />
-                                  </div>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <InfoLabel label="Verified by Riot" which="ogi_verified" />
-                                    <Toggle on={linkSettings.ogiVerified} onClick={() => setLink({ ogiVerified: !linkSettings.ogiVerified })} />
-                                  </div>
+                            {linkSettings.ogi && (
+                              <div style={{ paddingLeft: '12px', display: 'flex', flexDirection: 'column', gap: '8px', borderLeft: `2px solid ${border}` }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <InfoLabel label="Partial" which="ogi_partial" />
+                                  <Toggle on={linkSettings.ogiPartial} onClick={() => setLink({ ogiPartial: !linkSettings.ogiPartial, ogiVerified: linkSettings.ogiPartial ? linkSettings.ogiVerified : false })} />
                                 </div>
-                              )}
-                            </div>
-
-                            {/* Price */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span style={{ fontSize: '12px', color: text }}>Show Price</span>
-                                <Toggle on={linkSettings.showPrice} onClick={() => setLink({ showPrice: !linkSettings.showPrice, priceAmount: '', priceCurrency: 'USD' })} />
-                              </div>
-                              {linkSettings.showPrice && (
-                                <div style={{ display: 'flex', gap: '6px', paddingLeft: '12px', borderLeft: `2px solid ${border}` }}>
-                                  <select value={linkSettings.priceCurrency} onChange={e => setLink({ priceCurrency: e.target.value })}
-                                    style={{ width: '72px', flexShrink: 0, padding: '7px 4px', borderRadius: '7px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '11px', outline: 'none', cursor: 'pointer' }}>
-                                    {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
-                                  </select>
-                                  <input type="number" value={linkSettings.priceAmount} onChange={e => setLink({ priceAmount: e.target.value })} placeholder="0.00" min="0"
-                                    style={{ flex: 1, padding: '7px 10px', borderRadius: '7px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none' }} />
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <InfoLabel label="Verified by Riot" which="ogi_verified" />
+                                  <Toggle on={linkSettings.ogiVerified} onClick={() => setLink({ ogiVerified: !linkSettings.ogiVerified })} />
                                 </div>
-                              )}
-                            </div>
-
-                            {generatingLinkError && (
-                              <div style={{ fontSize: '11px', color: '#e05252', background: '#e0525210', border: '1px solid #e0525244', borderRadius: '6px', padding: '8px 10px' }}>
-                                ⚠ {generatingLinkError}
                               </div>
                             )}
-
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              {scanPreviewId && (
-                                <button onClick={() => { setEditingLinkSettings(false); setGeneratingLinkError(null) }}
-                                  style={{ flex: 1, padding: '9px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '8px', fontSize: '12px', cursor: 'pointer' }}>
-                                  Cancel
-                                </button>
-                              )}
-                              <button onClick={handleGenerateLink} disabled={generatingLink}
-                                style={{ flex: 2, padding: '9px', background: generatingLink ? '#7E655188' : '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', cursor: generatingLink ? 'not-allowed' : 'pointer' }}>
-                                {generatingLink ? (scanPreviewId ? 'Updating…' : 'Generating…') : (scanPreviewId ? '🔗 Update Link' : '🔗 Generate Link')}
-                              </button>
-                            </div>
                           </div>
-                        )}
 
-                        {scanPreviewId && !editingLinkSettings && (
-                          <button onClick={() => setEditingLinkSettings(true)}
-                            style={{ width: '100%', padding: '7px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '8px', fontSize: '11px', cursor: 'pointer' }}>
-                            ✎ Edit Link Settings
-                          </button>
-                        )}
+                          {/* Price */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: '12px', color: text }}>Selling Price</span>
+                              <Toggle on={linkSettings.showPrice} onClick={() => setLink({ showPrice: !linkSettings.showPrice, priceAmount: '', priceCurrency: 'USD' })} />
+                            </div>
+                            {linkSettings.showPrice && (
+                              <div style={{ display: 'flex', gap: '6px', paddingLeft: '12px', borderLeft: `2px solid ${border}` }}>
+                                <select value={linkSettings.priceCurrency} onChange={e => setLink({ priceCurrency: e.target.value })}
+                                  style={{ width: '72px', flexShrink: 0, padding: '7px 4px', borderRadius: '7px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '11px', outline: 'none', cursor: 'pointer' }}>
+                                  {CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                                </select>
+                                <input type="number" value={linkSettings.priceAmount} onChange={e => setLink({ priceAmount: e.target.value })} placeholder="0.00" min="0"
+                                  style={{ flex: 1, padding: '7px 10px', borderRadius: '7px', border: `1px solid ${border}`, background: inputBg, color: text, fontSize: '13px', outline: 'none' }} />
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Action buttons */}
@@ -2647,24 +2717,15 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                             {hasMappings ? '⚠ Map New Values' : '⚙ Configure Fields'}
                           </button>
                         ) : (
-                          <>
-                            <button onClick={() => {
-                              const prefill = checkerData || {}
-                              setShowAddChoice(false); setCheckerStep(0)
-                              handleOpenAdd({ ...prefill, _scanId: scanPreviewId, _scanOwnerToken: scanOwnerToken })
-                            }} style={{ flex: 2, padding: '11px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
-                              ✓ Create Account
-                            </button>
-                            <button onClick={() => {
-                              const prefill = checkerData || {}
-                              setShowAddChoice(false); setCheckerStep(0)
-                              handleOpenAdd({ ...prefill, _scanId: scanPreviewId, _scanOwnerToken: scanOwnerToken })
-                            }} style={{ flex: 1, padding: '11px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', cursor: 'pointer' }}>
-                              Edit Manually
-                            </button>
-                          </>
+                          <button onClick={() => {
+                            const prefill = checkerData || {}
+                            const soldFor = linkSettings.showPrice && linkSettings.priceAmount ? parseFloat(linkSettings.priceAmount) : null
+                            handleOpenAdd({ ...prefill }, soldFor, linkSettings.showPrice ? linkSettings.priceCurrency : null)
+                          }} style={{ flex: 1, padding: '11px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
+                            ✓ Save Account
+                          </button>
                         )}
-                        <button onClick={() => { setCheckerStep(2); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setGeneratingLinkError(null); setEditingLinkSettings(false) }}
+                        <button onClick={() => { setCheckerStep(2); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setVersionMismatch(false); setGeneratingLinkError(null); setEditingLinkSettings(false); setScanRetryActive(false); setScanRetryElapsed(0) }}
                           style={{ padding: '11px 14px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', cursor: 'pointer' }}>
                           Redo
                         </button>
@@ -2672,6 +2733,57 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                     </div>
                   )
                 })()}
+
+                {/* Step 5: Account saved — show links */}
+                {checkerStep === 5 && (
+                  <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ fontSize: '15px', fontWeight: '600', color: '#4caf50' }}>✅ Account saved!</div>
+                    <div style={{ fontSize: '13px', color: muted }}>Your preview link has been generated.</div>
+
+                    {scanPreviewId && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {/* Preview link row */}
+                        <div style={{ padding: '10px 14px', background: sectionBg, border: `1px solid ${border}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            Preview
+                          </span>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <a href={`https://lolprev.site/preview/lol/${scanPreviewId}`} target="_blank" rel="noreferrer"
+                              style={{ padding: '5px 10px', background: 'transparent', border: `1px solid ${border}`, borderRadius: '6px', color: muted, fontSize: '11px', textDecoration: 'none', cursor: 'pointer' }}>
+                              Open ↗
+                            </a>
+                            <button onClick={() => navigator.clipboard.writeText(`https://lolprev.site/preview/lol/${scanPreviewId}`)}
+                              style={{ padding: '5px 10px', background: '#7E6551', border: 'none', borderRadius: '6px', color: '#FDF4DC', fontSize: '11px', cursor: 'pointer', fontWeight: '500' }}>
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Owner link row */}
+                        <div style={{ padding: '10px 14px', background: sectionBg, border: `1px solid ${border}`, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span style={{ fontSize: '12px', color: muted, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            Owner Link
+                          </span>
+                          <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                            <a href={`/overview/lol/${scanPreviewId}?token=${scanOwnerToken}`} target="_blank" rel="noreferrer"
+                              style={{ padding: '5px 10px', background: 'transparent', border: `1px solid ${border}`, borderRadius: '6px', color: muted, fontSize: '11px', textDecoration: 'none', cursor: 'pointer' }}>
+                              Open ↗
+                            </a>
+                            <button onClick={() => setOwnerLinkCopyWarning(true)}
+                              style={{ padding: '5px 10px', background: '#7E6551', border: 'none', borderRadius: '6px', color: '#FDF4DC', fontSize: '11px', cursor: 'pointer', fontWeight: '500' }}>
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <button onClick={() => { setShowAddChoice(false); setCheckerStep(0); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setGeneratingLinkError(null); setEditingLinkSettings(false); setScanRetryActive(false) }}
+                      style={{ padding: '10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', cursor: 'pointer', textAlign: 'center' }}>
+                      Done
+                    </button>
+                  </div>
+                )}
 
               </div>
             </div>
@@ -2695,6 +2807,34 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         {showModal && <AccountModal game={selectedGame} gameConfig={getGameConfig(selectedGame.id)} newAccount={newAccount} setNewAccount={setNewAccount} handleSave={handleSave} handleStatusChange={handleStatusChange} onClose={() => { if (!saving) setShowModal(false) }} editingAccount={editingAccount} card={card} border={border} text={text} muted={muted} inputBg={inputBg} bg={bg} getSoldForLabel={getSoldForLabel} platforms={platforms} saving={saving} catConfig={getCheckerCategoriesConfig(selectedGame.id)} />}
         {showConfigModal && configuringGame && <ConfigModal {...configModalProps} />}
 
+
+        {/* Owner link copy warning */}
+        {ownerLinkCopyWarning && (
+          <div onClick={() => setOwnerLinkCopyWarning(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 600, padding: '20px' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: card, borderRadius: '16px', width: '100%', maxWidth: '400px', border: `1px solid ${border}`, overflow: 'hidden' }}>
+              <div style={{ padding: '18px 22px 14px', borderBottom: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', color: text, margin: 0 }}>⚠ Owner Link Warning</h3>
+                <button onClick={() => setOwnerLinkCopyWarning(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: muted }}><X size={16} /></button>
+              </div>
+              <div style={{ padding: '16px 22px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <p style={{ fontSize: '13px', color: text, lineHeight: '1.6', margin: 0 }}>The owner link gives full access to scan details including all account information. <strong>Only share this with trusted parties or keep it for yourself.</strong></p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={() => setOwnerLinkCopyWarning(false)}
+                    style={{ flex: 1, padding: '9px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/overview/lol/${scanPreviewId}?token=${scanOwnerToken}`)
+                    setOwnerLinkCopyWarning(false)
+                  }}
+                    style={{ flex: 1, padding: '9px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}>
+                    Copy Anyway
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {infoModal && (
           <div onClick={() => setInfoModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: '20px' }}>
