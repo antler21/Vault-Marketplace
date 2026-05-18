@@ -1450,6 +1450,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const [scanPreviewId, setScanPreviewId] = useState(null)   // lol_skin_scans UUID
   const [scanOwnerToken, setScanOwnerToken] = useState(null) // owner_token for overview link
   const [scannerOnline, setScannerOnline] = useState(false)
+  const [scannerVersion, setScannerVersion] = useState(null)
   const [leagueOpen, setLeagueOpen]       = useState(false)
   const [showFieldMapper, setShowFieldMapper]                 = useState(false)
   const [scannerMapping, setScannerMapping]                   = useState(null)
@@ -1600,13 +1601,15 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         const r = await fetch('http://localhost:35199/ping', { signal: AbortSignal.timeout(1500) })
         if (r.ok) {
           const d = await r.json()
-          setScannerOnline(true)
-          setLeagueOpen(!!d.leagueOpen)
+          const versionMatch = d.version === EXPECTED_SCANNER_VERSION
+          setScannerOnline(versionMatch)
+          setScannerVersion(d.version || null)
+          setLeagueOpen(versionMatch ? !!d.leagueOpen : false)
         } else {
-          setScannerOnline(false); setLeagueOpen(false)
+          setScannerOnline(false); setScannerVersion(null); setLeagueOpen(false)
         }
       } catch {
-        setScannerOnline(false); setLeagueOpen(false)
+        setScannerOnline(false); setScannerVersion(null); setLeagueOpen(false)
       }
     }
     poll()
@@ -2462,14 +2465,15 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                   <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ fontSize: '14px', fontWeight: '600', color: text }}>1. Run AIO Tool</div>
-                      <div style={{ fontSize: '12px', fontWeight: '600', color: scannerOnline ? '#4caf50' : muted }}>
-                        {scannerOnline ? '● Running' : '○ Not detected'}
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: scannerOnline ? '#4caf50' : scannerVersion ? '#e05252' : muted }}>
+                        {scannerOnline ? `● Running v${scannerVersion}` : scannerVersion ? `● Wrong version (v${scannerVersion})` : '○ Not detected'}
                       </div>
                     </div>
                     <a href="/aio-tool-v0.6.0.exe" download="aio-tool-v0.6.0.exe" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: scannerOnline ? 'transparent' : '#7E6551', color: scannerOnline ? muted : '#FDF4DC', border: scannerOnline ? `1px solid ${border}` : 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
                       ↓ Download AIO Tool v0.6.0
                     </a>
                     {scannerOnline && <div style={{ fontSize: '12px', color: '#4caf50' }}>AIO Tool is running on localhost:35199</div>}
+                    {!scannerOnline && scannerVersion && <div style={{ fontSize: '12px', color: '#e05252' }}>Old version detected (v{scannerVersion}) — close it and download the latest.</div>}
                     <button onClick={() => setCheckerStep(2)} disabled={!scannerOnline}
                       style={{ padding: '10px 20px', background: scannerOnline ? '#7E6551' : border, color: scannerOnline ? '#FDF4DC' : muted, border: 'none', borderRadius: '10px', cursor: scannerOnline ? 'pointer' : 'default', fontSize: '13px', fontWeight: '500', alignSelf: 'flex-end' }}>
                       Continue →
