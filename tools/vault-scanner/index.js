@@ -2,9 +2,36 @@ const http = require('http')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
+const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.5.4'
+const VERSION = '0.6.0'
+
+// ─── Local Storage ────────────────────────────────────────────────────────────
+
+const DATA_DIR = path.join(process.env.APPDATA || os.homedir(), 'aio-tool')
+const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json')
+const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
+
+function ensureDataDir() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
+}
+
+function loadJson(file, def) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return def }
+}
+
+function saveJson(file, data) {
+  ensureDataDir()
+  fs.writeFileSync(file, JSON.stringify(data, null, 2))
+}
+
+function loadAccounts() { return loadJson(ACCOUNTS_FILE, []) }
+function saveAccounts(a) { saveJson(ACCOUNTS_FILE, a) }
+function loadConfig() { return loadJson(CONFIG_FILE, { webappUrl: '' }) }
+function saveConfig(c) { saveJson(CONFIG_FILE, c) }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -668,24 +695,446 @@ async function runScan(lcuPort, password) {
 
 // ─── HTTP Server ─────────────────────────────────────────────────────────────
 
-function cors(res) {
+function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-  res.setHeader('Content-Type', 'application/json')
 }
 
-function json(res, status, body) { cors(res); res.writeHead(status); res.end(JSON.stringify(body)) }
+function json(res, status, body) {
+  setCors(res)
+  res.setHeader('Content-Type', 'application/json')
+  res.writeHead(status)
+  res.end(JSON.stringify(body))
+}
+
+function html(res, body) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.writeHead(200)
+  res.end(body)
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    let data = ''
+    req.on('data', c => data += c)
+    req.on('end', () => { try { resolve(JSON.parse(data)) } catch { resolve({}) } })
+  })
+}
+
+const UI_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIO Tool v${VERSION}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e8e0d0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#1a1f2e}::-webkit-scrollbar-thumb{background:#2a3347;border-radius:3px}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:#161b27;border-bottom:1px solid #1e2535;flex-shrink:0}
+.header-title{font-size:15px;font-weight:700;color:#c89b3c;letter-spacing:.5px}
+.header-actions{display:flex;gap:8px}
+.btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:.15s}
+.btn-primary{background:#c89b3c;color:#0f1117}
+.btn-primary:hover{background:#daa94a}
+.btn-ghost{background:transparent;color:#6b7a94;border:1px solid #2a3347}
+.btn-ghost:hover{background:#1e2535;color:#a0aec0}
+.btn-danger{background:#e05252;color:#fff}
+.btn-danger:hover{background:#c94444}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-icon{padding:7px;border-radius:7px;background:transparent;border:1px solid #2a3347;color:#6b7a94;cursor:pointer;font-size:14px;line-height:1}
+.btn-icon:hover{background:#1e2535;color:#a0aec0}
+.layout{display:flex;flex:1;overflow:hidden}
+.sidebar{width:200px;background:#161b27;border-right:1px solid #1e2535;display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-head{padding:14px 16px;font-size:10px;font-weight:700;color:#4a5568;letter-spacing:.1em;text-transform:uppercase}
+.game-item{padding:10px 16px;cursor:pointer;font-size:13px;color:#a0aec0;border-left:3px solid transparent;transition:.1s;display:flex;align-items:center;gap:8px}
+.game-item:hover{background:#1e2535;color:#e8e0d0}
+.game-item.active{background:#1e2535;color:#c89b3c;border-left-color:#c89b3c}
+.game-dot{width:8px;height:8px;border-radius:50%;background:#2a3347;flex-shrink:0}
+.game-item.active .game-dot{background:#c89b3c}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.main-head{padding:16px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e2535;flex-shrink:0}
+.main-head h2{font-size:16px;font-weight:600;color:#e8e0d0}
+.main-head-right{display:flex;align-items:center;gap:10px}
+.stat-pill{padding:4px 10px;background:#1e2535;border-radius:20px;font-size:11px;color:#6b7a94}
+.accounts-grid{flex:1;overflow-y:auto;padding:20px 24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;align-content:start}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:#2a3347}
+.empty-icon{font-size:48px;opacity:.4}
+.empty-text{font-size:14px;color:#4a5568}
+.card{background:#161b27;border:1px solid #1e2535;border-radius:10px;overflow:hidden;transition:.15s;position:relative}
+.card:hover{border-color:#2a3347;transform:translateY(-1px)}
+.card-img{height:120px;background:#0f1117;display:flex;align-items:center;justify-content:center;color:#2a3347;font-size:12px;overflow:hidden;position:relative}
+.card-img img{width:100%;height:100%;object-fit:cover}
+.card-badge{position:absolute;top:6px;right:6px;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(0,0,0,.7)}
+.card-body{padding:12px}
+.card-name{font-size:13px;font-weight:600;color:#e8e0d0;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-sub{font-size:11px;color:#6b7a94;margin-bottom:10px}
+.card-stats{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.stat-tag{padding:3px 7px;background:#1e2535;border-radius:5px;font-size:10px;color:#a0aec0}
+.card-actions{display:flex;gap:6px}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#161b27;border:1px solid #2a3347;border-radius:14px;width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.modal-head{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between}
+.modal-head h3{font-size:16px;font-weight:700;color:#e8e0d0}
+.modal-close{background:transparent;border:none;color:#4a5568;cursor:pointer;font-size:20px;line-height:1;padding:0}
+.modal-close:hover{color:#e8e0d0}
+.modal-body{padding:20px 24px}
+.modal-footer{padding:0 24px 20px;display:flex;gap:8px;justify-content:flex-end}
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:11px;font-weight:600;color:#6b7a94;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+.form-input{width:100%;padding:9px 12px;background:#0f1117;border:1px solid #2a3347;border-radius:7px;color:#e8e0d0;font-size:13px;outline:none;transition:.15s}
+.form-input:focus{border-color:#c89b3c}
+.seg-control{display:flex;background:#0f1117;border:1px solid #2a3347;border-radius:8px;padding:3px;gap:3px}
+.seg-btn{flex:1;padding:7px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:#6b7a94;transition:.15s}
+.seg-btn.active{background:#c89b3c;color:#0f1117}
+.scan-status{padding:16px;background:#0f1117;border-radius:8px;border:1px solid #2a3347;text-align:center}
+.scan-status .spinner{display:inline-block;width:20px;height:20px;border:2px solid #2a3347;border-top-color:#c89b3c;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scan-status .status-text{font-size:13px;color:#a0aec0}
+.scan-result{padding:16px;background:#0f1117;border-radius:8px;border:1px solid #2a3347}
+.scan-result-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:13px}
+.scan-result-row:not(:last-child){border-bottom:1px solid #1e2535}
+.scan-result-label{color:#6b7a94}
+.scan-result-val{color:#e8e0d0;font-weight:600}
+.notice{padding:10px 12px;background:#c89b3c18;border:1px solid #c89b3c33;border-radius:7px;font-size:12px;color:#c89b3c;margin-bottom:14px}
+.error-box{padding:10px 12px;background:#e0525218;border:1px solid #e0525233;border-radius:7px;font-size:12px;color:#e05252;margin-bottom:14px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #1e2535}
+.settings-row:last-child{border-bottom:none}
+.settings-label{font-size:13px;color:#a0aec0}
+.settings-sub{font-size:11px;color:#4a5568;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="header">
+  <span class="header-title">⚔ AIO Tool <span style="font-weight:400;color:#4a5568">v${VERSION}</span></span>
+  <div class="header-actions">
+    <button class="btn-icon" onclick="openSettings()" title="Settings">⚙</button>
+  </div>
+</div>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-head">Games</div>
+    <div id="games-list"></div>
+  </div>
+  <div class="main">
+    <div class="main-head">
+      <h2 id="game-title">Select a game</h2>
+      <div class="main-head-right">
+        <span class="stat-pill" id="account-count" style="display:none"></span>
+        <button class="btn btn-primary" id="add-btn" style="display:none" onclick="openAddModal()">+ Add Account</button>
+      </div>
+    </div>
+    <div id="accounts-container" class="accounts-grid"></div>
+  </div>
+</div>
+
+<!-- Add Account Modal -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Add Account</h3>
+      <button class="modal-close" onclick="closeAdd()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Mode</label>
+        <div class="seg-control">
+          <button class="seg-btn active" id="mode-scanonly" onclick="setMode('scanonly')">Scan Only</button>
+          <button class="seg-btn" id="mode-loginscan" onclick="setMode('loginscan')">Login &amp; Scan</button>
+        </div>
+      </div>
+      <div id="cred-fields" style="display:none">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input class="form-input" id="cred-user" type="text" placeholder="Riot username">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" id="cred-pass" type="password" placeholder="Password">
+        </div>
+      </div>
+      <div id="scan-area" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeAdd()">Cancel</button>
+      <button class="btn btn-primary" id="scan-btn" onclick="startScan()">Start Scan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Settings</h3>
+      <button class="modal-close" onclick="closeSettings()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Webapp URL</label>
+        <input class="form-input" id="webapp-url" type="text" placeholder="https://your-app.vercel.app">
+        <div style="font-size:11px;color:#4a5568;margin-top:5px">Used when importing accounts to the webapp</div>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Data folder</div>
+          <div class="settings-sub" id="data-dir-path"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeSettings()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:${PORT}'
+let selectedGame = null
+let scanMode = 'scanonly'
+let lastScanData = null
+let accounts = []
+let config = {}
+
+const GAMES = [
+  { id: 'lol', name: 'League of Legends', icon: '⚔' }
+]
+
+const RANK_COLORS = {
+  IRON:'#8b7355',BRONZE:'#a0522d',SILVER:'#c0c0c0',GOLD:'#ffd700',
+  PLATINUM:'#00c8b4',EMERALD:'#50c878',DIAMOND:'#b9f2ff',
+  MASTER:'#9b59b6',GRANDMASTER:'#e74c3c',CHALLENGER:'#f1c40f'
+}
+
+async function init() {
+  renderGames()
+  try {
+    const [accs, cfg] = await Promise.all([
+      fetch(API+'/local/accounts').then(r=>r.json()),
+      fetch(API+'/local/config').then(r=>r.json())
+    ])
+    accounts = accs
+    config = cfg
+    document.getElementById('data-dir-path').textContent = cfg.dataDir || ''
+    document.getElementById('webapp-url').value = cfg.webappUrl || ''
+  } catch {}
+  selectGame(GAMES[0])
+}
+
+function renderGames() {
+  const el = document.getElementById('games-list')
+  el.innerHTML = GAMES.map(g => \`
+    <div class="game-item\${selectedGame?.id===g.id?' active':''}" onclick="selectGame(GAMES.find(x=>x.id='\${g.id}'))">
+      <div class="game-dot"></div>\${g.name}
+    </div>
+  \`).join('')
+}
+
+function selectGame(g) {
+  selectedGame = g
+  renderGames()
+  document.getElementById('game-title').textContent = g.name
+  document.getElementById('add-btn').style.display = 'flex'
+  renderAccounts()
+}
+
+function renderAccounts() {
+  const container = document.getElementById('accounts-container')
+  const gameAccs = accounts.filter(a => a.gameId === selectedGame?.id)
+  document.getElementById('account-count').style.display = 'inline'
+  document.getElementById('account-count').textContent = gameAccs.length + ' account' + (gameAccs.length!==1?'s':'')
+  if (!gameAccs.length) {
+    container.innerHTML = \`<div class="empty" style="grid-column:1/-1;min-height:300px"><div class="empty-icon">🎮</div><div class="empty-text">No accounts yet — click Add Account to scan one</div></div>\`
+    return
+  }
+  container.innerHTML = gameAccs.map(a => {
+    const scan = a.scanData || {}
+    const skins = (scan.ownedSkinIds || []).length
+    const rank = scan.soloRank ? scan.soloRank.charAt(0)+scan.soloRank.slice(1).toLowerCase() : 'Unranked'
+    const rankColor = RANK_COLORS[scan.soloRank] || '#6b7a94'
+    const name = a.credentials?.username || scan.summonerName || 'Unknown'
+    const tag = scan.tagLine ? ' #'+scan.tagLine : ''
+    const region = scan.region || ''
+    return \`<div class="card">
+      <div class="card-img">
+        \${a.thumbnail ? \`<img src="\${a.thumbnail}" onerror="this.style.display='none'">\` : '<span>No image</span>'}
+        \${a.imported ? '<div class="card-badge" style="color:#4caf50">✓ Imported</div>' : ''}
+      </div>
+      <div class="card-body">
+        <div class="card-name" title="\${name}\${tag}">\${name}\${tag}</div>
+        <div class="card-sub">\${region}</div>
+        <div class="card-stats">
+          \${skins ? \`<span class="stat-tag">🎨 \${skins} skins</span>\` : ''}
+          <span class="stat-tag" style="color:\${rankColor}">\${rank}</span>
+          \${scan.rp!=null ? \`<span class="stat-tag">💎 \${scan.rp} RP</span>\` : ''}
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-primary btn-sm" style="flex:1" onclick="importAccount('\${a.id}')">
+            \${a.imported ? 'Re-import' : 'Import to Webapp'}
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="deleteAccount('\${a.id}')">🗑</button>
+        </div>
+      </div>
+    </div>\`
+  }).join('')
+}
+
+function setMode(mode) {
+  scanMode = mode
+  document.getElementById('mode-scanonly').classList.toggle('active', mode==='scanonly')
+  document.getElementById('mode-loginscan').classList.toggle('active', mode==='loginscan')
+  document.getElementById('cred-fields').style.display = mode==='loginscan' ? 'block' : 'none'
+}
+
+function openAddModal() {
+  lastScanData = null
+  document.getElementById('scan-area').style.display = 'none'
+  document.getElementById('scan-area').innerHTML = ''
+  document.getElementById('scan-btn').textContent = 'Start Scan'
+  document.getElementById('scan-btn').disabled = false
+  document.getElementById('scan-btn').onclick = startScan
+  document.getElementById('cred-user').value = ''
+  document.getElementById('cred-pass').value = ''
+  setMode('scanonly')
+  document.getElementById('add-modal').classList.add('open')
+}
+
+function closeAdd() {
+  document.getElementById('add-modal').classList.remove('open')
+  lastScanData = null
+}
+
+async function startScan() {
+  const scanArea = document.getElementById('scan-area')
+  const btn = document.getElementById('scan-btn')
+  scanArea.style.display = 'block'
+  scanArea.innerHTML = \`<div class="scan-status"><div class="spinner"></div><div class="status-text">Scanning account...</div></div>\`
+  btn.disabled = true
+  btn.textContent = 'Scanning...'
+  try {
+    const res = await fetch(API+'/scan', { signal: AbortSignal.timeout(120000) })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Scan failed')
+    lastScanData = data
+    const skins = (data.ownedSkinIds || []).length
+    const rank = data.soloRank ? data.soloRank.charAt(0)+data.soloRank.slice(1).toLowerCase() : 'Unranked'
+    const rankColor = RANK_COLORS[data.soloRank] || '#6b7a94'
+    scanArea.innerHTML = \`<div class="scan-result">
+      <div class="scan-result-row"><span class="scan-result-label">Account</span><span class="scan-result-val">\${data.summonerName || 'Unknown'}\${data.tagLine?' #'+data.tagLine:''}</span></div>
+      <div class="scan-result-row"><span class="scan-result-label">Region</span><span class="scan-result-val">\${data.region||'—'}</span></div>
+      <div class="scan-result-row"><span class="scan-result-label">Skins</span><span class="scan-result-val">\${skins}</span></div>
+      <div class="scan-result-row"><span class="scan-result-label">Solo Rank</span><span class="scan-result-val" style="color:\${rankColor}">\${rank}</span></div>
+      \${data.rp!=null?'<div class="scan-result-row"><span class="scan-result-label">RP</span><span class="scan-result-val">'+data.rp+'</span></div>':''}
+      \${data.be!=null?'<div class="scan-result-row"><span class="scan-result-label">BE</span><span class="scan-result-val">'+data.be+'</span></div>':''}
+    </div>\`
+    btn.disabled = false
+    btn.textContent = 'Save Account'
+    btn.onclick = saveScannedAccount
+  } catch (e) {
+    scanArea.innerHTML = \`<div class="error-box">\${e.message}</div>\`
+    btn.disabled = false
+    btn.textContent = 'Retry'
+    btn.onclick = startScan
+  }
+}
+
+async function saveScannedAccount() {
+  if (!lastScanData) return
+  const creds = scanMode === 'loginscan' ? {
+    username: document.getElementById('cred-user').value.trim(),
+    password: document.getElementById('cred-pass').value
+  } : { username: lastScanData.summonerName || '' }
+  const body = { gameId: selectedGame.id, scanData: lastScanData, credentials: creds, importedAt: null, imported: false }
+  try {
+    const res = await fetch(API+'/local/accounts', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    const saved = await res.json()
+    accounts.push(saved)
+    renderAccounts()
+    closeAdd()
+  } catch (e) { alert('Failed to save: ' + e.message) }
+}
+
+async function importAccount(id) {
+  const acc = accounts.find(a=>a.id===id)
+  if (!acc) return
+  const webappUrl = config.webappUrl?.replace(/\\/+$/,'')
+  if (!webappUrl) { alert('Set your webapp URL in Settings first.'); openSettings(); return }
+  try {
+    const scanData = acc.scanData || {}
+    const res = await fetch(webappUrl+'/api/lol-skins', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        summonerName: scanData.summonerName, tagLine: scanData.tagLine,
+        region: scanData.region, profileIconId: scanData.profileIconId,
+        summonerLevel: scanData.summonerLevel, soloRank: scanData.soloRank,
+        flexRank: scanData.flexRank, soloPeakRank: scanData.soloPeakRank,
+        soloPrevRank: scanData.soloPrevRank, rp: scanData.rp, be: scanData.be,
+        ownedSkinIds: scanData.ownedSkinIds, lootSummary: scanData.lootSummary,
+        rankHistory: scanData.rankHistory, champCount: scanData.champCount,
+        ownedChromaIds: scanData.ownedChromaIds, ownedEmoteIds: scanData.ownedEmoteIds,
+        ownedIconIds: scanData.ownedIconIds, championMastery: scanData.championMastery,
+        _scannerVersion: scanData._scannerVersion,
+        accountTitle: acc.credentials?.username || scanData.summonerName || '',
+      })
+    })
+    const stored = await res.json()
+    if (stored.error) throw new Error(stored.error)
+    // Mark as imported
+    await fetch(API+'/local/accounts/'+id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ imported: true, importedScanId: stored.id }) })
+    acc.imported = true
+    acc.importedScanId = stored.id
+    renderAccounts()
+    // Open webapp
+    window.open(webappUrl, '_blank')
+  } catch (e) { alert('Import failed: ' + e.message) }
+}
+
+async function deleteAccount(id) {
+  if (!confirm('Delete this account?')) return
+  await fetch(API+'/local/accounts/'+id, { method:'DELETE' })
+  accounts = accounts.filter(a=>a.id!==id)
+  renderAccounts()
+}
+
+function openSettings() {
+  document.getElementById('webapp-url').value = config.webappUrl || ''
+  document.getElementById('settings-modal').classList.add('open')
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('open')
+}
+
+async function saveSettings() {
+  config.webappUrl = document.getElementById('webapp-url').value.trim()
+  await fetch(API+'/local/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(config) })
+  closeSettings()
+}
+
+init()
+</script>
+</body>
+</html>`
 
 const server = http.createServer(async (req, res) => {
-  if (req.method === 'OPTIONS') { cors(res); res.writeHead(200); res.end(); return }
+  if (req.method === 'OPTIONS') { setCors(res); res.writeHead(200); res.end(); return }
   const url = new URL(req.url, `http://localhost:${PORT}`)
 
-  if (url.pathname === '/ping') {
+  // ── UI ──────────────────────────────────────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/') {
+    return html(res, UI_HTML)
+  }
+
+  // ── Existing scan endpoints ──────────────────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/ping') {
     return json(res, 200, { running: true, leagueOpen: !!findLockfile() })
   }
 
-  if (url.pathname === '/scan') {
+  if (req.method === 'GET' && url.pathname === '/scan') {
     const lockfile = findLockfile()
     if (!lockfile) return json(res, 400, { error: 'League client not detected — open League of Legends first.' })
     const { port: lcuPort, password } = parseLockfile(lockfile)
@@ -700,6 +1149,52 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // ── Local accounts CRUD ──────────────────────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/local/accounts') {
+    return json(res, 200, loadAccounts())
+  }
+
+  if (req.method === 'POST' && url.pathname === '/local/accounts') {
+    const body = await readBody(req)
+    const accounts = loadAccounts()
+    const account = { ...body, id: uid(), createdAt: new Date().toISOString() }
+    accounts.push(account)
+    saveAccounts(accounts)
+    return json(res, 201, account)
+  }
+
+  const patchMatch = url.pathname.match(/^\/local\/accounts\/([^/]+)$/)
+  if (patchMatch) {
+    const id = patchMatch[1]
+    if (req.method === 'DELETE') {
+      const accounts = loadAccounts().filter(a => a.id !== id)
+      saveAccounts(accounts)
+      return json(res, 200, { ok: true })
+    }
+    if (req.method === 'PATCH') {
+      const body = await readBody(req)
+      const accounts = loadAccounts()
+      const idx = accounts.findIndex(a => a.id === id)
+      if (idx === -1) return json(res, 404, { error: 'Not found' })
+      accounts[idx] = { ...accounts[idx], ...body }
+      saveAccounts(accounts)
+      return json(res, 200, accounts[idx])
+    }
+  }
+
+  // ── Config ──────────────────────────────────────────────────────────────────
+  if (req.method === 'GET' && url.pathname === '/local/config') {
+    const cfg = loadConfig()
+    cfg.dataDir = DATA_DIR
+    return json(res, 200, cfg)
+  }
+
+  if (req.method === 'POST' && url.pathname === '/local/config') {
+    const body = await readBody(req)
+    saveConfig(body)
+    return json(res, 200, { ok: true })
+  }
+
   return json(res, 404, { error: 'Not found' })
 })
 
@@ -710,11 +1205,11 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('╔════════════════════════════════════════╗')
   console.log(`║           AIO TOOL  v${VERSION}             ║`)
   console.log('╚════════════════════════════════════════╝')
-  console.log(`\n  Running on http://localhost:${PORT}`)
-  console.log('  Keep this window open while scanning.')
-  console.log('  Minimize it — reuse for multiple accounts.\n')
+  console.log(`\n  UI: http://localhost:${PORT}`)
+  console.log('  Opening in browser...\n')
   console.log('─────────────────────────────────────────')
-  log('Ready. Waiting for scan request...')
+  log('Ready.')
+  exec(`start http://localhost:${PORT}`)
 })
 
 server.on('error', (e) => {
