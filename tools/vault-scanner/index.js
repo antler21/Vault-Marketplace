@@ -832,7 +832,7 @@ const UI_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AIO Tool v${VERSION}</title>
 <style>
-:root{--bg:#0f1117;--surf:#161b27;--surf2:#1c2333;--accent:#c89b3c;--text:#e8e8e8;--muted:#6b7280;--border:#2a3040;--red:#ef4444;--green:#22c55e;--r:10px}
+:root{--bg:#151515;--surf:#1e1e1e;--surf2:#252525;--accent:#7E6551;--accent-hi:#a08570;--text:#FDF4DC;--muted:#a08570;--border:#2e2e2e;--red:#e05252;--green:#4caf50;--r:10px}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 header{display:flex;align-items:center;padding:0 16px;height:52px;border-bottom:1px solid var(--border);background:var(--surf);flex-shrink:0;gap:10px}
@@ -846,7 +846,7 @@ aside{width:176px;background:var(--surf);border-right:1px solid var(--border);di
 .sidebar-label{padding:8px 14px 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
 .sidebar-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;color:var(--muted);font-size:13px;border-left:3px solid transparent;transition:background .12s}
 .sidebar-item:hover{background:var(--surf2);color:var(--text)}
-.sidebar-item.active{background:var(--surf2);color:var(--accent);border-left-color:var(--accent)}
+.sidebar-item.active{background:rgba(126,101,81,.18);color:var(--accent-hi);border-left-color:var(--accent)}
 .sidebar-item.blur{filter:blur(2px);opacity:.5;pointer-events:none}
 .s-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
 .s-dot.on{background:var(--accent)}
@@ -854,7 +854,7 @@ main{flex:1;overflow-y:auto;padding:20px}
 .main-hdr{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
 .main-title{font-size:17px;font-weight:600}
 .btn{padding:7px 16px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:500;transition:opacity .15s,background .15s}
-.btn-primary{background:var(--accent);color:#000}
+.btn-primary{background:var(--accent);color:var(--text)}
 .btn-primary:hover{opacity:.85}
 .btn-secondary{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
 .btn-secondary:hover{background:var(--border)}
@@ -872,16 +872,16 @@ main{flex:1;overflow-y:auto;padding:20px}
 .card-overlay{position:absolute;inset:0;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;opacity:0;transition:opacity .15s;pointer-events:none}
 .card:hover .card-overlay{opacity:1;pointer-events:all}
 .ov-btn{width:82%;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:500;transition:opacity .15s}
-.ov-import{background:var(--accent);color:#000}
+.ov-import{background:var(--accent);color:var(--text)}
 .ov-preview{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
 .ov-remove{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.4)}
 .ov-btn:hover{opacity:.8}
 .empty{text-align:center;padding:60px 20px;color:var(--muted)}
 .empty h3{font-size:15px;margin-bottom:8px;color:var(--text)}
-.scan-banner{padding:11px 14px;background:rgba(200,155,60,.1);border:1px solid rgba(200,155,60,.3);border-radius:var(--r);margin-bottom:14px;color:var(--accent);font-size:13px;display:none}
+.scan-banner{padding:11px 14px;background:rgba(126,101,81,.15);border:1px solid rgba(126,101,81,.4);border-radius:var(--r);margin-bottom:14px;color:var(--accent);font-size:13px;display:none}
 .scan-banner.on{display:block}
 .grid-blur{filter:blur(3px);pointer-events:none}
-.sel-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(200,155,60,.1);border:1px solid rgba(200,155,60,.3);border-radius:var(--r);margin-bottom:12px}
+.sel-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(126,101,81,.15);border:1px solid rgba(126,101,81,.4);border-radius:var(--r);margin-bottom:12px}
 .sel-bar.hide{display:none}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
 .modal-bg.on{opacity:1;pointer-events:all}
@@ -896,21 +896,21 @@ textarea{resize:vertical;min-height:100px}
 select{cursor:pointer}
 .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
 .notice{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:10px}
-.n-info{background:rgba(200,155,60,.1);border:1px solid rgba(200,155,60,.25);color:var(--accent)}
+.n-info{background:rgba(126,101,81,.15);border:1px solid rgba(126,101,81,.35);color:var(--accent)}
 .n-error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red)}
 .n-success{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);color:var(--green)}
 .steps{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
 .step{display:flex;align-items:flex-start;gap:12px;padding:10px 14px;background:var(--surf2);border-radius:8px;border:1px solid var(--border)}
 .step-ico{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
 .ico-pending{background:var(--border);color:var(--muted)}
-.ico-active{background:rgba(200,155,60,.2);color:var(--accent)}
+.ico-active{background:rgba(126,101,81,.2);color:var(--accent-hi)}
 .ico-done{background:rgba(34,197,94,.15);color:var(--green)}
 .ico-error{background:rgba(239,68,68,.15);color:var(--red)}
 .step-info{flex:1}
 .step-main{font-size:13px}
 .step-sub{font-size:11px;color:var(--muted);margin-top:2px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(200,155,60,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(126,101,81,.25);border-top-color:var(--accent-hi);border-radius:50%;animation:spin .8s linear infinite}
 .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0}
 .toggle{position:relative;width:40px;height:22px;flex-shrink:0}
 .toggle input{opacity:0;width:0;height:0}
@@ -1129,7 +1129,7 @@ async function fetchGames() {
     var r = await fetch(_url + '/api/games')
     if (!r.ok) { renderGames([]); return }
     var all = await r.json()
-    _games = (Array.isArray(all) ? all : []).filter(function(g){ return g.scriptEnabled && g.scannerType })
+    _games = (Array.isArray(all) ? all : []).filter(function(g){ return g.script_enabled && g.scanner_type })
     renderGames(_games)
   } catch(e) { renderGames([]) }
 }
