@@ -2175,21 +2175,15 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
               {selectedAccount.soldOnPlatform && (
                 <div style={{ padding: '8px 12px', background: '#2196f311', borderRadius: '8px', border: '1px solid #2196f333', fontSize: '12px', color: '#2196f3' }}>Sold on {selectedAccount.soldOnPlatform}</div>
               )}
-              {customFields.map(field => (
-                <div key={field.id} style={{ padding: '10px 12px', background: bg, borderRadius: '8px', border: `1px solid ${border}` }}>
-                  <div style={{ fontSize: '11px', color: muted, marginBottom: '3px' }}>{field.label}</div>
-                  <div style={{ fontSize: '14px', fontWeight: '500', color: text }}>{field.type === 'Checkbox' ? (selectedAccount.fields[field.id] === 'true' ? '✓ Yes' : '✗ No') : (selectedAccount.fields[field.id] || '—')}</div>
-                </div>
-              ))}
               {selectedAccount.fields?._scanId && (
                 <>
-                  <div style={{ padding: '10px 12px', background: bg, borderRadius: '8px', border: `1px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '11px', color: muted }}>Preview Link</span>
+                  <div style={{ padding: '10px 12px', background: '#7E655111', borderRadius: '8px', border: `1px solid #7E655133`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', color: '#7E6551', fontWeight: '600' }}>Preview Link</span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <a href={`https://lolprev.site/preview/lol/${selectedAccount.fields._scanId}`} target="_blank" rel="noreferrer"
                         style={{ fontSize: '11px', color: '#7E6551', textDecoration: 'none', padding: '3px 8px', border: '1px solid #7E655155', borderRadius: '4px' }}>Open ↗</a>
                       <button onClick={() => navigator.clipboard.writeText(`https://lolprev.site/preview/lol/${selectedAccount.fields._scanId}`)}
-                        style={{ fontSize: '11px', color: muted, background: 'transparent', border: `1px solid ${border}`, borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>Copy</button>
+                        style={{ fontSize: '11px', color: '#7E6551', background: 'transparent', border: '1px solid #7E655155', borderRadius: '4px', padding: '3px 8px', cursor: 'pointer' }}>Copy</button>
                     </div>
                   </div>
                   {selectedAccount.fields?._scanOwnerToken && (
@@ -2205,6 +2199,12 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                   )}
                 </>
               )}
+              {customFields.map(field => (
+                <div key={field.id} style={{ padding: '10px 12px', background: bg, borderRadius: '8px', border: `1px solid ${border}` }}>
+                  <div style={{ fontSize: '11px', color: muted, marginBottom: '3px' }}>{field.label}</div>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: text }}>{field.type === 'Checkbox' ? (selectedAccount.fields[field.id] === 'true' ? '✓ Yes' : '✗ No') : (selectedAccount.fields[field.id] || '—')}</div>
+                </div>
+              ))}
             </div>
             <div style={{ padding: '14px 20px', borderTop: `1px solid ${border}`, display: 'flex', gap: '8px', flexShrink: 0 }}>
               <button onClick={() => handleOpenEdit(selectedAccount)} style={{ flex: 1, padding: '10px', background: '#7E655122', color: '#7E6551', border: `1px solid #7E655144`, borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
