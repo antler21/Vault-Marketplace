@@ -1463,6 +1463,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const [scanRetryElapsed, setScanRetryElapsed]               = useState(0)
   const [versionMismatch, setVersionMismatch]                 = useState(false)
   const [ownerLinkCopyWarning, setOwnerLinkCopyWarning]       = useState(false)
+  const [copiedCardId, setCopiedCardId]                       = useState(null)
   const scanCancelRef                                         = useRef(false)
   const pendingScanDataRef                                    = useRef(null) // snapshot of scanData when Save Account is clicked
   const [editingAccount, setEditingAccount] = useState(null)
@@ -1888,7 +1889,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         await updateAccount({ ...payload, id: editingAccount })
         if (selectedAccount && selectedAccount.id === editingAccount) setSelectedAccount(prev => ({ ...prev, ...payload }))
       } else {
-        await addAccount(payload)
+        const savedAccount = await addAccount(payload)
 
         // Generate preview link if this came from a scan
         const activeScanData = pendingScanDataRef.current
@@ -1922,6 +1923,14 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
             if (!stored.error) {
               setScanPreviewId(stored.id)
               setScanOwnerToken(stored.owner_token)
+              // Persist scan ID on the account so links are always accessible later
+              if (savedAccount) {
+                const updatedFields = { ...cleanFields, _scanId: stored.id, _scanOwnerToken: stored.owner_token }
+                await updateAccount({ ...payload, id: savedAccount.id, fields: updatedFields })
+                if (selectedAccount && selectedAccount.id === savedAccount.id) {
+                  setSelectedAccount(prev => ({ ...prev, fields: updatedFields }))
+                }
+              }
               setShowAddChoice(true)
               setCheckerStep(5)
             }
@@ -2318,6 +2327,16 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                     <div style={{ position: 'absolute', top: '8px', left: '8px', background: '#e8a020', borderRadius: '6px', padding: '2px 8px', fontSize: '10px', color: '#fff', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px' }}>
                       <Flag size={9} /> HIGH
                     </div>
+                  )}
+                  {account.fields?._scanId && (
+                    <button onClick={(e) => {
+                      e.stopPropagation()
+                      navigator.clipboard.writeText(`https://lolprev.site/preview/lol/${account.fields._scanId}`)
+                      setCopiedCardId(account.id)
+                      setTimeout(() => setCopiedCardId(null), 2000)
+                    }} style={{ position: 'absolute', top: '8px', right: '8px', background: copiedCardId === account.id ? '#4caf50' : 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', color: '#fff', fontSize: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px', transition: 'background 0.2s' }}>
+                      {copiedCardId === account.id ? <><Check size={10} /> Copied!</> : <><Link size={10} /> Copy Link</>}
+                    </button>
                   )}
                 </div>
                 <div style={{ padding: '14px' }}>

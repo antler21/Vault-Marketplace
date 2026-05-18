@@ -191,9 +191,10 @@ export default function Home() {
     try {
       const res = await fetch('/api/accounts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(account) })
       const saved = await res.json()
-      if (saved.error) return
+      if (saved.error) return null
       setAccountsState(prev => [...prev, normalizeAccountRaw(saved)])
-    } catch (err) { console.error(err) }
+      return saved
+    } catch (err) { console.error(err); return null }
   }
 
   const updateAccount = async (account) => {
