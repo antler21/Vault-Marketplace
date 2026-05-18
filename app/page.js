@@ -42,6 +42,7 @@ export default function Home() {
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(10)
   const [profileName, setProfileName] = useState('Admin')
   const [defaultDateFilter, setDefaultDateFilter] = useState('all')
+  const [toolImportScanId, setToolImportScanId] = useState(null)
 
   const bg = darkMode ? '#151515' : '#FDF4DC'
   const border = darkMode ? '#2e2e2e' : '#e8d9b8'
@@ -78,8 +79,14 @@ export default function Home() {
       setActivePageState('Orders')
       localStorage.setItem('activePage', 'Orders')
       window.history.replaceState({}, '', '/')
-      // Store a flag so Orders component knows to recheck connection
       localStorage.setItem('gmailJustConnected', 'true')
+    }
+    const toolScanId = params.get('toolImport')
+    if (toolScanId) {
+      setToolImportScanId(toolScanId)
+      setActivePageState('Accounts')
+      localStorage.setItem('activePage', 'Accounts')
+      window.history.replaceState({}, '', '/')
     }
     if (params.get('gmailError')) {
       window.history.replaceState({}, '', '/')
@@ -109,7 +116,7 @@ export default function Home() {
       const removalData = await removalRes.json()
 
       if (rates) setExchangeRates(rates)
-      setGamesState(Array.isArray(gamesData) ? gamesData.map(g => ({ id: g.id, name: g.name, image: g.image || '', sections: g.sections || [], allowedPlatformIds: g.allowed_platform_ids || [], titleCharLimit: g.title_char_limit || null, dataLists: g.data_lists || [], scriptEnabled: g.script_enabled || false, scriptSections: g.script_sections || [] })) : [])
+      setGamesState(Array.isArray(gamesData) ? gamesData.map(g => ({ id: g.id, name: g.name, image: g.image || '', sections: g.sections || [], allowedPlatformIds: g.allowed_platform_ids || [], titleCharLimit: g.title_char_limit || null, dataLists: g.data_lists || [], scriptEnabled: g.script_enabled || false, scriptSections: g.script_sections || [], scannerType: g.scanner_type || null })) : [])
       setGameConfigsState(Array.isArray(configsData) ? configsData : [])
       setAccountsState(Array.isArray(accountsData) ? accountsData.map(normalizeAccountRaw) : [])
       setPlatformsState(Array.isArray(platformsData) ? platformsData.map(normalizePlatformRaw) : [])
@@ -149,7 +156,7 @@ export default function Home() {
       const res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(game) })
       const saved = await res.json()
       if (saved.error) return
-      setGamesState(prev => [...prev, { id: saved.id, name: saved.name, image: saved.image || '', sections: saved.sections || [], allowedPlatformIds: saved.allowed_platform_ids || [], titleCharLimit: saved.title_char_limit || null, dataLists: saved.data_lists || [], scriptEnabled: saved.script_enabled || false, scriptSections: saved.script_sections || [] }])
+      setGamesState(prev => [...prev, { id: saved.id, name: saved.name, image: saved.image || '', sections: saved.sections || [], allowedPlatformIds: saved.allowed_platform_ids || [], titleCharLimit: saved.title_char_limit || null, dataLists: saved.data_lists || [], scriptEnabled: saved.script_enabled || false, scriptSections: saved.script_sections || [], scannerType: saved.scanner_type || null }])
     } catch (err) { console.error(err) }
   }
 
@@ -158,7 +165,7 @@ export default function Home() {
       const res = await fetch(`/api/games/${game.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(game) })
       const saved = await res.json()
       if (saved.error) return
-      setGamesState(prev => prev.map(g => g.id === saved.id ? { id: saved.id, name: saved.name, image: saved.image || '', sections: saved.sections || [], allowedPlatformIds: saved.allowed_platform_ids || [], titleCharLimit: saved.title_char_limit || null, dataLists: saved.data_lists || [], scriptEnabled: saved.script_enabled || false, scriptSections: saved.script_sections || [] } : g))
+      setGamesState(prev => prev.map(g => g.id === saved.id ? { id: saved.id, name: saved.name, image: saved.image || '', sections: saved.sections || [], allowedPlatformIds: saved.allowed_platform_ids || [], titleCharLimit: saved.title_char_limit || null, dataLists: saved.data_lists || [], scriptEnabled: saved.script_enabled || false, scriptSections: saved.script_sections || [], scannerType: saved.scanner_type || null } : g))
     } catch (err) { console.error(err) }
   }
 
@@ -268,7 +275,7 @@ export default function Home() {
       case 'Games':
         return <Games darkMode={darkMode} games={games} gameConfigs={gameConfigs} platforms={platforms} addGame={addGame} updateGame={updateGame} deleteGame={deleteGame} saveGameConfig={saveGameConfig} />
       case 'Accounts':
-        return <Accounts darkMode={darkMode} games={games} gameConfigs={gameConfigs} accounts={accounts} platforms={platforms} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} bulkAddAccounts={bulkAddAccounts} setActivePage={setActivePage} currency={currency} exchangeRates={exchangeRates} saveGameConfig={saveGameConfig} />
+        return <Accounts darkMode={darkMode} games={games} gameConfigs={gameConfigs} accounts={accounts} platforms={platforms} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} bulkAddAccounts={bulkAddAccounts} setActivePage={setActivePage} currency={currency} exchangeRates={exchangeRates} saveGameConfig={saveGameConfig} toolImportScanId={toolImportScanId} onToolImportDone={() => setToolImportScanId(null)} />
       case 'Platforms':
         return <Platforms darkMode={darkMode} platforms={platforms} games={games} gameConfigs={gameConfigs} addPlatform={addPlatform} updatePlatform={updatePlatform} deletePlatform={deletePlatform} />
       case 'Orders':

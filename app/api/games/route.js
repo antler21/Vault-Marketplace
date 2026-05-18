@@ -23,6 +23,7 @@ export async function POST(request) {
       data_lists: body.dataLists || [],
       script_enabled: body.scriptEnabled ?? false,
       script_sections: body.scriptSections || [],
+      scanner_type: body.scannerType || null,
     }])
     .select()
     .single()

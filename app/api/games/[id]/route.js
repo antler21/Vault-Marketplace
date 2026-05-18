@@ -15,6 +15,7 @@ export async function PUT(request, context) {
       data_lists: body.dataLists || [],
       script_enabled: body.scriptEnabled ?? false,
       script_sections: body.scriptSections || [],
+      scanner_type: body.scannerType || null,
     })
     .eq('id', params.id)
     .select()

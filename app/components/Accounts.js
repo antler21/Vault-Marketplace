@@ -1436,7 +1436,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
 }
 
 // ─── Main Accounts Component ─────────────────────────────────────
-export default function Accounts({ darkMode, games, gameConfigs, accounts, platforms, addAccount, updateAccount, deleteAccount, bulkAddAccounts, setActivePage, currency, exchangeRates, saveGameConfig }) {
+export default function Accounts({ darkMode, games, gameConfigs, accounts, platforms, addAccount, updateAccount, deleteAccount, bulkAddAccounts, setActivePage, currency, exchangeRates, saveGameConfig, toolImportScanId, onToolImportDone }) {
   const [accountsSubTab, setAccountsSubTab] = useState('accounts')
   const [selectedGame, setSelectedGame] = useState(null)
   const [selectedAccount, setSelectedAccount] = useState(null)
@@ -1551,6 +1551,46 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
     setShowConfigModal(false)
     setConfiguringGame(null)
   }
+
+  // Handle ?toolImport — fetch scan and open add account form pre-filled
+  useEffect(() => {
+    if (!toolImportScanId) return
+    const doImport = async () => {
+      try {
+        const res = await fetch(`/api/lol-skins/${toolImportScanId}`)
+        const scan = await res.json()
+        if (scan.error) { onToolImportDone?.(); return }
+        // Build a raw-format object so flattenScanData can process it
+        const raw = {
+          summonerName: scan.summoner_name, tagLine: scan.tag_line, region: scan.region,
+          profileIconId: scan.profile_icon_id, summonerLevel: scan.summoner_level,
+          soloRank: scan.solo_rank, flexRank: scan.flex_rank,
+          soloPeakRank: scan.solo_peak_rank, soloPrevRank: scan.solo_prev_rank,
+          rp: scan.rp, be: scan.be, ownedSkinIds: scan.owned_skin_ids,
+          lootSummary: scan.loot_summary, rankHistory: scan.rank_history,
+          champCount: scan.champ_count, ownedChromaIds: scan.owned_chroma_ids,
+          ownedEmoteIds: scan.owned_emote_ids, ownedIconIds: scan.owned_icon_ids,
+          championMastery: scan.champion_mastery,
+        }
+        // Snapshot the raw data so handleSave can link it (skip re-creating the scan record)
+        pendingScanDataRef.current = raw
+        setScanPreviewId(toolImportScanId)
+        setScanOwnerToken(scan.owner_token || null)
+        // Find game and apply field mapping
+        const gameId = games.find(g => g.scriptEnabled && g.scannerType === 'lol')?.id || games[0]?.id
+        const flat = flattenScanData(raw)
+        let checkerData = {}
+        if (gameId) {
+          const mapping = getScannerMapping(gameId)
+          const cf = getGameConfig(gameId)?.customFields || []
+          checkerData = applyMapping(flat, mapping, cf)
+        }
+        handleOpenAdd(checkerData, scan.price_amount, scan.price_currency)
+        onToolImportDone?.()
+      } catch { onToolImportDone?.() }
+    }
+    doImport()
+  }, [toolImportScanId])
 
   // Poll vault-scanner on localhost every 2s while automatic modal is open
   useEffect(() => {
