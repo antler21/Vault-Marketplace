@@ -1044,27 +1044,28 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
   const titleSeparator = gameConfig?.titleSeparator ?? ' | '
 
   const fieldsJson = JSON.stringify(newAccount.fields)
+  const customFieldsKey = customFields.map(f => f.id).join(',')
   useEffect(() => {
     if (!titleAutoFill || !titleTemplate) return
     const f = newAccount.fields || {}
     const base = buildLabelFields(f, customFields)
     const cats = buildCategoryFields(catConfig?.categories, f, gameConfig?.categoryLimits, false)
-    const fields = { ...base, ...cats, preview: f._scanId ? `https://lolprev.site/preview/lol/${f._scanId}` : '' }
+    const fields = { ...base, ...cats, preview: '' }
     const rendered = renderTemplate(titleTemplate, fields, titleSeparator)
     setNewAccount(prev => prev.title === rendered ? prev : { ...prev, title: rendered })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [titleAutoFill, titleTemplate, titleSeparator, fieldsJson])
+  }, [titleAutoFill, titleTemplate, titleSeparator, fieldsJson, customFieldsKey])
 
   useEffect(() => {
     if (!descAutoFill || !descTemplate) return
     const f = newAccount.fields || {}
     const base = buildLabelFields(f, customFields)
     const cats = buildCategoryFields(catConfig?.categories, f, null, true)
-    const fields = { ...base, ...cats, preview: f._scanId ? `https://lolprev.site/preview/lol/${f._scanId}` : '' }
+    const fields = { ...base, ...cats, preview: '' }
     const rendered = renderTemplate(descTemplate, fields, titleSeparator)
     setNewAccount(prev => prev.description === rendered ? prev : { ...prev, description: rendered })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [descAutoFill, descTemplate, titleSeparator, fieldsJson])
+  }, [descAutoFill, descTemplate, titleSeparator, fieldsJson, customFieldsKey])
 
   const scanId = newAccount.fields?._scanId || null
   const [scanShare, setScanShare] = useState({ expiresAt: null, hideName: false, loading: false, expiryOpt: 'never' })
@@ -1170,7 +1171,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
   const isTargeted = (platformName) => (newAccount.targetPlatforms || []).some(p => p.platformName === platformName)
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '20px' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: '20px' }}>
       <style>{`
         .themed-scroll::-webkit-scrollbar{width:6px}
         .themed-scroll::-webkit-scrollbar-track{background:transparent}
@@ -1413,7 +1414,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
         {/* Save Button with saving state */}
         <div style={{ padding: '16px 28px', borderTop: `1px solid ${border}`, flexShrink: 0 }}>
           {!editingAccount && (
-            <div style={{ fontSize: '11px', color: muted, textAlign: 'center', marginBottom: '-4px' }}>
+            <div style={{ fontSize: '11px', color: muted, textAlign: 'center', marginBottom: '8px' }}>
               Preview link will be generated automatically after saving.
             </div>
           )}
@@ -1463,6 +1464,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const [versionMismatch, setVersionMismatch]                 = useState(false)
   const [ownerLinkCopyWarning, setOwnerLinkCopyWarning]       = useState(false)
   const scanCancelRef                                         = useRef(false)
+  const pendingScanDataRef                                    = useRef(null) // snapshot of scanData when Save Account is clicked
   const [editingAccount, setEditingAccount] = useState(null)
   const [saving, setSaving] = useState(false)
   const [newAccount, setNewAccount] = useState({ title: '', description: '', status: 'Available', fields: {}, images: [], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
@@ -1849,6 +1851,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
 
   const handleOpenAdd = (prefillFields = {}, prefillSoldFor = null, prefillSoldForCurrency = null) => {
     setEditingAccount(null)
+    pendingScanDataRef.current = scanData // snapshot so save works even if checker modal closes
     setNewAccount({ title: '', description: '', status: 'Available', fields: prefillFields, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: prefillSoldFor ?? 0, boughtForCurrency: 'USD', soldForCurrency: prefillSoldForCurrency || 'USD', targetPlatforms: [], postingPriority: 0 })
     setShowModal(true)
   }
@@ -1888,7 +1891,8 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         await addAccount(payload)
 
         // Generate preview link if this came from a scan
-        if (scanData && !scanPreviewId) {
+        const activeScanData = pendingScanDataRef.current
+        if (activeScanData && !scanPreviewId) {
           try {
             let expiresAt = null
             if (linkSettings.expiry === '1d') expiresAt = new Date(Date.now() + 86400000).toISOString()
@@ -1901,7 +1905,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                ...scanData,
+                ...activeScanData,
                 hideName: linkSettings.hideIgn,
                 expiresAt,
                 oge: linkSettings.oge,
@@ -1918,9 +1922,11 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
             if (!stored.error) {
               setScanPreviewId(stored.id)
               setScanOwnerToken(stored.owner_token)
+              setShowAddChoice(true)
               setCheckerStep(5)
             }
           } catch {}
+          pendingScanDataRef.current = null
         }
       }
       setShowModal(false)
@@ -2349,7 +2355,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
 
         {/* ── Add Account Choice Modal ── */}
         {showAddChoice && selectedGame && (() => {
-          const closeModal = () => { setShowAddChoice(false); setCheckerStep(0); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setVersionMismatch(false); setGeneratingLinkError(null); setEditingLinkSettings(false); setScanRetryActive(false); setScanRetryElapsed(0); scanCancelRef.current = false }
+          const closeModal = () => { setShowAddChoice(false); setCheckerStep(0); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setVersionMismatch(false); setGeneratingLinkError(null); setEditingLinkSettings(false); setScanRetryActive(false); setScanRetryElapsed(0); scanCancelRef.current = false; pendingScanDataRef.current = null }
           const _rawFlat = scanData ? flattenScanData(scanData) : null
           const _catResults = scanData ? evaluateCategories(scanData, getCheckerCategoriesConfig(selectedGame.id).categories || []) : {}
           const flat = _rawFlat ? { ..._rawFlat, ..._catResults } : null
@@ -2778,7 +2784,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                       </div>
                     )}
 
-                    <button onClick={() => { setShowAddChoice(false); setCheckerStep(0); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setGeneratingLinkError(null); setEditingLinkSettings(false); setScanRetryActive(false) }}
+                    <button onClick={() => { setShowAddChoice(false); setCheckerStep(0); setScanData(null); setScanPreviewId(null); setScanOwnerToken(null); setCheckerData(null); setCheckerError(null); setVersionMismatch(false); setGeneratingLinkError(null); setEditingLinkSettings(false); setScanRetryActive(false); setScanRetryElapsed(0); scanCancelRef.current = false; pendingScanDataRef.current = null }}
                       style={{ padding: '10px', background: 'transparent', color: muted, border: `1px solid ${border}`, borderRadius: '10px', fontSize: '13px', cursor: 'pointer', textAlign: 'center' }}>
                       Done
                     </button>
