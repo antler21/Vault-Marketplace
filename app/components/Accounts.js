@@ -1598,7 +1598,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
     if (!(showAddChoice && checkerStep >= 1)) return
     const poll = async () => {
       try {
-        const r = await fetch('http://localhost:35199/ping', { signal: AbortSignal.timeout(1500) })
+        const r = await fetch(`http://localhost:35199/ping?t=${Date.now()}`, { signal: AbortSignal.timeout(1500), cache: 'no-store' })
         if (r.ok) {
           const d = await r.json()
           const versionMatch = d.version === EXPECTED_SCANNER_VERSION
