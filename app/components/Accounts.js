@@ -2726,6 +2726,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                           <button onClick={() => {
                             const prefill = checkerData || {}
                             const soldFor = linkSettings.showPrice && linkSettings.priceAmount ? parseFloat(linkSettings.priceAmount) : null
+                            setShowAddChoice(false)
                             handleOpenAdd({ ...prefill }, soldFor, linkSettings.showPrice ? linkSettings.priceCurrency : null)
                           }} style={{ flex: 1, padding: '11px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
                             ✓ Save Account
