@@ -2466,11 +2466,9 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                         {scannerOnline ? '● Running' : '○ Not detected'}
                       </div>
                     </div>
-                    {!scannerOnline && (
-                      <a href="/aio-tool-v0.6.0.exe" download="aio-tool-v0.6.0.exe" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: '#7E6551', color: '#FDF4DC', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
-                        ↓ Download AIO Tool v0.6.0.exe
-                      </a>
-                    )}
+                    <a href="/aio-tool-v0.6.0.exe" download="aio-tool-v0.6.0.exe" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: scannerOnline ? 'transparent' : '#7E6551', color: scannerOnline ? muted : '#FDF4DC', border: scannerOnline ? `1px solid ${border}` : 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
+                      ↓ Download AIO Tool v0.6.0
+                    </a>
                     {scannerOnline && <div style={{ fontSize: '12px', color: '#4caf50' }}>AIO Tool is running on localhost:35199</div>}
                     <button onClick={() => setCheckerStep(2)} disabled={!scannerOnline}
                       style={{ padding: '10px 20px', background: scannerOnline ? '#7E6551' : border, color: scannerOnline ? '#FDF4DC' : muted, border: 'none', borderRadius: '10px', cursor: scannerOnline ? 'pointer' : 'default', fontSize: '13px', fontWeight: '500', alignSelf: 'flex-end' }}>
