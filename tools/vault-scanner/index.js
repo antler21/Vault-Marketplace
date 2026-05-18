@@ -1209,7 +1209,10 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('  Opening in browser...\n')
   console.log('─────────────────────────────────────────')
   log('Ready.')
-  exec(`start http://localhost:${PORT}`)
+  const appUrl = `http://localhost:${PORT}`
+  exec(`start msedge --app="${appUrl}" --window-size=1280,820 --window-position=80,40`, (err) => {
+    if (err) exec(`start ${appUrl}`)
+  })
 })
 
 server.on('error', (e) => {
