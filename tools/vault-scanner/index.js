@@ -1189,16 +1189,16 @@ function renderAccounts() {
     var rank = a.soloRank || 'Unranked'
     var isSel = _selected.has(a.id)
     html += '<div class="card' + (isSel ? ' sel' : '') + '" id="c-' + a.id + '">' +
-      (_selMode ? '<div class="chk' + (isSel ? ' on' : '') + '" onclick="toggleSel(\'' + a.id + '\',event)">' +
+      (_selMode ? '<div class="chk' + (isSel ? ' on' : '') + '" data-id="' + a.id + '" onclick="toggleSel(this.dataset.id,event)">' +
         (isSel ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : '') +
         '</div>' : '') +
       '<div class="card-thumb"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#3a4050" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>' +
       '<div class="card-body"><div class="card-name" title="' + escH(name) + '">' + escH(name) + '</div>' +
       '<div class="card-meta"><span>' + skins + ' skins</span><span>' + escH(rank) + '</span></div></div>' +
       '<div class="card-overlay">' +
-      '<button class="ov-btn ov-import" onclick="openImport(\'' + a.id + '\',event)">Import to Webapp</button>' +
-      '<button class="ov-btn ov-preview" onclick="openPreview(\'' + a.id + '\',event)">Preview Link</button>' +
-      '<button class="ov-btn ov-remove" onclick="removeAcct(\'' + a.id + '\',event)">Remove</button>' +
+      '<button class="ov-btn ov-import" data-id="' + a.id + '" onclick="openImport(this.dataset.id,event)">Import to Webapp</button>' +
+      '<button class="ov-btn ov-preview" data-id="' + a.id + '" onclick="openPreview(this.dataset.id,event)">Preview Link</button>' +
+      '<button class="ov-btn ov-remove" data-id="' + a.id + '" onclick="removeAcct(this.dataset.id,event)">Remove</button>' +
       '</div></div>'
   }
   grid.innerHTML = html
