@@ -310,7 +310,7 @@ export default function Home() {
       <Sidebar activePage={activePage} setActivePage={setActivePage} darkMode={darkMode} collapsed={collapsed} setCollapsed={setCollapsed} orderNotificationCount={orderNotificationCount} profileName={profileName} />
       <div style={{ marginLeft: sidebarWidth, flex: 1, transition: 'margin-left 0.3s ease', minWidth: 0 }}>
         <div style={{ position: 'sticky', top: 0, zIndex: 50, background: bg, borderBottom: `1px solid ${border}`, padding: '14px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: '14px', color: muted }}>
+          <span suppressHydrationWarning style={{ fontSize: '14px', color: muted }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative' }}>
