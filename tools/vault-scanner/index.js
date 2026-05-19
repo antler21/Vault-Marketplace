@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.1'
+const VERSION = '0.6.2'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -109,6 +109,8 @@ async function launchLeague() {
 
 let webappScanning = false
 let pendingImport = null
+let _lcuOnline = false          // cached LCU status — refreshed every 3s
+let _shutdownTimer = null       // set by /shutdown, cancelled by /heartbeat (handles refresh vs close)
 
 // ─── LCU Discovery ───────────────────────────────────────────────────────────
 
@@ -1221,14 +1223,20 @@ function startPoll() {
       var banner = document.getElementById('scan-banner')
       var grid = document.getElementById('grid')
       var gameItems = document.querySelectorAll('#games-list .sidebar-item')
+      var scanBtnEl = document.getElementById('scan-btn')
+      var multiBtnEl = document.getElementById('multi-btn')
       if (s.webappScanning) {
         banner.classList.add('on')
         grid.classList.add('grid-blur')
         gameItems.forEach(function(el){ el.classList.add('blur') })
+        if (scanBtnEl) { scanBtnEl.disabled = true; scanBtnEl.style.opacity = '0.4'; scanBtnEl.style.cursor = 'not-allowed' }
+        if (multiBtnEl) { multiBtnEl.disabled = true; multiBtnEl.style.opacity = '0.4'; multiBtnEl.style.cursor = 'not-allowed' }
       } else {
         banner.classList.remove('on')
         grid.classList.remove('grid-blur')
         gameItems.forEach(function(el){ el.classList.remove('blur') })
+        if (scanBtnEl) { scanBtnEl.disabled = false; scanBtnEl.style.opacity = ''; scanBtnEl.style.cursor = '' }
+        if (multiBtnEl) { multiBtnEl.disabled = false; multiBtnEl.style.opacity = ''; multiBtnEl.style.cursor = '' }
       }
     } catch(e) {}
   }, 3500)
@@ -1686,8 +1694,12 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 init()
-// Keep server alive while window is open; server exits ~30s after window closes
-setInterval(function() { fetch('/heartbeat', { method: 'POST' }).catch(function(){}) }, 10000)
+// Heartbeat: immediate on load, then every 5s — keeps server alive while window is open
+function sendHeartbeat() { fetch('/heartbeat', { method: 'POST' }).catch(function(){}) }
+sendHeartbeat()
+setInterval(sendHeartbeat, 5000)
+// Signal server to shut down when window closes (5s grace so refresh can cancel it)
+window.addEventListener('beforeunload', function() { navigator.sendBeacon('/shutdown', '{}') })
 </script>
 </body>
 </html>`
@@ -1703,13 +1715,21 @@ const server = http.createServer(async (req, res) => {
   // Serve UI
   if (req.method === 'GET' && pathname === '/') return html(res, UI_HTML)
 
-  // Ping
-  if (req.method === 'GET' && pathname === '/ping') return json(res, 200, { ok: true, version: VERSION })
+  // Ping — includes cached LCU status so webapp can detect League client
+  if (req.method === 'GET' && pathname === '/ping') return json(res, 200, { ok: true, version: VERSION, leagueOpen: _lcuOnline })
 
-  // Heartbeat — browser sends this every 10s; server exits 30s after last heartbeat
+  // Heartbeat — browser sends every 5s; also cancels any pending shutdown (refresh vs close)
   if (req.method === 'POST' && pathname === '/heartbeat') {
     lastHeartbeat = Date.now()
+    if (_shutdownTimer) { clearTimeout(_shutdownTimer); _shutdownTimer = null }
     return json(res, 200, { ok: true })
+  }
+
+  // Shutdown — browser sends via sendBeacon on beforeunload; 5s timer so refresh can cancel it
+  if (req.method === 'POST' && pathname === '/shutdown') {
+    json(res, 200, { ok: true })
+    _shutdownTimer = setTimeout(() => { log('Window closed — shutting down'); process.exit(0) }, 5000)
+    return
   }
 
   // LCU ping — checks if League client is running and logged in
@@ -1843,14 +1863,13 @@ server.listen(PORT, '127.0.0.1', () => {
       exec(`start "" "${appUrl}"`)
     }
   })
-  // Exit automatically ~30s after the browser window is closed
+  // Cache LCU status every 3s so /ping can return it instantly
+  setInterval(async () => { try { _lcuOnline = await pingLcu() } catch { _lcuOnline = false } }, 3000)
+  // Fallback: if no heartbeat or /shutdown for 60s after grace, exit (catches crash/force-close)
   setTimeout(() => {
     setInterval(() => {
-      if (Date.now() - lastHeartbeat > 30000) {
-        log('No heartbeat for 30s — shutting down')
-        process.exit(0)
-      }
+      if (Date.now() - lastHeartbeat > 60000) { log('No heartbeat for 60s — shutting down'); process.exit(0) }
     }, 15000)
-  }, 35000) // grace period so startup doesn't trigger the check
+  }, 30000)
 })
 

@@ -24,7 +24,7 @@ const scrollbarStyle = `
 
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36)
 const MAX_IMAGE_SIZE = 3 * 1024 * 1024 // 3MB
-const EXPECTED_SCANNER_VERSION = '0.6.1'
+const EXPECTED_SCANNER_VERSION = '0.6.2'
 
 const CHECKER_KEY_MAP = {
   'server': 'platform', 'platform': 'platform', 'region': 'platform',
@@ -1465,6 +1465,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const [versionMismatch, setVersionMismatch]                 = useState(false)
   const [ownerLinkCopyWarning, setOwnerLinkCopyWarning]       = useState(false)
   const [copiedCardId, setCopiedCardId]                       = useState(null)
+  const [toolImportLoading, setToolImportLoading]             = useState(false)
   const scanCancelRef                                         = useRef(false)
   const pendingScanDataRef                                    = useRef(null) // snapshot of scanData when Save Account is clicked
   const importRunRef                                          = useRef(null) // tracks which scanId we already processed
@@ -1554,10 +1555,10 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
     setConfiguringGame(null)
   }
 
-  // Handle tool import — select game and open form immediately, prefill from scan in background
+  // Handle tool import — navigate to game + show loading, then open modal with prefilled data
   useEffect(() => {
     if (!toolImportScanId || !games.length) return
-    if (importRunRef.current === toolImportScanId) return  // already ran for this ID
+    if (importRunRef.current === toolImportScanId) return
     importRunRef.current = toolImportScanId
 
     const targetGame = (toolImportGameId ? games.find(g => g.id === toolImportGameId) : null)
@@ -1565,21 +1566,25 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       || games[0]
     if (!targetGame) { onToolImportDone?.(); return }
 
-    // Open form immediately — never block on the fetch
-    setScanPreviewId(toolImportScanId)
+    // Navigate to game and show loading spinner — user knows something is happening
     setSelectedGame(targetGame)
-    setEditingAccount(null)
-    pendingScanDataRef.current = null
-    setNewAccount({ title: '', description: '', status: 'Available', fields: {}, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
-    setShowModal(true)
+    setToolImportLoading(true)
+    setScanPreviewId(toolImportScanId)
     onToolImportDone?.()
 
-    // Fetch scan in background to fill in fields + owner token
+    const openForm = (prefillFields, scanOwnerTok, priceSoldFor, priceCurrency) => {
+      setEditingAccount(null)
+      pendingScanDataRef.current = null
+      if (scanOwnerTok) setScanOwnerToken(scanOwnerTok)
+      setNewAccount({ title: '', description: '', status: 'Available', fields: prefillFields || {}, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: priceSoldFor || 0, boughtForCurrency: 'USD', soldForCurrency: priceCurrency || 'USD', targetPlatforms: [], postingPriority: 0 })
+      setShowModal(true)
+      setToolImportLoading(false)
+    }
+
     fetch(`/api/lol-skins/${toolImportScanId}`)
       .then(r => r.json())
       .then(scan => {
-        if (scan.error) return
-        if (scan.owner_token) setScanOwnerToken(scan.owner_token)
+        if (scan.error) { openForm({}, null, 0, 'USD'); return }
         const raw = {
           summonerName: scan.summoner_name, tagLine: scan.tag_line, region: scan.region,
           profileIconId: scan.profile_icon_id, summonerLevel: scan.summoner_level,
@@ -1595,10 +1600,9 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         const mapping = getScannerMapping(targetGame.id)
         const cf = getGameConfig(targetGame.id)?.customFields || []
         const prefillFields = applyMapping(flat, mapping, cf)
-        // Only prefill if the user hasn't already started editing (title still empty)
-        setNewAccount(prev => prev.title === '' ? { ...prev, fields: prefillFields, soldFor: scan.price_amount ?? 0, soldForCurrency: scan.price_currency || 'USD' } : prev)
+        openForm(prefillFields, scan.owner_token || null, scan.price_amount ?? 0, scan.price_currency || 'USD')
       })
-      .catch(() => {})
+      .catch(() => openForm({}, null, 0, 'USD'))
   }, [toolImportScanId, toolImportGameId, games])
 
   // Poll vault-scanner on localhost every 2s while automatic modal is open
@@ -1799,8 +1803,8 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         const skinCount = (raw.ownedSkinIds || []).length
         const elapsed = Date.now() - startTime
 
-        // Retry if no skins and still within 1 minute
-        if (skinCount === 0 && elapsed < 60000) {
+        // Retry if no skins and still within 2 minutes
+        if (skinCount === 0 && elapsed < 120000) {
           setScanRetryActive(true)
           setScanRetryElapsed(elapsed)
           await new Promise(r => setTimeout(r, 5000))
@@ -2483,8 +2487,8 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
                         {scannerOnline ? `● Running v${scannerVersion}` : scannerVersion ? `● Wrong version (v${scannerVersion})` : '○ Not detected'}
                       </div>
                     </div>
-                    <a href="/aio-tool-v0.6.1.exe" download="aio-tool-v0.6.1.exe" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: scannerOnline ? 'transparent' : '#7E6551', color: scannerOnline ? muted : '#FDF4DC', border: scannerOnline ? `1px solid ${border}` : 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
-                      ↓ Download AIO Tool v0.6.1
+                    <a href="/aio-tool-v0.6.2.exe" download="aio-tool-v0.6.2.exe" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: scannerOnline ? 'transparent' : '#7E6551', color: scannerOnline ? muted : '#FDF4DC', border: scannerOnline ? `1px solid ${border}` : 'none', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none', width: 'fit-content' }}>
+                      ↓ Download AIO Tool v0.6.2
                     </a>
                     {scannerOnline && <div style={{ fontSize: '12px', color: '#4caf50' }}>AIO Tool is running on localhost:35199</div>}
                     {!scannerOnline && scannerVersion && <div style={{ fontSize: '12px', color: '#e05252' }}>Old version detected (v{scannerVersion}) — close it and download the latest.</div>}
@@ -2889,6 +2893,16 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         {showModal && <AccountModal game={selectedGame} gameConfig={getGameConfig(selectedGame.id)} newAccount={newAccount} setNewAccount={setNewAccount} handleSave={handleSave} handleStatusChange={handleStatusChange} onClose={() => { if (!saving) setShowModal(false) }} editingAccount={editingAccount} card={card} border={border} text={text} muted={muted} inputBg={inputBg} bg={bg} getSoldForLabel={getSoldForLabel} platforms={platforms} saving={saving} catConfig={getCheckerCategoriesConfig(selectedGame.id)} />}
         {showConfigModal && configuringGame && <ConfigModal {...configModalProps} />}
 
+        {/* Loading overlay while tool import data is being fetched */}
+        {toolImportLoading && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: card, border: `1px solid ${border}`, borderRadius: 16, padding: '32px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+              <div style={{ width: 36, height: 36, border: `3px solid ${border}`, borderTop: '3px solid #7E6551', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <div style={{ fontSize: 14, fontWeight: 600, color: text }}>Loading account data…</div>
+              <div style={{ fontSize: 12, color: muted }}>Fetching scan results from server</div>
+            </div>
+          </div>
+        )}
 
         {/* Owner link copy warning */}
         {ownerLinkCopyWarning && (
