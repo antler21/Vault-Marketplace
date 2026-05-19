@@ -117,7 +117,13 @@ export default function Home() {
     const check = () => {
       fetch('http://localhost:35199/status', { signal: AbortSignal.timeout(1000), cache: 'no-store' })
         .then(r => r.ok ? r.json() : null)
-        .then(s => { if (s?.pendingImport) setPendingToolImport(prev => prev?.scanId === s.pendingImport.scanId ? prev : s.pendingImport) })
+        .then(s => {
+          if (s?.pendingImport) setPendingToolImport(prev => {
+            if (prev?.scanId === s.pendingImport.scanId) return prev
+            setImportNotifDismissed(false)  // new import — reset dismissed state
+            return s.pendingImport
+          })
+        })
         .catch(() => {})
     }
     const id = setInterval(check, 5000)
