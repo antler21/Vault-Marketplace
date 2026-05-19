@@ -43,6 +43,7 @@ export default function Home() {
   const [profileName, setProfileName] = useState('Admin')
   const [defaultDateFilter, setDefaultDateFilter] = useState('all')
   const [toolImportScanId, setToolImportScanId] = useState(null)
+  const [pendingToolImport, setPendingToolImport] = useState(null)
 
   const bg = darkMode ? '#151515' : '#FDF4DC'
   const border = darkMode ? '#2e2e2e' : '#e8d9b8'
@@ -55,6 +56,15 @@ export default function Home() {
     setActivePageState(page)
     localStorage.setItem('activePage', page)
     if (page === 'Orders') setOrderNotificationCount(0)
+  }
+
+  const handlePendingImport = () => {
+    if (!pendingToolImport) return
+    setToolImportScanId(pendingToolImport.scanId)
+    setActivePageState('Accounts')
+    localStorage.setItem('activePage', 'Accounts')
+    fetch('http://localhost:35199/pending-import', { method: 'DELETE' }).catch(() => {})
+    setPendingToolImport(null)
   }
 
   const setCurrency = (symbol) => {
@@ -88,6 +98,11 @@ export default function Home() {
       localStorage.setItem('activePage', 'Accounts')
       window.history.replaceState({}, '', '/')
     }
+    // Check for pending imports from the AIO Tool
+    fetch('http://localhost:35199/status', { signal: AbortSignal.timeout(1000), cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(s => { if (s?.pendingImport) setPendingToolImport(s.pendingImport) })
+      .catch(() => {})
     if (params.get('gmailError')) {
       window.history.replaceState({}, '', '/')
     }
@@ -331,6 +346,13 @@ export default function Home() {
                 </div>
               )}
             </div>
+            {pendingToolImport && (
+              <button onClick={handlePendingImport}
+                style={{ position: 'relative', background: '#7E655115', border: '1px solid #7E655144', borderRadius: '8px', padding: '7px 12px', cursor: 'pointer', color: '#a08570', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '500' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7E6551', display: 'inline-block', flexShrink: 0 }} />
+                {pendingToolImport.accountName || 'Account'} ready to add
+              </button>
+            )}
             <button onClick={() => loadData(false)}
               style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: '8px', padding: '7px 10px', cursor: 'pointer', color: muted, display: 'flex', alignItems: 'center' }}>
               <RefreshCw size={16} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />

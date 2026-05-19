@@ -1557,9 +1557,10 @@ async function doImport() {
     document.getElementById('import-confirm-btn').disabled = false
     return
   }
+  // Save as pending import — webapp will show a notification on next visit
+  var pending = { scanId: res.id, accountName: (_importAcct.summonerName || 'Unknown') + (skinCount ? ' · ' + skinCount + ' skins' : ''), importedAt: Date.now() }
+  await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign(await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} }), { pendingImport: pending })) }).catch(function(){})
   _afterImportId = _importAcct.id
-  var dest = _url + '?toolImport=' + res.id
-  window.open(dest, '_blank')
   hideModal('import-modal')
   showModal('after-import-modal')
 }
@@ -1709,9 +1710,17 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok })
   }
 
-  // Status — for webapp scanning indicator
+  // Status — for webapp scanning indicator + pending imports
   if (req.method === 'GET' && pathname === '/status') {
-    return json(res, 200, { webappScanning, pendingImport })
+    return json(res, 200, { webappScanning, pendingImport: loadConfig().pendingImport || null })
+  }
+
+  // Clear pending import (called by webapp after handling)
+  if (req.method === 'DELETE' && pathname === '/pending-import') {
+    const cfg = loadConfig()
+    delete cfg.pendingImport
+    saveConfig(cfg)
+    return json(res, 200, { ok: true })
   }
 
   // Scan (used by both webapp checker and local tool)

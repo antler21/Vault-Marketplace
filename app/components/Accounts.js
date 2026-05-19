@@ -1577,13 +1577,14 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         pendingScanDataRef.current = raw
         setScanPreviewId(toolImportScanId)
         setScanOwnerToken(scan.owner_token || null)
-        // Find game and apply field mapping
-        const gameId = games.find(g => g.scriptEnabled && g.scannerType === 'lol')?.id || games[0]?.id
+        // Find game, select it, and apply field mapping
+        const targetGame = games.find(g => g.scriptEnabled && g.scannerType === 'lol') || games[0]
+        if (targetGame) setSelectedGame(targetGame)
         const flat = flattenScanData(raw)
         let checkerData = {}
-        if (gameId) {
-          const mapping = getScannerMapping(gameId)
-          const cf = getGameConfig(gameId)?.customFields || []
+        if (targetGame) {
+          const mapping = getScannerMapping(targetGame.id)
+          const cf = getGameConfig(targetGame.id)?.customFields || []
           checkerData = applyMapping(flat, mapping, cf)
         }
         handleOpenAdd(checkerData, scan.price_amount, scan.price_currency)
