@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.2'
+const VERSION = '0.6.3'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -87,6 +87,11 @@ async function riotLogin(username, password) {
   if (!res.ok) {
     const msg = res.data?.message || res.data?.error || JSON.stringify(res.data)
     throw new Error('Login failed: ' + msg + ' (status ' + res.status + ')')
+  }
+  if (res.data?.type && res.data.type !== 'authenticated') {
+    const msg = res.data.type === 'multifactor' ? '2FA required — not supported'
+      : 'Login incomplete: ' + res.data.type
+    throw new Error(msg)
   }
   return res.data
 }
@@ -1318,13 +1323,23 @@ async function runSingleScan() {
   if (_scanAbort) return
   setStep(2, 'done', 'League client ready')
 
-  // Step 3: Scan
+  // Step 3: Scan with auto-retry (5s gaps, 2 min max)
   setStep(3, 'active', 'Scanning account...')
-  var result = await fetch('/scan', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  var result = null
+  var scanDl = Date.now() + 120000
+  var scanAttempt = 0
+  while (Date.now() < scanDl && !_scanAbort) {
+    if (scanAttempt > 0) setStep(3, 'active', 'Retrying scan (attempt ' + (scanAttempt + 1) + ')...')
+    result = await fetch('/scan', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+    if (_scanAbort) return
+    if (!result.error && Array.isArray(result.ownedSkinIds) && result.ownedSkinIds.length > 0) break
+    scanAttempt++
+    if (Date.now() < scanDl) { setStep(3, 'active', 'No data yet, retrying in 5s...'); await sleep(5000) }
+  }
   if (_scanAbort) return
-  if (result.error) {
+  if (!result || result.error) {
     setStep(3, 'error', 'Scan failed')
-    showNotice('scan-notice', 'error', result.error)
+    showNotice('scan-notice', 'error', result ? result.error : 'Scan timed out after 2 minutes')
     document.getElementById('scan-retry-btn').style.display = ''
     document.getElementById('scan-close-btn').textContent = 'Close'
     return
@@ -1414,6 +1429,22 @@ async function runMultiLoop(creds) {
     var username = parts[0]
     var password = parts.slice(1).join(':')
     progEl.textContent = 'Account ' + (i + 1) + ' of ' + creds.length + ': ' + username
+
+    // Close League if still running from previous iteration
+    var lcuCheck = await apiFetch('/ping-lcu', { ok: false })
+    if (lcuCheck.ok) {
+      stepsEl.innerHTML = '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Closing previous League session...</div></div></div>'
+      await fetch('/riot/close-league', { method: 'POST' }).catch(function(){})
+      var closeDl = Date.now() + 30000
+      while (Date.now() < closeDl && !_multiAbort) {
+        await sleep(3000)
+        var pClose = await apiFetch('/ping-lcu', { ok: true })
+        if (!pClose.ok) break
+      }
+    }
+    if (_multiAbort) break
+
+    // Login
     stepsEl.innerHTML = '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Logging in as ' + escH(username) + '...</div></div></div>'
     var login = await fetch('/riot/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
     if (_multiAbort) break
@@ -1422,12 +1453,16 @@ async function runMultiLoop(creds) {
       await sleep(2500)
       continue
     }
+
+    // Launch League
     stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Launching League...</div></div></div>'
     await fetch('/riot/launch-league', { method: 'POST' }).catch(function(){})
     if (_multiAbort) break
-    stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Waiting for League client...</div></div></div>'
+
+    // Wait for League (90s)
+    stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Waiting for League client (up to 90s)...</div></div></div>'
     var ready = false
-    var dl = Date.now() + 60000
+    var dl = Date.now() + 90000
     while (Date.now() < dl && !_multiAbort) {
       await sleep(5000)
       var p = await apiFetch('/ping-lcu', { ok: false })
@@ -1435,15 +1470,26 @@ async function runMultiLoop(creds) {
     }
     if (_multiAbort) break
     if (!ready) {
-      showNotice('multi-notice', 'error', username + ': League did not start, skipping.')
+      showNotice('multi-notice', 'error', username + ': League did not start in 90s, skipping.')
       await sleep(1500)
       continue
     }
+
+    // Scan with auto-retry (5s gaps, 2 min max)
     stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Scanning...</div></div></div>'
-    var result = await fetch('/scan', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+    var result = null
+    var scanDl = Date.now() + 120000
+    var scanAttempt = 0
+    while (Date.now() < scanDl && !_multiAbort) {
+      result = await fetch('/scan', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+      if (_multiAbort) break
+      if (!result.error && Array.isArray(result.ownedSkinIds) && result.ownedSkinIds.length > 0) break
+      scanAttempt++
+      if (Date.now() < scanDl) await sleep(5000)
+    }
     if (_multiAbort) break
-    if (result.error) {
-      showNotice('multi-notice', 'error', username + ': Scan failed — ' + result.error)
+    if (!result || result.error) {
+      showNotice('multi-notice', 'error', username + ': Scan failed — ' + (result ? result.error : 'timed out'))
     } else {
       await saveLocally(result)
       await reloadAccounts()
@@ -1802,6 +1848,13 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       return json(res, 400, { error: e.message })
     }
+  }
+
+  // Close League client (kills LeagueClient + LeagueClientUx)
+  if (req.method === 'POST' && pathname === '/riot/close-league') {
+    exec('taskkill /F /IM LeagueClient.exe /T & taskkill /F /IM LeagueClientUx.exe /T', () => {})
+    log('Close League: taskkill sent')
+    return json(res, 200, { ok: true })
   }
 
   // Debug logs
