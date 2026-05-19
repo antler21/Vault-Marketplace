@@ -43,6 +43,7 @@ export default function Home() {
   const [profileName, setProfileName] = useState('Admin')
   const [defaultDateFilter, setDefaultDateFilter] = useState('all')
   const [toolImportScanId, setToolImportScanId] = useState(null)
+  const [toolImportGameId, setToolImportGameId] = useState(null)
   const [pendingToolImport, setPendingToolImport] = useState(null)
   const [importNotifDismissed, setImportNotifDismissed] = useState(false)
 
@@ -61,7 +62,9 @@ export default function Home() {
 
   const handlePendingImport = () => {
     if (!pendingToolImport) return
+    const targetGame = games.find(g => g.scriptEnabled && g.scannerType === 'lol') || games[0]
     setToolImportScanId(pendingToolImport.scanId)
+    if (targetGame) setToolImportGameId(targetGame.id)
     setActivePageState('Accounts')
     localStorage.setItem('activePage', 'Accounts')
     fetch('http://localhost:35199/pending-import', { method: 'DELETE' }).catch(() => {})
@@ -303,7 +306,7 @@ export default function Home() {
       case 'Games':
         return <Games darkMode={darkMode} games={games} gameConfigs={gameConfigs} platforms={platforms} addGame={addGame} updateGame={updateGame} deleteGame={deleteGame} saveGameConfig={saveGameConfig} />
       case 'Accounts':
-        return <Accounts darkMode={darkMode} games={games} gameConfigs={gameConfigs} accounts={accounts} platforms={platforms} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} bulkAddAccounts={bulkAddAccounts} setActivePage={setActivePage} currency={currency} exchangeRates={exchangeRates} saveGameConfig={saveGameConfig} toolImportScanId={toolImportScanId} onToolImportDone={() => setToolImportScanId(null)} />
+        return <Accounts darkMode={darkMode} games={games} gameConfigs={gameConfigs} accounts={accounts} platforms={platforms} addAccount={addAccount} updateAccount={updateAccount} deleteAccount={deleteAccount} bulkAddAccounts={bulkAddAccounts} setActivePage={setActivePage} currency={currency} exchangeRates={exchangeRates} saveGameConfig={saveGameConfig} toolImportScanId={toolImportScanId} toolImportGameId={toolImportGameId} onToolImportDone={() => { setToolImportScanId(null); setToolImportGameId(null) }} />
       case 'Platforms':
         return <Platforms darkMode={darkMode} platforms={platforms} games={games} gameConfigs={gameConfigs} addPlatform={addPlatform} updatePlatform={updatePlatform} deletePlatform={deletePlatform} />
       case 'Orders':
@@ -372,18 +375,24 @@ export default function Home() {
         <style>{`@keyframes spin { to { transform: rotate(360deg) } } @keyframes slideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }`}</style>
         {renderPage()}
       </div>
-      {pendingToolImport && !importNotifDismissed && (
-        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, width: 300, background: card, border: `1px solid ${border}`, borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.2)', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, animation: 'slideUp 0.25s ease' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: text }}>Account Ready to Add</span>
-            <button onClick={() => setImportNotifDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, padding: '2px 6px', fontSize: 16, lineHeight: 1 }}>✕</button>
+      {pendingToolImport && !importNotifDismissed && (() => {
+        const importGame = games.find(g => g.scriptEnabled && g.scannerType === 'lol')
+        return (
+          <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, width: 300, background: card, border: `1px solid ${border}`, borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.2)', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, animation: 'slideUp 0.25s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: text }}>Account Ready to Add</div>
+                {importGame && <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>{importGame.name}</div>}
+              </div>
+              <button onClick={() => setImportNotifDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, padding: '2px 6px', fontSize: 16, lineHeight: 1, flexShrink: 0 }}>✕</button>
+            </div>
+            <div style={{ fontSize: 13, color: muted }}>{pendingToolImport.accountName}</div>
+            <button onClick={handlePendingImport} style={{ padding: '9px 14px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}>
+              Add Account →
+            </button>
           </div>
-          <div style={{ fontSize: 13, color: muted }}>{pendingToolImport.accountName}</div>
-          <button onClick={handlePendingImport} style={{ padding: '9px 14px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}>
-            Add Account →
-          </button>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

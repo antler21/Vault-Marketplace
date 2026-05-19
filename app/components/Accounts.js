@@ -1436,7 +1436,7 @@ function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave,
 }
 
 // ─── Main Accounts Component ─────────────────────────────────────
-export default function Accounts({ darkMode, games, gameConfigs, accounts, platforms, addAccount, updateAccount, deleteAccount, bulkAddAccounts, setActivePage, currency, exchangeRates, saveGameConfig, toolImportScanId, onToolImportDone }) {
+export default function Accounts({ darkMode, games, gameConfigs, accounts, platforms, addAccount, updateAccount, deleteAccount, bulkAddAccounts, setActivePage, currency, exchangeRates, saveGameConfig, toolImportScanId, toolImportGameId, onToolImportDone }) {
   const [accountsSubTab, setAccountsSubTab] = useState('accounts')
   const [selectedGame, setSelectedGame] = useState(null)
   const [selectedAccount, setSelectedAccount] = useState(null)
@@ -1467,6 +1467,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
   const [copiedCardId, setCopiedCardId]                       = useState(null)
   const scanCancelRef                                         = useRef(false)
   const pendingScanDataRef                                    = useRef(null) // snapshot of scanData when Save Account is clicked
+  const importRunRef                                          = useRef(null) // tracks which scanId we already processed
   const [editingAccount, setEditingAccount] = useState(null)
   const [saving, setSaving] = useState(false)
   const [newAccount, setNewAccount] = useState({ title: '', description: '', status: 'Available', fields: {}, images: [], thumbnailIndex: 0, boughtFor: 0, soldFor: 0, boughtForCurrency: 'USD', soldForCurrency: 'USD', targetPlatforms: [], postingPriority: 0 })
@@ -1553,15 +1554,16 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
     setConfiguringGame(null)
   }
 
-  // Handle ?toolImport — fetch scan and open add account form pre-filled
+  // Handle tool import — fetch existing scan and open add form pre-filled
   useEffect(() => {
-    if (!toolImportScanId) return
+    if (!toolImportScanId || !games.length) return
+    if (importRunRef.current === toolImportScanId) return  // already ran for this ID
+    importRunRef.current = toolImportScanId
     const doImport = async () => {
       try {
         const res = await fetch(`/api/lol-skins/${toolImportScanId}`)
         const scan = await res.json()
-        if (scan.error) { onToolImportDone?.(); return }
-        // Build a raw-format object so flattenScanData can process it
+        if (scan.error) { console.error('doImport: scan not found', scan.error); onToolImportDone?.(); return }
         const raw = {
           summonerName: scan.summoner_name, tagLine: scan.tag_line, region: scan.region,
           profileIconId: scan.profile_icon_id, summonerLevel: scan.summoner_level,
@@ -1573,26 +1575,30 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
           ownedEmoteIds: scan.owned_emote_ids, ownedIconIds: scan.owned_icon_ids,
           championMastery: scan.champion_mastery,
         }
-        // Snapshot the raw data so handleSave can link it (skip re-creating the scan record)
-        pendingScanDataRef.current = raw
+        // Find game: prefer toolImportGameId, then scannerType match, then first game
+        const targetGame = (toolImportGameId ? games.find(g => g.id === toolImportGameId) : null)
+          || games.find(g => g.scriptEnabled && g.scannerType === 'lol')
+          || games[0]
+        if (!targetGame) { console.error('doImport: no target game found'); onToolImportDone?.(); return }
+        // Build prefill fields from scan data
+        const flat = flattenScanData(raw)
+        const mapping = getScannerMapping(targetGame.id)
+        const cf = getGameConfig(targetGame.id)?.customFields || []
+        const prefillFields = applyMapping(flat, mapping, cf)
+        // Set state: select game, store scan IDs, open modal directly
+        // (Don't call handleOpenAdd — it overwrites pendingScanDataRef with null)
         setScanPreviewId(toolImportScanId)
         setScanOwnerToken(scan.owner_token || null)
-        // Find game, select it, and apply field mapping
-        const targetGame = games.find(g => g.scriptEnabled && g.scannerType === 'lol') || games[0]
-        if (targetGame) setSelectedGame(targetGame)
-        const flat = flattenScanData(raw)
-        let checkerData = {}
-        if (targetGame) {
-          const mapping = getScannerMapping(targetGame.id)
-          const cf = getGameConfig(targetGame.id)?.customFields || []
-          checkerData = applyMapping(flat, mapping, cf)
-        }
-        handleOpenAdd(checkerData, scan.price_amount, scan.price_currency)
+        setSelectedGame(targetGame)
+        setEditingAccount(null)
+        pendingScanDataRef.current = null  // scan already exists, handleSave will just link IDs
+        setNewAccount({ title: '', description: '', status: 'Available', fields: prefillFields, images: [{ id: uid(), url: '', mode: 'url' }], thumbnailIndex: 0, boughtFor: 0, soldFor: scan.price_amount ?? 0, boughtForCurrency: 'USD', soldForCurrency: scan.price_currency || 'USD', targetPlatforms: [], postingPriority: 0 })
+        setShowModal(true)
         onToolImportDone?.()
-      } catch { onToolImportDone?.() }
+      } catch (e) { console.error('doImport error:', e); onToolImportDone?.() }
     }
     doImport()
-  }, [toolImportScanId])
+  }, [toolImportScanId, toolImportGameId, games])
 
   // Poll vault-scanner on localhost every 2s while automatic modal is open
   useEffect(() => {
@@ -1935,7 +1941,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
       } else {
         const savedAccount = await addAccount(payload)
 
-        // Generate preview link if this came from a scan
+        // Generate preview link if this came from a checker scan (new scan record needed)
         const activeScanData = pendingScanDataRef.current
         if (activeScanData && !scanPreviewId) {
           try {
@@ -1980,6 +1986,12 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
             }
           } catch {}
           pendingScanDataRef.current = null
+        } else if (!activeScanData && scanPreviewId && scanOwnerToken && savedAccount) {
+          // Tool import: scan record already exists — just link the IDs to the account silently
+          try {
+            const updatedFields = { ...cleanFields, _scanId: scanPreviewId, _scanOwnerToken: scanOwnerToken }
+            await updateAccount({ ...payload, id: savedAccount.id, fields: updatedFields })
+          } catch {}
         }
       }
       setShowModal(false)
