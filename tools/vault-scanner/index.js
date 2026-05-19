@@ -29,7 +29,7 @@ function saveJson(file, data) {
 
 function loadAccounts() { return loadJson(ACCOUNTS_FILE, []) }
 function saveAccounts(a) { saveJson(ACCOUNTS_FILE, a) }
-function loadConfig() { return loadJson(CONFIG_FILE, { webappUrl: 'https://antlervaults.store' }) }
+function loadConfig() { const c = loadJson(CONFIG_FILE, {}); if (!c.webappUrl) c.webappUrl = 'https://antlervaults.store'; return c }
 function saveConfig(c) { saveJson(CONFIG_FILE, c) }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
@@ -1124,23 +1124,28 @@ async function apiFetch(path, fallback) {
 // ─── Games ────────────────────────────────────────────────────────────────────
 
 async function fetchGames() {
-  if (!_url) { renderGames([]); return }
+  if (!_url) { renderGames([], 'no-url'); return }
   try {
     var r = await fetch(_url + '/api/games')
-    if (!r.ok) { renderGames([]); return }
+    if (!r.ok) { renderGames([], 'error:' + r.status); return }
     var all = await r.json()
     _games = (Array.isArray(all) ? all : []).filter(function(g){ return g.script_enabled && g.scanner_type })
-    renderGames(_games)
-  } catch(e) { renderGames([]) }
+    renderGames(_games, null)
+  } catch(e) { renderGames([], 'fetch-error:' + e.message) }
 }
 
-function renderGames(list) {
+function renderGames(list, err) {
   var el = document.getElementById('games-list')
   var hasScan = list.length > 0
   document.getElementById('scan-btn').style.display = hasScan ? '' : 'none'
   document.getElementById('multi-btn').style.display = hasScan ? '' : 'none'
   if (!list.length) {
-    el.innerHTML = '<div class="sidebar-item" style="font-size:11px;opacity:.5">No games — open Settings</div>'
+    var msg = err === 'no-url'
+      ? 'No webapp URL — open Settings'
+      : err
+      ? 'Failed to load games (' + err + ')'
+      : 'No scanner games found'
+    el.innerHTML = '<div class="sidebar-item" style="font-size:11px;opacity:.5">' + msg + '</div>'
     _activeGame = null
     return
   }
