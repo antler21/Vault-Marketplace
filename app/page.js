@@ -44,6 +44,7 @@ export default function Home() {
   const [defaultDateFilter, setDefaultDateFilter] = useState('all')
   const [toolImportScanId, setToolImportScanId] = useState(null)
   const [pendingToolImport, setPendingToolImport] = useState(null)
+  const [importNotifDismissed, setImportNotifDismissed] = useState(false)
 
   const bg = darkMode ? '#151515' : '#FDF4DC'
   const border = darkMode ? '#2e2e2e' : '#e8d9b8'
@@ -358,13 +359,6 @@ export default function Home() {
                 </div>
               )}
             </div>
-            {pendingToolImport && (
-              <button onClick={handlePendingImport}
-                style={{ position: 'relative', background: '#7E655115', border: '1px solid #7E655144', borderRadius: '8px', padding: '7px 12px', cursor: 'pointer', color: '#a08570', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '500' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#7E6551', display: 'inline-block', flexShrink: 0 }} />
-                {pendingToolImport.accountName || 'Account'} ready to add
-              </button>
-            )}
             <button onClick={() => loadData(false)}
               style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: '8px', padding: '7px 10px', cursor: 'pointer', color: muted, display: 'flex', alignItems: 'center' }}>
               <RefreshCw size={16} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
@@ -375,9 +369,21 @@ export default function Home() {
             </button>
           </div>
         </div>
-        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } } @keyframes slideUp { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: translateY(0) } }`}</style>
         {renderPage()}
       </div>
+      {pendingToolImport && !importNotifDismissed && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, width: 300, background: card, border: `1px solid ${border}`, borderRadius: 16, boxShadow: '0 8px 32px rgba(0,0,0,0.2)', padding: '16px', display: 'flex', flexDirection: 'column', gap: 10, animation: 'slideUp 0.25s ease' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: text }}>Account Ready to Add</span>
+            <button onClick={() => setImportNotifDismissed(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: muted, padding: '2px 6px', fontSize: 16, lineHeight: 1 }}>✕</button>
+          </div>
+          <div style={{ fontSize: 13, color: muted }}>{pendingToolImport.accountName}</div>
+          <button onClick={handlePendingImport} style={{ padding: '9px 14px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer', textAlign: 'left' }}>
+            Add Account →
+          </button>
+        </div>
+      )}
     </div>
   )
 }
