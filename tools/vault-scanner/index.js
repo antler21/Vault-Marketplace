@@ -29,7 +29,7 @@ function saveJson(file, data) {
 
 function loadAccounts() { return loadJson(ACCOUNTS_FILE, []) }
 function saveAccounts(a) { saveJson(ACCOUNTS_FILE, a) }
-function loadConfig() { return loadJson(CONFIG_FILE, { webappUrl: '' }) }
+function loadConfig() { return loadJson(CONFIG_FILE, { webappUrl: 'https://antlervaults.store' }) }
 function saveConfig(c) { saveJson(CONFIG_FILE, c) }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
