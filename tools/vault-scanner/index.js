@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.0'
+const VERSION = '0.6.1'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1686,6 +1686,8 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 init()
+// Keep server alive while window is open; server exits ~30s after window closes
+setInterval(function() { fetch('/heartbeat', { method: 'POST' }).catch(function(){}) }, 10000)
 </script>
 </body>
 </html>`
@@ -1703,6 +1705,12 @@ const server = http.createServer(async (req, res) => {
 
   // Ping
   if (req.method === 'GET' && pathname === '/ping') return json(res, 200, { ok: true, version: VERSION })
+
+  // Heartbeat — browser sends this every 10s; server exits 30s after last heartbeat
+  if (req.method === 'POST' && pathname === '/heartbeat') {
+    lastHeartbeat = Date.now()
+    return json(res, 200, { ok: true })
+  }
 
   // LCU ping — checks if League client is running and logged in
   if (req.method === 'GET' && pathname === '/ping-lcu') {
@@ -1824,6 +1832,8 @@ const server = http.createServer(async (req, res) => {
 
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
+let lastHeartbeat = Date.now()
+
 server.listen(PORT, '127.0.0.1', () => {
   log(`AIO Tool v${VERSION} listening on http://localhost:${PORT}`)
   const appUrl = `http://localhost:${PORT}`
@@ -1833,5 +1843,14 @@ server.listen(PORT, '127.0.0.1', () => {
       exec(`start "" "${appUrl}"`)
     }
   })
+  // Exit automatically ~30s after the browser window is closed
+  setTimeout(() => {
+    setInterval(() => {
+      if (Date.now() - lastHeartbeat > 30000) {
+        log('No heartbeat for 30s — shutting down')
+        process.exit(0)
+      }
+    }, 15000)
+  }, 35000) // grace period so startup doesn't trigger the check
 })
 
