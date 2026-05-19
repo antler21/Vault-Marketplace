@@ -15,6 +15,7 @@ export default function Games({ darkMode, games, gameConfigs, platforms, addGame
   const [showGameModal, setShowGameModal] = useState(false)
   const [editingGame, setEditingGame] = useState(null)
   const [newGame, setNewGame] = useState({ name: '', image: '', imageUrl: '', sections: [], allowedPlatformIds: [], scriptEnabled: false, scriptSections: [], scannerType: '' })
+  const [saveError, setSaveError] = useState(null)
   const [imageMode, setImageMode] = useState('url')
   const [expandedGame, setExpandedGame] = useState(null)
   const [showConfigModal, setShowConfigModal] = useState(false)
@@ -70,12 +71,13 @@ export default function Games({ darkMode, games, gameConfigs, platforms, addGame
 
   const handleSaveGame = async () => {
     if (!newGame.name.trim()) return
+    setSaveError(null)
     const imageToUse = newGame.image || newGame.imageUrl || ''
-    if (editingGame) {
-      await updateGame({ id: editingGame, name: newGame.name, image: imageToUse, sections: newGame.sections, allowedPlatformIds: newGame.allowedPlatformIds, titleCharLimit: newGame.titleCharLimit || null, dataLists: newGame.dataLists || [], scriptEnabled: newGame.scriptEnabled, scriptSections: newGame.scriptEnabled ? newGame.scriptSections : [], scannerType: newGame.scannerType || null })
-    } else {
-      await addGame({ name: newGame.name, image: imageToUse, sections: newGame.sections, allowedPlatformIds: newGame.allowedPlatformIds, titleCharLimit: newGame.titleCharLimit || null, dataLists: newGame.dataLists || [], scriptEnabled: newGame.scriptEnabled, scriptSections: newGame.scriptEnabled ? newGame.scriptSections : [], scannerType: newGame.scannerType || null })
-    }
+    const payload = { name: newGame.name, image: imageToUse, sections: newGame.sections, allowedPlatformIds: newGame.allowedPlatformIds, titleCharLimit: newGame.titleCharLimit || null, dataLists: newGame.dataLists || [], scriptEnabled: newGame.scriptEnabled, scriptSections: newGame.scriptEnabled ? newGame.scriptSections : [], scannerType: newGame.scannerType || null }
+    const err = editingGame
+      ? await updateGame({ id: editingGame, ...payload })
+      : await addGame(payload)
+    if (err) { setSaveError(String(err)); return }
     setShowGameModal(false)
     setEditingGame(null)
   }
@@ -510,6 +512,7 @@ export default function Games({ darkMode, games, gameConfigs, platforms, addGame
                 )
               })()}
 
+              {saveError && <div style={{ fontSize: '12px', color: '#e05252', padding: '8px 12px', background: '#e0525218', borderRadius: '8px' }}>{saveError}</div>}
               <button onClick={handleSaveGame}
                 style={{ width: '100%', padding: '12px', background: '#7E6551', color: '#FDF4DC', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
                 {editingGame ? 'Save Changes' : 'Add Game'}

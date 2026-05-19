@@ -155,18 +155,18 @@ export default function Home() {
     try {
       const res = await fetch('/api/games', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(game) })
       const saved = await res.json()
-      if (saved.error) return
+      if (saved.error) return saved.error
       setGamesState(prev => [...prev, { id: saved.id, name: saved.name, image: saved.image || '', sections: saved.sections || [], allowedPlatformIds: saved.allowed_platform_ids || [], titleCharLimit: saved.title_char_limit || null, dataLists: saved.data_lists || [], scriptEnabled: saved.script_enabled || false, scriptSections: saved.script_sections || [], scannerType: saved.scanner_type || null }])
-    } catch (err) { console.error(err) }
+    } catch (err) { return err.message }
   }
 
   const updateGame = async (game) => {
     try {
       const res = await fetch(`/api/games/${game.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(game) })
       const saved = await res.json()
-      if (saved.error) return
+      if (saved.error) return saved.error
       setGamesState(prev => prev.map(g => g.id === saved.id ? { id: saved.id, name: saved.name, image: saved.image || '', sections: saved.sections || [], allowedPlatformIds: saved.allowed_platform_ids || [], titleCharLimit: saved.title_char_limit || null, dataLists: saved.data_lists || [], scriptEnabled: saved.script_enabled || false, scriptSections: saved.script_sections || [], scannerType: saved.scanner_type || null } : g))
-    } catch (err) { console.error(err) }
+    } catch (err) { return err.message }
   }
 
   const deleteGame = async (id) => {
