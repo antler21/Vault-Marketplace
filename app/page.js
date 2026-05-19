@@ -98,7 +98,7 @@ export default function Home() {
       localStorage.setItem('activePage', 'Accounts')
       window.history.replaceState({}, '', '/')
     }
-    // Check for pending imports from the AIO Tool
+    // Check for pending imports from the AIO Tool on load
     fetch('http://localhost:35199/status', { signal: AbortSignal.timeout(1000), cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
       .then(s => { if (s?.pendingImport) setPendingToolImport(s.pendingImport) })
@@ -106,6 +106,18 @@ export default function Home() {
     if (params.get('gmailError')) {
       window.history.replaceState({}, '', '/')
     }
+  }, [])
+
+  // Poll tool every 5s for pending imports while webapp is open
+  useEffect(() => {
+    const check = () => {
+      fetch('http://localhost:35199/status', { signal: AbortSignal.timeout(1000), cache: 'no-store' })
+        .then(r => r.ok ? r.json() : null)
+        .then(s => { if (s?.pendingImport) setPendingToolImport(prev => prev?.scanId === s.pendingImport.scanId ? prev : s.pendingImport) })
+        .catch(() => {})
+    }
+    const id = setInterval(check, 5000)
+    return () => clearInterval(id)
   }, [])
 
   const loadData = async (showSpinner = true) => {
