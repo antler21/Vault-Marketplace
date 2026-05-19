@@ -63,7 +63,7 @@ export default function Games({ darkMode, games, gameConfigs, platforms, addGame
 
   const handleOpenEdit = (game) => {
     setEditingGame(game.id)
-    setNewGame({ name: game.name, image: game.image || '', imageUrl: game.image || '', sections: [...(game.sections || [])], allowedPlatformIds: [...(game.allowed_platform_ids || [])], titleCharLimit: game.title_char_limit || '', dataLists: game.data_lists || [], scriptEnabled: game.script_enabled || false, scriptSections: [...(game.script_sections || [])], scannerType: game.scanner_type || '' })
+    setNewGame({ name: game.name, image: game.image || '', imageUrl: game.image || '', sections: [...(game.sections || [])], allowedPlatformIds: [...(game.allowedPlatformIds || [])], titleCharLimit: game.titleCharLimit || '', dataLists: game.dataLists || [], scriptEnabled: game.scriptEnabled || false, scriptSections: [...(game.scriptSections || [])], scannerType: game.scannerType || '' })
     setImageMode('url')
     setShowGameModal(true)
   }
@@ -194,9 +194,9 @@ export default function Games({ darkMode, games, gameConfigs, platforms, addGame
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                   <div style={{ fontSize: '15px', fontWeight: '600', color: text }}>{game.name}</div>
-                  {game.script_enabled && (game.script_sections || []).length > 0 && (
+                  {game.scriptEnabled && (game.scriptSections || []).length > 0 && (
                     <span style={{ fontSize: '10px', padding: '2px 7px', borderRadius: '10px', background: '#7E655120', color: '#7E6551', border: '1px solid #7E655140', fontWeight: '500' }}>
-                      AIO · {(game.script_sections || []).map(k => SECTIONS.find(s => s.key === k)?.label).filter(Boolean).join(', ')}
+                      AIO · {(game.scriptSections || []).map(k => SECTIONS.find(s => s.key === k)?.label).filter(Boolean).join(', ')}
                     </span>
                   )}
                 </div>

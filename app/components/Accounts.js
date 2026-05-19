@@ -1031,8 +1031,8 @@ function ConfigModal({ card, border, text, muted, bg, inputBg, sectionBg, config
 // ─── Account Modal (OUTSIDE main component to prevent remount) ───
 function AccountModal({ game, gameConfig, newAccount, setNewAccount, handleSave, handleStatusChange, onClose, editingAccount, card, border, text, muted, inputBg, bg, getSoldForLabel, platforms, saving, catConfig }) {
   // Filter platforms to only ones allowed for this game (empty = all allowed)
-  const allowedPlatforms = (game?.allowed_platform_ids || []).length > 0
-    ? platforms.filter(p => game.allowed_platform_ids.includes(p.id))
+  const allowedPlatforms = (game?.allowedPlatformIds || []).length > 0
+    ? platforms.filter(p => game.allowedPlatformIds.includes(p.id))
     : platforms
   const customFields = gameConfig?.customFields || []
   const [uploadErrors, setUploadErrors] = useState({})
@@ -1578,7 +1578,7 @@ export default function Accounts({ darkMode, games, gameConfigs, accounts, platf
         setScanPreviewId(toolImportScanId)
         setScanOwnerToken(scan.owner_token || null)
         // Find game and apply field mapping
-        const gameId = games.find(g => g.script_enabled && g.scanner_type === 'lol')?.id || games[0]?.id
+        const gameId = games.find(g => g.scriptEnabled && g.scannerType === 'lol')?.id || games[0]?.id
         const flat = flattenScanData(raw)
         let checkerData = {}
         if (gameId) {
