@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.3'
+const VERSION = '0.6.4'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1423,17 +1423,37 @@ async function startMultiScan() {
 async function runMultiLoop(creds) {
   var stepsEl = document.getElementById('multi-steps')
   var progEl = document.getElementById('multi-prog-label')
+
+  function addStep(label) {
+    stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">' + label + '</div></div></div>'
+  }
+  function markLastDone() {
+    var actives = stepsEl.querySelectorAll('.ico-active')
+    if (!actives.length) return
+    var last = actives[actives.length - 1]
+    last.className = 'step-ico ico-done'
+    last.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
+  }
+  function markLastError() {
+    var actives = stepsEl.querySelectorAll('.ico-active')
+    if (!actives.length) return
+    var last = actives[actives.length - 1]
+    last.className = 'step-ico ico-error'
+    last.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+  }
+
   for (var i = 0; i < creds.length; i++) {
     if (_multiAbort) break
     var parts = creds[i].split(':')
     var username = parts[0]
     var password = parts.slice(1).join(':')
     progEl.textContent = 'Account ' + (i + 1) + ' of ' + creds.length + ': ' + username
+    stepsEl.innerHTML = ''
 
     // Close League if still running from previous iteration
     var lcuCheck = await apiFetch('/ping-lcu', { ok: false })
     if (lcuCheck.ok) {
-      stepsEl.innerHTML = '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Closing previous League session...</div></div></div>'
+      addStep('Closing previous League session...')
       await fetch('/riot/close-league', { method: 'POST' }).catch(function(){})
       var closeDl = Date.now() + 30000
       while (Date.now() < closeDl && !_multiAbort) {
@@ -1441,26 +1461,32 @@ async function runMultiLoop(creds) {
         var pClose = await apiFetch('/ping-lcu', { ok: true })
         if (!pClose.ok) break
       }
+      markLastDone()
     }
     if (_multiAbort) break
 
     // Login
-    stepsEl.innerHTML = '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Logging in as ' + escH(username) + '...</div></div></div>'
+    addStep('Logging in as ' + escH(username) + '...')
     var login = await fetch('/riot/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
     if (_multiAbort) break
     if (login.error) {
-      stepsEl.innerHTML = '<div class="step"><div class="step-ico ico-error"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div><div class="step-info"><div class="step-main">' + escH(username) + '</div><div class="step-sub">' + escH(login.error) + '</div></div></div>'
+      markLastError()
+      showNotice('multi-notice', 'error', username + ': ' + login.error)
       await sleep(2500)
       continue
     }
-
-    // Launch League
-    stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Launching League...</div></div></div>'
-    await fetch('/riot/launch-league', { method: 'POST' }).catch(function(){})
+    markLastDone()
+    await sleep(1500) // let Riot Client finish auth handshake before launching League
     if (_multiAbort) break
 
+    // Launch League
+    addStep('Launching League...')
+    await fetch('/riot/launch-league', { method: 'POST' }).catch(function(){})
+    if (_multiAbort) break
+    markLastDone()
+
     // Wait for League (90s)
-    stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Waiting for League client (up to 90s)...</div></div></div>'
+    addStep('Waiting for League client (up to 90s)...')
     var ready = false
     var dl = Date.now() + 90000
     while (Date.now() < dl && !_multiAbort) {
@@ -1470,31 +1496,32 @@ async function runMultiLoop(creds) {
     }
     if (_multiAbort) break
     if (!ready) {
+      markLastError()
       showNotice('multi-notice', 'error', username + ': League did not start in 90s, skipping.')
       await sleep(1500)
       continue
     }
+    markLastDone()
 
     // Scan with auto-retry (5s gaps, 2 min max)
-    stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">Scanning...</div></div></div>'
+    addStep('Scanning...')
     var result = null
     var scanDl = Date.now() + 120000
-    var scanAttempt = 0
     while (Date.now() < scanDl && !_multiAbort) {
       result = await fetch('/scan', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
       if (_multiAbort) break
       if (!result.error && Array.isArray(result.ownedSkinIds) && result.ownedSkinIds.length > 0) break
-      scanAttempt++
       if (Date.now() < scanDl) await sleep(5000)
     }
     if (_multiAbort) break
     if (!result || result.error) {
+      markLastError()
       showNotice('multi-notice', 'error', username + ': Scan failed — ' + (result ? result.error : 'timed out'))
     } else {
+      markLastDone()
       await saveLocally(result)
       await reloadAccounts()
       renderAccounts()
-      stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-done"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div><div class="step-info"><div class="step-main">' + escH(username) + ': Saved!</div></div></div>'
     }
     await fetch('/riot/logout', { method: 'POST' }).catch(function(){})
     await sleep(1500)
