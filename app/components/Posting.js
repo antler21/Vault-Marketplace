@@ -390,7 +390,7 @@ export default function Posting({ darkMode, accounts, games, gameConfigs, platfo
 
   const getAllowedPlatforms = (game) => {
     if (!game) return []
-    const ids = game.allowedPlatformIds || []
+    const ids = game.allowed_platform_ids || []
     return ids.length > 0 ? platforms.filter(p => ids.includes(p.id)) : platforms
   }
 
