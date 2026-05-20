@@ -563,18 +563,14 @@ export default function PreviewPage() {
       .catch(() => [])
 
     Promise.all([
-      fetch(`/api/lol-skins/${id}`).then(r => r.json()),
-      fetch(`${CDN}/v1/skins.json`).then(r => r.json()),
-      fetch(`${CDN}/v1/summoner-icons.json`).then(r => r.json()).catch(() => []),
-      fetch(`${CDN}/v1/summoner-emotes.json`).then(r => r.json()).catch(() => []),
-      fetch(`${CDN}/v1/ward-skins.json`).then(r => r.json()).catch(() => []),
-      fetch(`${CDN}/v1/champion-summary.json`).then(r => r.json()).catch(() => []),
+      fetch(`/api/lol-preview-data/${id}`).then(r => r.json()),
       ddragonFetch,
       boomsFetch,
       fetch(`${CDN}/v1/nexusfinishers.json`).then(r => r.json()).catch(() => []),
       fetch('/api/border-skins').then(r => r.json()).catch(() => ({})),
-    ]).then(([scanData, skinsJson, iconsJson, emotesJson, wardsJson, champsJson, ddragonData, boomsArr, finishersJson, borderData]) => {
-      if (scanData.error) { setError(scanData.error); setLoading(false); return }
+    ]).then(([previewData, ddragonData, boomsArr, finishersJson, borderData]) => {
+      if (previewData.error) { setError(previewData.error); setLoading(false); return }
+      const { scan: scanData, skins: skinsJson, icons: iconsJson, emotes: emotesJson, wards: wardsJson, champions: champsJson } = previewData
       setScan(scanData)
       if (scanData.hide_name) setHideIGN(true)
       if (Array.isArray(borderData?.skin_ids)) setManualBorderIds(borderData.skin_ids)
