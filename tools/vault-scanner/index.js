@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.18'
+const VERSION = '0.6.19'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -225,6 +225,46 @@ function lcuGet(lcuPort, password, endpoint) {
     req.setTimeout(8000, () => { req.destroy(); resolve({ ok: false, data: null, status: null }) })
     req.end()
   })
+}
+
+function lcuDelete(lcuPort, password, endpoint) {
+  return new Promise((resolve) => {
+    const auth = Buffer.from(`riot:${password}`).toString('base64')
+    const req = https.request({
+      hostname: '127.0.0.1', port: lcuPort, path: endpoint, method: 'DELETE',
+      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+      rejectUnauthorized: false,
+    }, (res) => {
+      let raw = ''
+      res.on('data', c => raw += c)
+      res.on('end', () => {
+        try { resolve({ ok: res.statusCode < 300, data: raw ? JSON.parse(raw) : null, status: res.statusCode }) }
+        catch { resolve({ ok: res.statusCode < 300, data: null, status: res.statusCode }) }
+      })
+    })
+    req.on('error', () => resolve({ ok: false, data: null, status: null }))
+    req.setTimeout(8000, () => { req.destroy(); resolve({ ok: false, data: null, status: null }) })
+    req.end()
+  })
+}
+
+async function unfriendAll() {
+  const lf = findLockfile()
+  if (!lf) throw new Error('No League client detected. Make sure League is open and fully loaded.')
+  const { port, password } = parseLockfile(lf)
+  const friendsRes = await lcuGet(port, password, '/lol-chat/v1/friends')
+  if (!friendsRes.ok) throw new Error('Could not fetch friends list (status ' + friendsRes.status + ').')
+  const friends = friendsRes.data || []
+  log(`[unfriend-all] ${friends.length} friends found, removing...`)
+  let removed = 0
+  for (const f of friends) {
+    const id = f.id
+    if (!id) continue
+    const r = await lcuDelete(port, password, '/lol-chat/v1/friends/' + encodeURIComponent(id))
+    if (r.ok || r.status === 204) removed++
+  }
+  log(`[unfriend-all] Done: ${removed}/${friends.length} removed`)
+  return { count: removed, total: friends.length }
 }
 
 async function pMap(items, fn, concurrency = 8) {
@@ -1029,6 +1069,7 @@ select{cursor:pointer}
       <span class="main-title">Accounts</span>
       <div class="spacer"></div>
       <button class="btn btn-secondary btn-sm" id="sel-btn" onclick="toggleSelect()" style="display:none">Select</button>
+      <button class="btn btn-secondary btn-sm" id="unfriend-btn" onclick="openUnfriendModal()" style="display:none">Unfriend All</button>
       <button class="btn btn-secondary btn-sm" id="multi-btn" onclick="openMultiScan()" style="display:none">Multi Scan</button>
       <button class="btn btn-primary btn-sm" id="scan-btn" onclick="openSingleScan()" style="display:none">+ Single Scan</button>
     </div>
@@ -1068,6 +1109,10 @@ select{cursor:pointer}
     <div id="multi-creds-section" class="field">
       <label>Credentials — one per line, format: <code style="font-size:11px">username:password</code></label>
       <textarea id="multi-creds" placeholder="user1:pass1&#10;user2:pass2&#10;user3:pass3" style="font-family:monospace;font-size:12px;min-height:130px"></textarea>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:12px;color:var(--muted)">
+        <input type="checkbox" id="multi-unfriend-toggle" style="cursor:pointer">
+        Unfriend all friends after scanning each account
+      </label>
     </div>
     <div id="multi-notice" style="display:none"></div>
     <div id="multi-progress" style="display:none">
@@ -1077,6 +1122,19 @@ select{cursor:pointer}
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeMultiModal()" id="multi-close-btn">Cancel</button>
       <button class="btn btn-primary" onclick="startMultiScan()" id="multi-start-btn">Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- Unfriend All Modal -->
+<div class="modal-bg" id="unfriend-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">Remove All Friends</div>
+    <div class="modal-sub">This will remove every friend from the currently logged-in League account. This cannot be undone.</div>
+    <div id="unfriend-notice" style="display:none;margin-top:12px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('unfriend-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmUnfriendAll()" id="unfriend-confirm-btn" style="background:#c0392b;border-color:#c0392b">Remove All</button>
     </div>
   </div>
 </div>
@@ -1212,6 +1270,7 @@ function renderGames(list, err) {
   var hasScan = list.length > 0
   document.getElementById('scan-btn').style.display = hasScan ? '' : 'none'
   document.getElementById('multi-btn').style.display = hasScan ? '' : 'none'
+  document.getElementById('unfriend-btn').style.display = hasScan ? '' : 'none'
   if (!list.length) {
     var msg = err === 'no-url'
       ? 'No webapp URL — open Settings'
@@ -1454,6 +1513,33 @@ async function saveLocally(data) {
   return r && r.ok
 }
 
+// ─── Unfriend All ────────────────────────────────────────────────────────────
+
+function openUnfriendModal() {
+  hideNotice('unfriend-notice')
+  var btn = document.getElementById('unfriend-confirm-btn')
+  btn.disabled = false
+  btn.style.display = ''
+  btn.textContent = 'Remove All'
+  showModal('unfriend-modal')
+}
+
+async function confirmUnfriendAll() {
+  var btn = document.getElementById('unfriend-confirm-btn')
+  btn.disabled = true
+  btn.textContent = 'Removing...'
+  hideNotice('unfriend-notice')
+  var res = await fetch('/unfriend-all', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) {
+    showNotice('unfriend-notice', 'error', res.error)
+    btn.disabled = false
+    btn.textContent = 'Remove All'
+  } else {
+    showNotice('unfriend-notice', 'success', 'Removed ' + res.count + ' friend' + (res.count === 1 ? '' : 's') + '.')
+    btn.style.display = 'none'
+  }
+}
+
 // ─── Multi Scan ───────────────────────────────────────────────────────────────
 
 function openMultiScan() {
@@ -1639,6 +1725,12 @@ async function runMultiLoop(creds, myRunId) {
       await saveLocally(result)
       await reloadAccounts()
       renderAccounts()
+      // Unfriend all if toggle is enabled
+      if (document.getElementById('multi-unfriend-toggle').checked) {
+        addStep('Unfriending all friends...')
+        var ufRes = await fetch('/unfriend-all', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+        if (ufRes.error) { markLastError() } else { markLastDone() }
+      }
     }
     await sleep(2000)
   }
@@ -1925,6 +2017,17 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/ping-lcu') {
     const ok = await pingLcu()
     return json(res, 200, { ok })
+  }
+
+  // Unfriend all friends on current League account
+  if (req.method === 'POST' && pathname === '/unfriend-all') {
+    try {
+      const result = await unfriendAll()
+      return json(res, 200, result)
+    } catch (e) {
+      log(`[unfriend-all] error: ${e.message}`)
+      return json(res, 400, { error: e.message })
+    }
   }
 
   // Status — for webapp scanning indicator + pending imports
