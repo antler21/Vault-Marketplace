@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "pkg index.js --targets node18-win-x64 --output aio-tool-v0.6.9.exe --compress GZip && node patch-exe.js aio-tool-v0.6.9.exe"
+    "build": "pkg index.js --targets node18-win-x64 --output aio-tool-v0.6.10.exe --compress GZip && node patch-exe.js aio-tool-v0.6.10.exe"
   },
   "dependencies": {},
   "devDependencies": {

@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.9'
+const VERSION = '0.6.10'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -80,18 +80,9 @@ async function riotLogin(username, password) {
   if (!lf) throw new Error('Riot Client not detected. Open Riot Client first.')
   const { port, password: rcPass } = parseRCLockfile(lf)
 
-  // Check current session state — skip DELETE if already on login screen
-  const current = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
-  if (!current.ok || current.data?.type !== 'needs_credentials') {
-    // Sign out if logged in, then wait for login screen
-    await rcRequest(port, rcPass, 'DELETE', '/rso-auth/v1/session')
-    const clearDl = Date.now() + 12000
-    while (Date.now() < clearDl) {
-      await new Promise(r => setTimeout(r, 700))
-      const s = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
-      if (s.ok && s.data?.type === 'needs_credentials') break
-    }
-  }
+  // Sign out any existing session, then wait 2s for it to clear
+  await rcRequest(port, rcPass, 'DELETE', '/rso-auth/v1/session')
+  await new Promise(r => setTimeout(r, 2000))
 
   // Submit credentials
   const res = await rcRequest(port, rcPass, 'PUT', '/rso-auth/v1/session/credentials', {
@@ -1499,20 +1490,21 @@ async function runMultiLoop(creds) {
     // Restart Riot Client to get a completely fresh auth session
     addStep('Restarting Riot Client...')
     await fetch('/riot/restart-client', { method: 'POST' }).catch(function(){})
-    // Wait until the auth service is ready (needs_credentials = login screen up), max 60s
+    // Wait for lockfile to appear (max 45s), then extra 6s for auth API to initialize
     var rcReady = false
-    var rcDl = Date.now() + 60000
+    var rcDl = Date.now() + 45000
     while (Date.now() < rcDl && !_multiAbort) {
-      await sleep(2500)
-      var authState = await apiFetch('/riot/auth-state', { state: null })
-      if (authState.state === 'needs_credentials') { rcReady = true; break }
+      await sleep(2000)
+      var rcStatus = await apiFetch('/riot/status', { running: false })
+      if (rcStatus.running) { rcReady = true; break }
     }
     if (_multiAbort) break
     if (!rcReady) {
       markLastError()
-      showNotice('multi-notice', 'error', 'Riot Client did not reach login screen — check install path.')
+      showNotice('multi-notice', 'error', 'Riot Client did not start — check install path.')
       break
     }
+    await sleep(6000) // wait for auth API to finish initializing after lockfile appears
     markLastDone()
     if (_multiAbort) break
 
