@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.7'
+const VERSION = '0.6.8'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -114,6 +114,30 @@ async function riotLogin(username, password) {
     // needs_credentials, auth, loading — keep polling
   }
   throw new Error('Login timed out — Riot Client did not respond in time')
+}
+
+const RC_SERVICE_PATHS = [
+  'C:\\Riot Games\\Riot Client\\RiotClientServices.exe',
+  path.join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Riot Games', 'Riot Client', 'RiotClientServices.exe'),
+  path.join(process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)', 'Riot Games', 'Riot Client', 'RiotClientServices.exe'),
+]
+
+async function restartRiotClient() {
+  // Kill everything Riot-related
+  await new Promise(r => exec('taskkill /F /IM "Riot Client.exe" /T & taskkill /F /IM RiotClientServices.exe /T & taskkill /F /IM LeagueClient.exe /T & taskkill /F /IM LeagueClientUx.exe /T', r))
+  await new Promise(r => setTimeout(r, 2000))
+  // Find and relaunch RiotClientServices
+  let launched = false
+  for (const p of RC_SERVICE_PATHS) {
+    if (fs.existsSync(p)) {
+      exec(`"${p}"`)
+      launched = true
+      log('Riot Client relaunched from: ' + p)
+      break
+    }
+  }
+  if (!launched) log('WARN: Could not find RiotClientServices.exe to relaunch')
+  return launched
 }
 
 async function riotLogout() {
@@ -1470,20 +1494,25 @@ async function runMultiLoop(creds) {
     progEl.textContent = 'Account ' + (i + 1) + ' of ' + creds.length + ': ' + username
     stepsEl.innerHTML = ''
 
-    // Close League if still running from previous iteration
-    var lcuCheck = await apiFetch('/ping-lcu', { ok: false })
-    if (lcuCheck.ok) {
-      addStep('Closing previous League session...')
-      await fetch('/riot/close-league', { method: 'POST' }).catch(function(){})
-      var closeDl = Date.now() + 30000
-      while (Date.now() < closeDl && !_multiAbort) {
-        await sleep(3000)
-        var pClose = await apiFetch('/ping-lcu', { ok: true })
-        if (!pClose.ok) break
-      }
-      markLastDone()
-      await sleep(2000) // let Riot Client stabilize after League was killed
+    // Restart Riot Client to get a completely fresh auth session
+    addStep('Restarting Riot Client...')
+    await fetch('/riot/restart-client', { method: 'POST' }).catch(function(){})
+    // Wait for Riot Client lockfile to reappear (max 40s)
+    var rcReady = false
+    var rcDl = Date.now() + 40000
+    while (Date.now() < rcDl && !_multiAbort) {
+      await sleep(2000)
+      var rcStatus = await apiFetch('/riot/status', { running: false })
+      if (rcStatus.running) { rcReady = true; break }
     }
+    if (_multiAbort) break
+    if (!rcReady) {
+      markLastError()
+      showNotice('multi-notice', 'error', 'Riot Client did not start — check install path.')
+      break
+    }
+    markLastDone()
+    await sleep(1500) // let RC fully initialize before logging in
     if (_multiAbort) break
 
     // Login
@@ -1544,8 +1573,7 @@ async function runMultiLoop(creds) {
       await reloadAccounts()
       renderAccounts()
     }
-    await fetch('/riot/logout', { method: 'POST' }).catch(function(){})
-    await sleep(4000) // give Riot servers time to reset auth state between accounts
+    await sleep(2000) // brief pause before next iteration
   }
   if (!_multiAbort) {
     progEl.textContent = 'All done!'
@@ -1903,6 +1931,12 @@ const server = http.createServer(async (req, res) => {
     exec('taskkill /F /IM LeagueClient.exe /T & taskkill /F /IM LeagueClientUx.exe /T', () => {})
     log('Close League: taskkill sent')
     return json(res, 200, { ok: true })
+  }
+
+  // Restart Riot Client (kills all Riot/League processes + relaunches RC)
+  if (req.method === 'POST' && pathname === '/riot/restart-client') {
+    const launched = await restartRiotClient()
+    return json(res, 200, { ok: true, launched })
   }
 
   // Debug logs
