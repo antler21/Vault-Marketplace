@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.20'
+const VERSION = '0.6.21'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1072,6 +1072,7 @@ select{cursor:pointer}
       <div class="spacer"></div>
       <button class="btn btn-secondary btn-sm" id="sel-btn" onclick="toggleSelect()" style="display:none">Select</button>
       <button class="btn btn-secondary btn-sm" id="unfriend-btn" onclick="openUnfriendModal()" style="display:none">Unfriend All</button>
+      <button class="btn btn-secondary btn-sm" id="scan-current-btn" onclick="scanCurrentAccount()" style="display:none">Scan Current</button>
       <button class="btn btn-secondary btn-sm" id="multi-btn" onclick="openMultiScan()" style="display:none">Multi Scan</button>
       <button class="btn btn-primary btn-sm" id="scan-btn" onclick="openSingleScan()" style="display:none">+ Single Scan</button>
     </div>
@@ -1271,6 +1272,7 @@ function renderGames(list, err) {
   var el = document.getElementById('games-list')
   var hasScan = list.length > 0
   document.getElementById('scan-btn').style.display = hasScan ? '' : 'none'
+  document.getElementById('scan-current-btn').style.display = hasScan ? '' : 'none'
   document.getElementById('multi-btn').style.display = hasScan ? '' : 'none'
   document.getElementById('unfriend-btn').style.display = hasScan ? '' : 'none'
   if (!list.length) {
@@ -1513,6 +1515,26 @@ async function saveLocally(data) {
   var method = existing ? 'PATCH' : 'POST'
   var r = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(function(){ return null })
   return r && r.ok
+}
+
+// ─── Scan Current Account ────────────────────────────────────────────────────
+
+async function scanCurrentAccount() {
+  var btn = document.getElementById('scan-current-btn')
+  btn.disabled = true
+  btn.textContent = 'Scanning...'
+  var result = await fetch('/scan', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (result.error) {
+    btn.textContent = 'Scan Current'
+    btn.disabled = false
+    alert('Scan failed: ' + result.error)
+    return
+  }
+  await saveLocally(result)
+  await reloadAccounts()
+  renderAccounts()
+  btn.textContent = 'Scan Current'
+  btn.disabled = false
 }
 
 // ─── Unfriend All ────────────────────────────────────────────────────────────
