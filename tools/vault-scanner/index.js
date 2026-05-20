@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.17'
+const VERSION = '0.6.18'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -148,7 +148,9 @@ async function launchLeague() {
   const lf = findRCLockfile()
   if (!lf) throw new Error('Riot Client not detected.')
   const { port, password: rcPass } = parseRCLockfile(lf)
-  await rcRequest(port, rcPass, 'POST', '/product-launcher/v1/products/league_of_legends/patchlines/live', {})
+  const res = await rcRequest(port, rcPass, 'POST', '/product-launcher/v1/products/league_of_legends/patchlines/live', {})
+  log(`[launch-league] HTTP ${res.status} ok=${res.ok} data=${JSON.stringify(res.data)?.slice(0, 200)}`)
+  if (!res.ok) throw new Error(`Launch failed: HTTP ${res.status} — ${JSON.stringify(res.data)?.slice(0, 100)}`)
 }
 
 async function getLeaguePatchState() {
@@ -1561,6 +1563,7 @@ async function runMultiLoop(creds, myRunId) {
     }
     markLastDone()
     if (aborted()) break
+    await sleep(3000) // give RC a moment to fully settle after login before launching
 
     // Check League patch state — only pause if we explicitly detect update/repair
     addStep('Checking League...')
@@ -1593,7 +1596,9 @@ async function runMultiLoop(creds, myRunId) {
 
     // Launch League
     addStep('Launching League...')
-    await fetch('/riot/launch-league', { method: 'POST' }).catch(function(){})
+    await clientLog('multi-scan: calling launch-league')
+    var launchRes = await fetch('/riot/launch-league', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+    await clientLog('multi-scan: launch-league result = ' + JSON.stringify(launchRes))
     if (aborted()) break
     markLastDone()
 
