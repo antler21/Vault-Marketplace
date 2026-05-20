@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.16'
+const VERSION = '0.6.17'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -153,39 +153,25 @@ async function launchLeague() {
 
 async function getLeaguePatchState() {
   const lf = findRCLockfile()
-  if (!lf) return { error: 'no_lockfile', ready: false }
+  if (!lf) return { error: 'no_lockfile', skip: true }
   try {
     const { port, password: rcPass } = parseRCLockfile(lf)
     const res = await rcRequest(port, rcPass, 'GET', '/patch/v1/products/league_of_legends')
     log(`[league-state] HTTP ${res.status}: ${JSON.stringify(res.data)?.slice(0, 500)}`)
-    if (!res.ok || !res.data) return { error: 'api_error', status: res.status, ready: false }
+    if (!res.ok || !res.data) return { error: 'api_error', status: res.status, skip: true }
     const d = res.data
     const action = String(d.action || '').toLowerCase()
     const stateType = String(d.product_state?.type || d.status || '').toLowerCase()
     const progress = d.progress ?? d.product_state?.percent ?? null
-    const ready = stateType === 'up_to_date' || stateType === 'playable' || (action === 'idle' && !stateType) || action === 'idle'
     const patching = action === 'patching' || action === 'checking_for_patches' || stateType === 'patching' || stateType === 'downloading'
     const needs_repair = action === 'repairing' || stateType === 'needs_repair' || stateType === 'corrupted'
-    return { ready, patching, needs_repair, needs_patch: !ready && !patching && !needs_repair, progress, raw_action: action, raw_state: stateType }
+    const needs_patch = !patching && !needs_repair && (stateType === 'needs_update' || stateType === 'patch_available' || action === 'needs_update')
+    const ready = !patching && !needs_repair && !needs_patch
+    return { ready, patching, needs_repair, needs_patch, progress, raw_action: action, raw_state: stateType }
   } catch (e) {
     log(`[league-state] error: ${e.message}`)
-    return { error: e.message, ready: false }
+    return { error: e.message, skip: true }
   }
-}
-
-async function patchLeague() {
-  const lf = findRCLockfile()
-  if (!lf) throw new Error('Riot Client not detected.')
-  const { port, password: rcPass } = parseRCLockfile(lf)
-  const res = await rcRequest(port, rcPass, 'POST', '/patch/v1/products/league_of_legends/start-patching', {})
-  log(`[patch-league] start-patching HTTP ${res.status}: ${JSON.stringify(res.data)?.slice(0, 200)}`)
-  // Valorant trick: briefly focus Valorant then switch back — can speed up download priority
-  await new Promise(r => setTimeout(r, 2000))
-  await rcRequest(port, rcPass, 'POST', '/product-launcher/v1/products/valorant/patchlines/live', {}).catch(() => {})
-  log('[patch-league] valorant trick: switched to valorant')
-  await new Promise(r => setTimeout(r, 3000))
-  await rcRequest(port, rcPass, 'POST', '/product-launcher/v1/products/league_of_legends/patchlines/live', {}).catch(() => {})
-  log('[patch-league] valorant trick: switched back to league')
 }
 
 // ─── Server state ─────────────────────────────────────────────────────────────
@@ -1576,30 +1562,29 @@ async function runMultiLoop(creds, myRunId) {
     markLastDone()
     if (aborted()) break
 
-    // Check League patch state (Update / Repair / Play)
+    // Check League patch state — only pause if we explicitly detect update/repair
     addStep('Checking League...')
-    var leagueState = await apiFetch('/riot/league-patch-state', { ready: false, error: 'fetch_failed' })
+    var leagueState = await apiFetch('/riot/league-patch-state', { skip: true })
     await clientLog('league-patch-state: ' + JSON.stringify(leagueState))
     markLastDone()
     if (aborted()) break
 
-    if (!leagueState.ready) {
-      var patchLabel = leagueState.needs_repair ? 'Repairing League...' : 'Updating League... (may take a while)'
+    if (!leagueState.skip && (leagueState.needs_patch || leagueState.needs_repair || leagueState.patching)) {
+      var patchLabel = leagueState.needs_repair ? 'League needs repair — please repair in Riot Client, waiting...' : 'League needs update — please update in Riot Client, waiting...'
       addStep(patchLabel)
-      await fetch('/riot/patch-league', { method: 'POST' }).catch(function(){})
-      if (aborted()) break
+      // Pause and poll until League is ready — no auto-patching
       var patchDone = false
-      var patchDl = Date.now() + 30 * 60 * 1000
+      var patchDl = Date.now() + 45 * 60 * 1000
       while (Date.now() < patchDl && !aborted()) {
-        await sleep(10000)
-        var ps = await apiFetch('/riot/league-patch-state', { ready: false })
+        await sleep(15000)
+        var ps = await apiFetch('/riot/league-patch-state', { skip: true })
         await clientLog('patch-progress: ' + JSON.stringify(ps))
-        if (ps.ready) { patchDone = true; break }
+        if (ps.skip || ps.ready) { patchDone = true; break }
       }
       if (aborted()) break
       if (!patchDone) {
         markLastError()
-        showNotice('multi-notice', 'error', username + ': League update timed out.')
+        showNotice('multi-notice', 'error', username + ': League update timed out (45 min).')
         continue
       }
       markLastDone()
@@ -2017,17 +2002,6 @@ const server = http.createServer(async (req, res) => {
   // League patch state (Update / Repair / Play detection)
   if (req.method === 'GET' && pathname === '/riot/league-patch-state') {
     return json(res, 200, await getLeaguePatchState())
-  }
-
-  // Start League patching (update or repair) + Valorant trick
-  if (req.method === 'POST' && pathname === '/riot/patch-league') {
-    try {
-      await patchLeague()
-      return json(res, 200, { ok: true })
-    } catch (e) {
-      log(`[patch-league] error: ${e.message}`)
-      return json(res, 400, { error: e.message })
-    }
   }
 
   // Close League client (kills LeagueClient + LeagueClientUx)
