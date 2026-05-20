@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.5'
+const VERSION = '0.6.6'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -79,8 +79,19 @@ async function riotLogin(username, password) {
   const lf = findRCLockfile()
   if (!lf) throw new Error('Riot Client not detected. Open Riot Client first.')
   const { port, password: rcPass } = parseRCLockfile(lf)
+
+  // Sign out current session
   await rcRequest(port, rcPass, 'DELETE', '/rso-auth/v1/session')
-  await new Promise(r => setTimeout(r, 800))
+
+  // Wait until the session is fully cleared (needs_credentials) before sending new creds
+  const clearDl = Date.now() + 8000
+  while (Date.now() < clearDl) {
+    await new Promise(r => setTimeout(r, 600))
+    const s = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
+    if (!s.ok || s.data?.type === 'needs_credentials') break
+  }
+
+  // Submit credentials
   const res = await rcRequest(port, rcPass, 'PUT', '/rso-auth/v1/session/credentials', {
     username, password, persistLogin: false
   })
@@ -89,21 +100,20 @@ async function riotLogin(username, password) {
     throw new Error('Login failed: ' + msg + ' (status ' + res.status + ')')
   }
   if (res.data?.type === 'multifactor') throw new Error('2FA required — not supported')
+  if (res.data?.type === 'auth_failure') throw new Error('Wrong username or password')
   if (res.data?.type === 'authenticated') return res.data
 
-  // Riot Client auth is async — poll GET /rso-auth/v1/session until authenticated
+  // Auth is async — poll GET /rso-auth/v1/session until authenticated
   const deadline = Date.now() + 15000
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 1000))
     const check = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
     if (check.ok && check.data?.type === 'authenticated') return check.data
     if (check.data?.type === 'multifactor') throw new Error('2FA required — not supported')
-    if (check.data?.type === 'auth_failure' || check.data?.error) {
-      throw new Error('Login failed: ' + (check.data?.error || check.data?.type))
-    }
-    // types like 'needs_credentials', 'loading' — keep polling
+    if (check.data?.type === 'auth_failure') throw new Error('Wrong username or password')
+    // needs_credentials, auth, loading — keep polling
   }
-  throw new Error('Login timed out — wrong credentials or Riot Client not ready')
+  throw new Error('Login timed out — Riot Client did not respond in time')
 }
 
 async function riotLogout() {
@@ -1472,6 +1482,7 @@ async function runMultiLoop(creds) {
         if (!pClose.ok) break
       }
       markLastDone()
+      await sleep(2000) // let Riot Client stabilize after League was killed
     }
     if (_multiAbort) break
 
@@ -1534,7 +1545,7 @@ async function runMultiLoop(creds) {
       renderAccounts()
     }
     await fetch('/riot/logout', { method: 'POST' }).catch(function(){})
-    await sleep(1500)
+    await sleep(4000) // give Riot servers time to reset auth state between accounts
   }
   if (!_multiAbort) {
     progEl.textContent = 'All done!'
