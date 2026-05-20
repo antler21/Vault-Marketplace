@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.12'
+const VERSION = '0.6.13'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1512,18 +1512,26 @@ async function runMultiLoop(creds) {
     markLastDone()
     if (_multiAbort) break
 
-    // Login
+    // Login via SendKeys — types credentials directly into Riot Client window
     addStep('Logging in as ' + escH(username) + '...')
-    var login = await fetch('/riot/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+    await fetch('/riot/sendkeys-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) }).catch(function(){})
     if (_multiAbort) break
-    if (login.error) {
+    // Poll auth-state until authenticated (max 35s)
+    var loggedIn = false
+    var loginDl = Date.now() + 35000
+    while (Date.now() < loginDl && !_multiAbort) {
+      await sleep(2000)
+      var authState = await apiFetch('/riot/auth-state', { state: null })
+      if (authState.state === 'authenticated') { loggedIn = true; break }
+    }
+    if (_multiAbort) break
+    if (!loggedIn) {
       markLastError()
-      showNotice('multi-notice', 'error', username + ': ' + login.error)
-      await sleep(2500)
+      showNotice('multi-notice', 'error', username + ': Login failed — check credentials or Riot Client focus.')
+      await sleep(2000)
       continue
     }
     markLastDone()
-    await sleep(1500) // let Riot Client finish auth handshake before launching League
     if (_multiAbort) break
 
     // Launch League
@@ -1945,6 +1953,39 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/riot/restart-client') {
     const launched = await restartRiotClient()
     return json(res, 200, { ok: true, launched })
+  }
+
+  // SendKeys login — types credentials into the Riot Client window via PowerShell
+  if (req.method === 'POST' && pathname === '/riot/sendkeys-login') {
+    const body = await readBody(req)
+    const { username, password } = body
+    if (!username || !password) return json(res, 400, { error: 'Missing credentials' })
+    // Escape SendKeys special chars: + ^ % ~ ( ) { } [ ]
+    const escSK = s => String(s).replace(/[+^%~(){}[\]]/g, m => '{' + m + '}')
+    // Escape PowerShell single-quoted string (double up single quotes)
+    const escPS = s => String(s).replace(/'/g, "''")
+    const u = escPS(escSK(username))
+    const p = escPS(escSK(password))
+    const psLines = [
+      `$w = New-Object -ComObject wscript.shell`,
+      `Start-Sleep -Milliseconds 500`,
+      `$w.AppActivate('Riot Client')`,
+      `Start-Sleep -Milliseconds 1000`,
+      `$w.SendKeys('${u}')`,
+      `Start-Sleep -Milliseconds 300`,
+      `$w.SendKeys('{TAB}')`,
+      `Start-Sleep -Milliseconds 300`,
+      `$w.SendKeys('${p}')`,
+      `Start-Sleep -Milliseconds 300`,
+      `$w.SendKeys('{ENTER}')`,
+    ].join('\r\n')
+    const encoded = Buffer.from(psLines, 'utf16le').toString('base64')
+    log(`[sendkeys] Typing credentials for ${username}`)
+    exec(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, (err) => {
+      if (err) log(`[sendkeys] Error: ${err.message}`)
+      else log(`[sendkeys] Done`)
+    })
+    return json(res, 200, { ok: true })
   }
 
   // Debug logs
