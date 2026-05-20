@@ -563,7 +563,7 @@ export default function PreviewPage() {
       .catch(() => [])
 
     Promise.all([
-      fetch(`/api/lol-preview-data/${id}`).then(r => r.json()),
+      fetch(`/api/lol-skins/${id}?cdn=1`).then(r => r.json()),
       ddragonFetch,
       boomsFetch,
       fetch(`${CDN}/v1/nexusfinishers.json`).then(r => r.json()).catch(() => []),
