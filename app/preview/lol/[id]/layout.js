@@ -45,7 +45,7 @@ export async function generateMetadata({ params }) {
       title,
       description,
       url: `https://lolprev.site/preview/lol/${id}`,
-      images: iconUrl ? [{ url: iconUrl, width: 200, height: 200 }] : [],
+      images: iconUrl ? [{ url: iconUrl }] : [],
       type: 'website',
       siteName: 'lolprev.site',
     },
