@@ -10,7 +10,7 @@ export async function generateMetadata({ params }) {
   const { id } = await params
   const { data: scan } = await supabase
     .from('lol_skin_scans')
-    .select('summoner_name,tag_line,region,solo_rank,owned_skin_ids,account_title,hide_name')
+    .select('summoner_name,tag_line,region,solo_rank,owned_skin_ids,account_title,hide_name,profile_icon_id')
     .eq('id', id)
     .single()
 
@@ -34,7 +34,9 @@ export async function generateMetadata({ params }) {
   ].filter(Boolean)
   const description = parts.length > 0 ? parts.join(' · ') : 'View full account details on lolprev.site'
 
-  const ogImageUrl = `https://lolprev.site/api/og/lol/${id}`
+  const iconUrl = scan.profile_icon_id
+    ? `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/${scan.profile_icon_id}.jpg`
+    : null
 
   return {
     title,
@@ -43,15 +45,15 @@ export async function generateMetadata({ params }) {
       title,
       description,
       url: `https://lolprev.site/preview/lol/${id}`,
-      images: [{ url: ogImageUrl, width: 1200, height: 630 }],
+      images: iconUrl ? [{ url: iconUrl, width: 200, height: 200 }] : [],
       type: 'website',
       siteName: 'lolprev.site',
     },
     twitter: {
-      card: 'summary_large_image',
+      card: 'summary',
       title,
       description,
-      images: [ogImageUrl],
+      images: iconUrl ? [iconUrl] : [],
     },
   }
 }
