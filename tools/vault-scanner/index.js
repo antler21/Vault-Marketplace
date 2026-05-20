@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.11'
+const VERSION = '0.6.12'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -91,13 +91,13 @@ async function riotLogin(username, password) {
   const res = await rcRequest(port, rcPass, 'PUT', '/rso-auth/v1/session/credentials', {
     username, password, persistLogin: false
   })
-  log(`[login:${username}] PUT -> status=${res.status} ok=${res.ok} type=${res.data?.type} data=${JSON.stringify(res.data)?.slice(0, 120)}`)
+  log(`[login:${username}] PUT -> status=${res.status} ok=${res.ok} type=${res.data?.type} error=${res.data?.error} data=${JSON.stringify(res.data)?.slice(0, 120)}`)
   if (!res.ok) {
     const msg = res.data?.message || res.data?.error || JSON.stringify(res.data)
     throw new Error('Login failed: ' + msg + ' (status ' + res.status + ')')
   }
   if (res.data?.type === 'multifactor') throw new Error('2FA required — not supported')
-  if (res.data?.type === 'auth_failure') throw new Error('Wrong username or password')
+  if (res.data?.type === 'auth_failure' || res.data?.error === 'auth_failure') throw new Error('Wrong username or password')
   if (res.data?.type === 'authenticated') return res.data
 
   // Auth is async — poll GET /rso-auth/v1/session until authenticated
@@ -105,10 +105,10 @@ async function riotLogin(username, password) {
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 1000))
     const check = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
-    log(`[login:${username}] GET poll -> status=${check.status} type=${check.data?.type} data=${JSON.stringify(check.data)?.slice(0, 120)}`)
+    log(`[login:${username}] GET poll -> status=${check.status} type=${check.data?.type} error=${check.data?.error}`)
     if (check.ok && check.data?.type === 'authenticated') return check.data
     if (check.data?.type === 'multifactor') throw new Error('2FA required — not supported')
-    if (check.data?.type === 'auth_failure') throw new Error('Wrong username or password')
+    if (check.data?.type === 'auth_failure' || check.data?.error === 'auth_failure') throw new Error('Wrong username or password')
   }
   throw new Error('Login timed out — Riot Client did not respond in time')
 }
