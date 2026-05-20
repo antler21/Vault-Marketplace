@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.15'
+const VERSION = '0.6.16'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -149,6 +149,43 @@ async function launchLeague() {
   if (!lf) throw new Error('Riot Client not detected.')
   const { port, password: rcPass } = parseRCLockfile(lf)
   await rcRequest(port, rcPass, 'POST', '/product-launcher/v1/products/league_of_legends/patchlines/live', {})
+}
+
+async function getLeaguePatchState() {
+  const lf = findRCLockfile()
+  if (!lf) return { error: 'no_lockfile', ready: false }
+  try {
+    const { port, password: rcPass } = parseRCLockfile(lf)
+    const res = await rcRequest(port, rcPass, 'GET', '/patch/v1/products/league_of_legends')
+    log(`[league-state] HTTP ${res.status}: ${JSON.stringify(res.data)?.slice(0, 500)}`)
+    if (!res.ok || !res.data) return { error: 'api_error', status: res.status, ready: false }
+    const d = res.data
+    const action = String(d.action || '').toLowerCase()
+    const stateType = String(d.product_state?.type || d.status || '').toLowerCase()
+    const progress = d.progress ?? d.product_state?.percent ?? null
+    const ready = stateType === 'up_to_date' || stateType === 'playable' || (action === 'idle' && !stateType) || action === 'idle'
+    const patching = action === 'patching' || action === 'checking_for_patches' || stateType === 'patching' || stateType === 'downloading'
+    const needs_repair = action === 'repairing' || stateType === 'needs_repair' || stateType === 'corrupted'
+    return { ready, patching, needs_repair, needs_patch: !ready && !patching && !needs_repair, progress, raw_action: action, raw_state: stateType }
+  } catch (e) {
+    log(`[league-state] error: ${e.message}`)
+    return { error: e.message, ready: false }
+  }
+}
+
+async function patchLeague() {
+  const lf = findRCLockfile()
+  if (!lf) throw new Error('Riot Client not detected.')
+  const { port, password: rcPass } = parseRCLockfile(lf)
+  const res = await rcRequest(port, rcPass, 'POST', '/patch/v1/products/league_of_legends/start-patching', {})
+  log(`[patch-league] start-patching HTTP ${res.status}: ${JSON.stringify(res.data)?.slice(0, 200)}`)
+  // Valorant trick: briefly focus Valorant then switch back — can speed up download priority
+  await new Promise(r => setTimeout(r, 2000))
+  await rcRequest(port, rcPass, 'POST', '/product-launcher/v1/products/valorant/patchlines/live', {}).catch(() => {})
+  log('[patch-league] valorant trick: switched to valorant')
+  await new Promise(r => setTimeout(r, 3000))
+  await rcRequest(port, rcPass, 'POST', '/product-launcher/v1/products/league_of_legends/patchlines/live', {}).catch(() => {})
+  log('[patch-league] valorant trick: switched back to league')
 }
 
 // ─── Server state ─────────────────────────────────────────────────────────────
@@ -1149,7 +1186,7 @@ select{cursor:pointer}
 var _url = '', _games = [], _accounts = [], _activeGame = null
 var _selMode = false, _selected = new Set()
 var _debugOpen = false, _pollInterval = null
-var _scanAbort = false, _multiAbort = false
+var _scanAbort = false, _multiAbort = false, _multiRunId = 0
 var _previewAcct = null, _importAcct = null, _afterImportId = null
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -1458,12 +1495,14 @@ async function startMultiScan() {
   document.getElementById('multi-close-btn').textContent = 'Stop'
   hideNotice('multi-notice')
   _multiAbort = false
-  await runMultiLoop(creds)
+  _multiRunId++
+  await runMultiLoop(creds, _multiRunId)
 }
 
-async function runMultiLoop(creds) {
+async function runMultiLoop(creds, myRunId) {
   var stepsEl = document.getElementById('multi-steps')
   var progEl = document.getElementById('multi-prog-label')
+  function aborted() { return _multiAbort || _multiRunId !== myRunId }
 
   function addStep(label) {
     stepsEl.innerHTML += '<div class="step"><div class="step-ico ico-active"><div class="spinner"></div></div><div class="step-info"><div class="step-main">' + label + '</div></div></div>'
@@ -1482,9 +1521,12 @@ async function runMultiLoop(creds) {
     last.className = 'step-ico ico-error'
     last.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
   }
+  async function clientLog(msg) {
+    await fetch('/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) }).catch(function(){})
+  }
 
   for (var i = 0; i < creds.length; i++) {
-    if (_multiAbort) break
+    if (aborted()) break
     var parts = creds[i].split(':')
     var username = parts[0]
     var password = parts.slice(1).join(':')
@@ -1494,39 +1536,37 @@ async function runMultiLoop(creds) {
     // Restart Riot Client to get a completely fresh auth session
     addStep('Restarting Riot Client...')
     await fetch('/riot/restart-client', { method: 'POST' }).catch(function(){})
-    // Wait for lockfile to appear (max 45s), then extra 6s for auth API to initialize
     var rcReady = false
     var rcDl = Date.now() + 45000
-    while (Date.now() < rcDl && !_multiAbort) {
+    while (Date.now() < rcDl && !aborted()) {
       await sleep(2000)
       var rcStatus = await apiFetch('/riot/status', { running: false })
       if (rcStatus.running) { rcReady = true; break }
     }
-    if (_multiAbort) break
+    if (aborted()) break
     if (!rcReady) {
       markLastError()
       showNotice('multi-notice', 'error', 'Riot Client did not start — check install path.')
       break
     }
-    await sleep(6000) // wait for auth API to finish initializing after lockfile appears
+    await sleep(6000)
     markLastDone()
-    if (_multiAbort) break
+    if (aborted()) break
 
-    // Login via SendKeys — types credentials directly into Riot Client window
+    // Login via SendKeys
     addStep('Logging in as ' + escH(username) + '...')
-    await fetch('/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'multi-scan: firing sendkeys for ' + username }) }).catch(function(){})
+    await clientLog('multi-scan: firing sendkeys for ' + username)
     await fetch('/riot/sendkeys-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) }).catch(function(){})
-    if (_multiAbort) break
-    // Poll auth-state until authenticated (max 35s)
+    if (aborted()) break
     var loggedIn = false
     var loginDl = Date.now() + 35000
-    while (Date.now() < loginDl && !_multiAbort) {
+    while (Date.now() < loginDl && !aborted()) {
       await sleep(2000)
       var authState = await apiFetch('/riot/auth-state', { state: null })
-      await fetch('/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'multi-scan: auth-state poll = ' + authState.state }) }).catch(function(){})
+      await clientLog('multi-scan: auth-state poll = ' + authState.state)
       if (authState.state === 'authenticated') { loggedIn = true; break }
     }
-    if (_multiAbort) break
+    if (aborted()) break
     if (!loggedIn) {
       markLastError()
       showNotice('multi-notice', 'error', username + ': Login failed — check credentials or Riot Client focus.')
@@ -1534,24 +1574,54 @@ async function runMultiLoop(creds) {
       continue
     }
     markLastDone()
-    if (_multiAbort) break
+    if (aborted()) break
+
+    // Check League patch state (Update / Repair / Play)
+    addStep('Checking League...')
+    var leagueState = await apiFetch('/riot/league-patch-state', { ready: false, error: 'fetch_failed' })
+    await clientLog('league-patch-state: ' + JSON.stringify(leagueState))
+    markLastDone()
+    if (aborted()) break
+
+    if (!leagueState.ready) {
+      var patchLabel = leagueState.needs_repair ? 'Repairing League...' : 'Updating League... (may take a while)'
+      addStep(patchLabel)
+      await fetch('/riot/patch-league', { method: 'POST' }).catch(function(){})
+      if (aborted()) break
+      var patchDone = false
+      var patchDl = Date.now() + 30 * 60 * 1000
+      while (Date.now() < patchDl && !aborted()) {
+        await sleep(10000)
+        var ps = await apiFetch('/riot/league-patch-state', { ready: false })
+        await clientLog('patch-progress: ' + JSON.stringify(ps))
+        if (ps.ready) { patchDone = true; break }
+      }
+      if (aborted()) break
+      if (!patchDone) {
+        markLastError()
+        showNotice('multi-notice', 'error', username + ': League update timed out.')
+        continue
+      }
+      markLastDone()
+      if (aborted()) break
+    }
 
     // Launch League
     addStep('Launching League...')
     await fetch('/riot/launch-league', { method: 'POST' }).catch(function(){})
-    if (_multiAbort) break
+    if (aborted()) break
     markLastDone()
 
-    // Wait for League (90s)
+    // Wait for League LCU (90s)
     addStep('Waiting for League client (up to 90s)...')
     var ready = false
     var dl = Date.now() + 90000
-    while (Date.now() < dl && !_multiAbort) {
+    while (Date.now() < dl && !aborted()) {
       await sleep(5000)
       var p = await apiFetch('/ping-lcu', { ok: false })
       if (p.ok) { ready = true; break }
     }
-    if (_multiAbort) break
+    if (aborted()) break
     if (!ready) {
       markLastError()
       showNotice('multi-notice', 'error', username + ': League did not start in 90s, skipping.')
@@ -1564,13 +1634,13 @@ async function runMultiLoop(creds) {
     addStep('Scanning...')
     var result = null
     var scanDl = Date.now() + 120000
-    while (Date.now() < scanDl && !_multiAbort) {
+    while (Date.now() < scanDl && !aborted()) {
       result = await fetch('/scan', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
-      if (_multiAbort) break
+      if (aborted()) break
       if (!result.error && Array.isArray(result.ownedSkinIds) && result.ownedSkinIds.length > 0) break
       if (Date.now() < scanDl) await sleep(5000)
     }
-    if (_multiAbort) break
+    if (aborted()) break
     if (!result || result.error) {
       markLastError()
       showNotice('multi-notice', 'error', username + ': Scan failed — ' + (result ? result.error : 'timed out'))
@@ -1580,9 +1650,9 @@ async function runMultiLoop(creds) {
       await reloadAccounts()
       renderAccounts()
     }
-    await sleep(2000) // brief pause before next iteration
+    await sleep(2000)
   }
-  if (!_multiAbort) {
+  if (!aborted()) {
     progEl.textContent = 'All done!'
     document.getElementById('multi-close-btn').textContent = 'Close'
   }
@@ -1940,6 +2010,22 @@ const server = http.createServer(async (req, res) => {
       await launchLeague()
       return json(res, 200, { ok: true })
     } catch (e) {
+      return json(res, 400, { error: e.message })
+    }
+  }
+
+  // League patch state (Update / Repair / Play detection)
+  if (req.method === 'GET' && pathname === '/riot/league-patch-state') {
+    return json(res, 200, await getLeaguePatchState())
+  }
+
+  // Start League patching (update or repair) + Valorant trick
+  if (req.method === 'POST' && pathname === '/riot/patch-league') {
+    try {
+      await patchLeague()
+      return json(res, 200, { ok: true })
+    } catch (e) {
+      log(`[patch-league] error: ${e.message}`)
       return json(res, 400, { error: e.message })
     }
   }
