@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.4'
+const VERSION = '0.6.5'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -88,12 +88,22 @@ async function riotLogin(username, password) {
     const msg = res.data?.message || res.data?.error || JSON.stringify(res.data)
     throw new Error('Login failed: ' + msg + ' (status ' + res.status + ')')
   }
-  if (res.data?.type && res.data.type !== 'authenticated') {
-    const msg = res.data.type === 'multifactor' ? '2FA required — not supported'
-      : 'Login incomplete: ' + res.data.type
-    throw new Error(msg)
+  if (res.data?.type === 'multifactor') throw new Error('2FA required — not supported')
+  if (res.data?.type === 'authenticated') return res.data
+
+  // Riot Client auth is async — poll GET /rso-auth/v1/session until authenticated
+  const deadline = Date.now() + 15000
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 1000))
+    const check = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
+    if (check.ok && check.data?.type === 'authenticated') return check.data
+    if (check.data?.type === 'multifactor') throw new Error('2FA required — not supported')
+    if (check.data?.type === 'auth_failure' || check.data?.error) {
+      throw new Error('Login failed: ' + (check.data?.error || check.data?.type))
+    }
+    // types like 'needs_credentials', 'loading' — keep polling
   }
-  return res.data
+  throw new Error('Login timed out — wrong credentials or Riot Client not ready')
 }
 
 async function riotLogout() {
