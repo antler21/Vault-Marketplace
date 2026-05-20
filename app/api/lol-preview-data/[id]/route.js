@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabase'
 const CDN = 'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default'
 
 export async function GET(request, { params }) {
+  try {
   const { id } = await params
 
   const { data: scan, error } = await supabase
@@ -64,4 +65,7 @@ export async function GET(request, { params }) {
   const champsFiltered = toArr(champsRaw).filter(c => ownedChampIds.has(c.id))
 
   return Response.json({ scan, skins: skinsFiltered, icons: iconsFiltered, emotes: emotesFiltered, wards: wardsFiltered, champions: champsFiltered })
+  } catch (err) {
+    return Response.json({ error: err.message }, { status: 500 })
+  }
 }
