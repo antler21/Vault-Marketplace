@@ -1,5 +1,7 @@
 import { supabase } from '../../../lib/supabase'
 
+const SITE_NAME = 'League Locker'
+
 const REGION_DISPLAY = {
   SG2: 'SEA', PH2: 'SEA', TH2: 'SEA', VN2: 'VN', TW2: 'TWN', MY2: 'SEA', ID1: 'SEA',
   NA1: 'NA', EUW1: 'EUW', EUNE1: 'EUNE', KR: 'KR', JP1: 'JP',
@@ -15,7 +17,7 @@ export async function generateMetadata({ params }) {
     .single()
 
   if (!scan) {
-    return { title: 'League Account | lolprev.site' }
+    return { title: `League Account | ${SITE_NAME}` }
   }
 
   const skinCount = (scan.owned_skin_ids || []).length
@@ -26,13 +28,15 @@ export async function generateMetadata({ params }) {
     ? `${scan.summoner_name}${scan.tag_line ? ` #${scan.tag_line}` : ''}`
     : null
 
-  const title = scan.account_title || displayName || 'League of Legends Account'
+  const accountLabel = scan.account_title || displayName || 'League of Legends Account'
+  const title = `${accountLabel} - ${SITE_NAME}`
+
   const parts = [
     skinCount ? `${skinCount} skins` : null,
     rank,
     region,
   ].filter(Boolean)
-  const description = parts.length > 0 ? parts.join(' · ') : 'View full account details on lolprev.site'
+  const description = `${accountLabel} shared their League of Legends Account Preview with you.${parts.length ? ' · ' + parts.join(' · ') : ''}`
 
   const iconUrl = scan.profile_icon_id
     ? `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/${scan.profile_icon_id}.jpg`
@@ -45,9 +49,9 @@ export async function generateMetadata({ params }) {
       title,
       description,
       url: `https://lolprev.site/preview/lol/${id}`,
-      images: iconUrl ? [{ url: iconUrl }] : [],
+      images: iconUrl ? [{ url: iconUrl, width: 200, height: 200 }] : [],
       type: 'website',
-      siteName: 'lolprev.site',
+      siteName: SITE_NAME,
     },
     twitter: {
       card: 'summary',
