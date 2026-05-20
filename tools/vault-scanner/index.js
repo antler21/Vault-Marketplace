@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.10'
+const VERSION = '0.6.11'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -81,13 +81,17 @@ async function riotLogin(username, password) {
   const { port, password: rcPass } = parseRCLockfile(lf)
 
   // Sign out any existing session, then wait 2s for it to clear
-  await rcRequest(port, rcPass, 'DELETE', '/rso-auth/v1/session')
+  log(`[login:${username}] DELETE session...`)
+  const delRes = await rcRequest(port, rcPass, 'DELETE', '/rso-auth/v1/session')
+  log(`[login:${username}] DELETE -> status=${delRes.status} ok=${delRes.ok} data=${JSON.stringify(delRes.data)?.slice(0, 120)}`)
   await new Promise(r => setTimeout(r, 2000))
 
   // Submit credentials
+  log(`[login:${username}] PUT credentials...`)
   const res = await rcRequest(port, rcPass, 'PUT', '/rso-auth/v1/session/credentials', {
     username, password, persistLogin: false
   })
+  log(`[login:${username}] PUT -> status=${res.status} ok=${res.ok} type=${res.data?.type} data=${JSON.stringify(res.data)?.slice(0, 120)}`)
   if (!res.ok) {
     const msg = res.data?.message || res.data?.error || JSON.stringify(res.data)
     throw new Error('Login failed: ' + msg + ' (status ' + res.status + ')')
@@ -101,10 +105,10 @@ async function riotLogin(username, password) {
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 1000))
     const check = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
+    log(`[login:${username}] GET poll -> status=${check.status} type=${check.data?.type} data=${JSON.stringify(check.data)?.slice(0, 120)}`)
     if (check.ok && check.data?.type === 'authenticated') return check.data
     if (check.data?.type === 'multifactor') throw new Error('2FA required — not supported')
     if (check.data?.type === 'auth_failure') throw new Error('Wrong username or password')
-    // needs_credentials, auth, loading — keep polling
   }
   throw new Error('Login timed out — Riot Client did not respond in time')
 }
