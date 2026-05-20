@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.13'
+const VERSION = '0.6.14'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1970,7 +1970,11 @@ const server = http.createServer(async (req, res) => {
       `$w = New-Object -ComObject wscript.shell`,
       `Start-Sleep -Milliseconds 500`,
       `$w.AppActivate('Riot Client')`,
-      `Start-Sleep -Milliseconds 1000`,
+      `Start-Sleep -Milliseconds 800`,
+      `$w.SendKeys('{ENTER}')`,        // dismiss "Unable to load" / error dialog if present
+      `Start-Sleep -Milliseconds 2500`, // wait for login form to appear
+      `$w.AppActivate('Riot Client')`,
+      `Start-Sleep -Milliseconds 500`,
       `$w.SendKeys('${u}')`,
       `Start-Sleep -Milliseconds 300`,
       `$w.SendKeys('{TAB}')`,
