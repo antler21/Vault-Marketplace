@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.14'
+const VERSION = '0.6.15'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1514,6 +1514,7 @@ async function runMultiLoop(creds) {
 
     // Login via SendKeys — types credentials directly into Riot Client window
     addStep('Logging in as ' + escH(username) + '...')
+    await fetch('/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'multi-scan: firing sendkeys for ' + username }) }).catch(function(){})
     await fetch('/riot/sendkeys-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username, password: password }) }).catch(function(){})
     if (_multiAbort) break
     // Poll auth-state until authenticated (max 35s)
@@ -1522,6 +1523,7 @@ async function runMultiLoop(creds) {
     while (Date.now() < loginDl && !_multiAbort) {
       await sleep(2000)
       var authState = await apiFetch('/riot/auth-state', { state: null })
+      await fetch('/debug-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'multi-scan: auth-state poll = ' + authState.state }) }).catch(function(){})
       if (authState.state === 'authenticated') { loggedIn = true; break }
     }
     if (_multiAbort) break
@@ -1960,6 +1962,19 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req)
     const { username, password } = body
     if (!username || !password) return json(res, 400, { error: 'Missing credentials' })
+
+    // Log auth-state before firing SendKeys
+    try {
+      const lf = findRCLockfile()
+      if (lf) {
+        const { port, password: rcPass } = parseRCLockfile(lf)
+        const s = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
+        log(`[sendkeys] PRE-FIRE auth-state: type=${s.data?.type} error=${s.data?.error} status=${s.status}`)
+      } else {
+        log(`[sendkeys] PRE-FIRE: no RC lockfile found`)
+      }
+    } catch (e) { log(`[sendkeys] PRE-FIRE auth-state check failed: ${e.message}`) }
+
     // Escape SendKeys special chars: + ^ % ~ ( ) { } [ ]
     const escSK = s => String(s).replace(/[+^%~(){}[\]]/g, m => '{' + m + '}')
     // Escape PowerShell single-quoted string (double up single quotes)
@@ -1971,8 +1986,8 @@ const server = http.createServer(async (req, res) => {
       `Start-Sleep -Milliseconds 500`,
       `$w.AppActivate('Riot Client')`,
       `Start-Sleep -Milliseconds 800`,
-      `$w.SendKeys('{ENTER}')`,        // dismiss "Unable to load" / error dialog if present
-      `Start-Sleep -Milliseconds 2500`, // wait for login form to appear
+      `$w.SendKeys('{ENTER}')`,
+      `Start-Sleep -Milliseconds 2500`,
       `$w.AppActivate('Riot Client')`,
       `Start-Sleep -Milliseconds 500`,
       `$w.SendKeys('${u}')`,
@@ -1984,11 +1999,28 @@ const server = http.createServer(async (req, res) => {
       `$w.SendKeys('{ENTER}')`,
     ].join('\r\n')
     const encoded = Buffer.from(psLines, 'utf16le').toString('base64')
-    log(`[sendkeys] Typing credentials for ${username}`)
-    exec(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, (err) => {
-      if (err) log(`[sendkeys] Error: ${err.message}`)
-      else log(`[sendkeys] Done`)
+    log(`[sendkeys] Firing for ${username} — total PS script: ${psLines.split('\r\n').length} lines`)
+    exec(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, async (err) => {
+      if (err) { log(`[sendkeys] PowerShell error: ${err.message}`); return }
+      log(`[sendkeys] PowerShell done — polling auth-state for 10s`)
+      for (let i = 1; i <= 5; i++) {
+        await new Promise(r => setTimeout(r, 2000))
+        try {
+          const lf = findRCLockfile()
+          if (!lf) { log(`[sendkeys] +${i*2}s: no lockfile`); continue }
+          const { port, password: rcPass } = parseRCLockfile(lf)
+          const s = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
+          log(`[sendkeys] +${i*2}s: type=${s.data?.type} error=${s.data?.error} status=${s.status}`)
+        } catch (e) { log(`[sendkeys] +${i*2}s: poll error: ${e.message}`) }
+      }
     })
+    return json(res, 200, { ok: true })
+  }
+
+  // Client-side debug log relay
+  if (req.method === 'POST' && pathname === '/debug-log') {
+    const body = await readBody(req)
+    log(`[client] ${body.message || '?'}`)
     return json(res, 200, { ok: true })
   }
 
