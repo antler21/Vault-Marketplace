@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.19'
+const VERSION = '0.6.20'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -252,19 +252,21 @@ async function unfriendAll() {
   const lf = findLockfile()
   if (!lf) throw new Error('No League client detected. Make sure League is open and fully loaded.')
   const { port, password } = parseLockfile(lf)
-  const friendsRes = await lcuGet(port, password, '/lol-chat/v1/friends')
-  if (!friendsRes.ok) throw new Error('Could not fetch friends list (status ' + friendsRes.status + ').')
-  const friends = friendsRes.data || []
-  log(`[unfriend-all] ${friends.length} friends found, removing...`)
-  let removed = 0
-  for (const f of friends) {
-    const id = f.id
-    if (!id) continue
-    const r = await lcuDelete(port, password, '/lol-chat/v1/friends/' + encodeURIComponent(id))
-    if (r.ok || r.status === 204) removed++
+  let totalRemoved = 0
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const friendsRes = await lcuGet(port, password, '/lol-chat/v1/friends')
+    if (!friendsRes.ok) throw new Error('Could not fetch friends list (status ' + friendsRes.status + ').')
+    const friends = (friendsRes.data || []).filter(f => f.id)
+    log(`[unfriend-all] attempt ${attempt}: ${friends.length} friends found`)
+    if (friends.length === 0) break
+    for (const f of friends) {
+      const r = await lcuDelete(port, password, '/lol-chat/v1/friends/' + encodeURIComponent(f.id))
+      if (r.ok || r.status === 204) totalRemoved++
+    }
+    await new Promise(r => setTimeout(r, 1500)) // brief pause before re-checking
   }
-  log(`[unfriend-all] Done: ${removed}/${friends.length} removed`)
-  return { count: removed, total: friends.length }
+  log(`[unfriend-all] Done: ${totalRemoved} total removed`)
+  return { count: totalRemoved }
 }
 
 async function pMap(items, fn, concurrency = 8) {
