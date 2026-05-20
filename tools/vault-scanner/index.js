@@ -6,7 +6,7 @@ const os = require('os')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.6'
+const VERSION = '0.6.7'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -84,11 +84,11 @@ async function riotLogin(username, password) {
   await rcRequest(port, rcPass, 'DELETE', '/rso-auth/v1/session')
 
   // Wait until the session is fully cleared (needs_credentials) before sending new creds
-  const clearDl = Date.now() + 8000
+  const clearDl = Date.now() + 10000
   while (Date.now() < clearDl) {
-    await new Promise(r => setTimeout(r, 600))
+    await new Promise(r => setTimeout(r, 700))
     const s = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
-    if (!s.ok || s.data?.type === 'needs_credentials') break
+    if (s.ok && s.data?.type === 'needs_credentials') break  // only proceed when truly ready
   }
 
   // Submit credentials
@@ -104,7 +104,7 @@ async function riotLogin(username, password) {
   if (res.data?.type === 'authenticated') return res.data
 
   // Auth is async — poll GET /rso-auth/v1/session until authenticated
-  const deadline = Date.now() + 15000
+  const deadline = Date.now() + 25000
   while (Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 1000))
     const check = await rcRequest(port, rcPass, 'GET', '/rso-auth/v1/session')
