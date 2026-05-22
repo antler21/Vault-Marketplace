@@ -11,6 +11,11 @@ const SECTIONS = [
   { key: 'gacha',    label: 'Gacha',    color: '#e05252', emoji: '🎰' },
 ]
 
+const SCANNER_TYPES = [
+  { value: 'lol',          label: 'League of Legends',  sections: ['accounts'] },
+  { value: 'csr2services', label: 'CSR2 Services',       sections: ['services', 'tools'] },
+]
+
 export default function Games({ darkMode, games, gameConfigs, platforms, addGame, updateGame, deleteGame, saveGameConfig }) {
   const [showGameModal, setShowGameModal] = useState(false)
   const [editingGame, setEditingGame] = useState(null)
@@ -309,10 +314,24 @@ export default function Games({ darkMode, games, gameConfigs, platforms, addGame
 
               {newGame.scriptEnabled && (
                 <div>
-                  <label style={labelStyle}>Scanner Type <span style={{ fontWeight: '300', color: muted }}>(e.g. lol, valorant, tft)</span></label>
-                  <input value={newGame.scannerType || ''} onChange={e => setNewGame(prev => ({ ...prev, scannerType: e.target.value }))}
-                    placeholder="lol" style={{ width: '100%', padding: '8px 12px', background: bg, border: `1px solid ${border}`, borderRadius: '8px', color: text, fontSize: '13px', outline: 'none' }} />
-                  <div style={{ fontSize: '11px', color: muted, marginTop: '4px' }}>Tells the AIO Tool which scan logic to use for this game</div>
+                  <label style={labelStyle}>Scanner Type</label>
+                  <select
+                    value={newGame.scannerType || ''}
+                    onChange={e => {
+                      const found = SCANNER_TYPES.find(t => t.value === e.target.value)
+                      setNewGame(prev => ({
+                        ...prev,
+                        scannerType: e.target.value,
+                        scriptSections: found ? found.sections : prev.scriptSections,
+                      }))
+                    }}
+                    style={{ width: '100%', padding: '8px 12px', background: bg, border: `1px solid ${border}`, borderRadius: '8px', color: text, fontSize: '13px', outline: 'none', cursor: 'pointer' }}>
+                    <option value="">Select scanner type...</option>
+                    {SCANNER_TYPES.map(t => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '11px', color: muted, marginTop: '4px' }}>Tells the AIO Tool which script to run for this game</div>
                 </div>
               )}
 
