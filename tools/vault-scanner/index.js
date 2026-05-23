@@ -972,11 +972,11 @@ function csr2WriteSave(data) {
 function csr2ReadSaveStats(buf) {
   const data = csr2ReadSave(buf)
   return {
-    cash:         data.caea  || 0,
-    gold:         data.goea  || 0,
-    bronzeKeys:   data.gbke  || 0,
-    silverKeys:   data.gske  || 0,
-    goldKeys:     data.ggke  || 0,
+    cash:         Math.max(0, (data.caea || 0) - (data.casp || 0)),
+    gold:         Math.max(0, (data.goea || 0) - (data.gosp || 0)),
+    bronzeKeys:   Math.max(0, (data.gbke || 0) - (data.gbks || 0)),
+    silverKeys:   Math.max(0, (data.gske || 0) - (data.gsks || 0)),
+    goldKeys:     Math.max(0, (data.ggke || 0) - (data.ggks || 0)),
     fuel:         data.fupi  || 0,
     fusionGreen:  (data.afme && data.afme.Green)  || 0,
     fusionBlue:   (data.afme && data.afme.Blue)   || 0,
@@ -1001,6 +1001,8 @@ function csr2ApplyPack(data, pack, selectedCars) {
     if (c.fusionRed)    data.afme.Red    = (data.afme.Red    || 0) + c.fusionRed
     if (c.fusionYellow) data.afme.Yellow = (data.afme.Yellow || 0) + c.fusionYellow
   }
+
+  if (pack.version) { data.prvr = pack.version; data.adpvr = pack.version }
 
   let note = null
   const carConfig = pack.cars
@@ -1255,6 +1257,25 @@ select{cursor:pointer}
 .selected-car-item{display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;font-size:12px}
 .selected-car-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;padding:0;line-height:1;margin-left:auto;flex-shrink:0}
 .selected-car-remove:hover{color:var(--text)}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.pack-sect{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.pack-sect-hdr{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.car-filter-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.car-filter-chip{background:var(--surf2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;white-space:nowrap;color:var(--muted)}
+.car-filter-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.ensb-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px}
+.ensb-label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);flex:1}
+.ensb-input{width:100px;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:13px;outline:none;text-align:right}
+.ensb-input:focus{border-color:var(--accent)}
+.ensb-after{font-size:13px;color:#4caf50;font-weight:600;min-width:90px;text-align:right}
+.result-icon{font-size:46px;text-align:center;margin:4px 0 10px}
+.result-title{font-size:18px;font-weight:700;text-align:center;margin-bottom:6px}
+.result-desc{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;max-width:320px;margin:0 auto}
+.confirm-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:16px}
+.cars-remaining-note{margin-top:auto;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5}
 </style>
 </head>
 <body>
@@ -1300,8 +1321,8 @@ select{cursor:pointer}
       <div class="main-hdr">
         <span class="main-title">CSR2 Services</span>
         <div class="spacer"></div>
-        <button class="btn btn-secondary btn-sm" onclick="openUnban()">Unban</button>
-        <button class="btn btn-secondary btn-sm" onclick="openEditNsb(null)">Edit NSB</button>
+        <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
+        <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
         <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
       </div>
       <div class="grid" id="packs-grid"></div>
@@ -1450,60 +1471,172 @@ select{cursor:pointer}
 
 <!-- Create Pack Modal -->
 <div class="modal-bg" id="create-pack-modal">
-  <div class="modal" style="max-width:500px">
+  <div class="modal" style="max-width:520px">
     <div class="modal-title" id="cp-title-label">Create Pack</div>
-    <div class="modal-sub">Define currencies and car options for this pack</div>
-    <div class="field">
+    <div class="field" style="margin-bottom:14px">
       <label>Pack Name</label>
       <input type="text" id="cp-name" placeholder="e.g. Starter Pack">
     </div>
-    <div class="section-title">Currencies</div>
-    <div class="curr-grid">
-      <div class="field"><label>Cash</label><div class="field-wrap"><input type="number" id="cp-cash" placeholder="0" min="0"><span class="field-unit">$</span></div></div>
-      <div class="field"><label>Gold</label><div class="field-wrap"><input type="number" id="cp-gold" placeholder="0" min="0"><span class="field-unit">G</span></div></div>
-      <div class="field"><label>Bronze Keys</label><div class="field-wrap"><input type="number" id="cp-bkeys" placeholder="0" min="0"><span class="field-unit">Bk</span></div></div>
-      <div class="field"><label>Silver Keys</label><div class="field-wrap"><input type="number" id="cp-skeys" placeholder="0" min="0"><span class="field-unit">Sk</span></div></div>
-      <div class="field"><label>Gold Keys</label><div class="field-wrap"><input type="number" id="cp-gkeys" placeholder="0" min="0"><span class="field-unit">Gk</span></div></div>
-      <div class="field"><label>Fuel Pips</label><div class="field-wrap"><input type="number" id="cp-fuel" placeholder="0" min="0"><span class="field-unit">F</span></div></div>
+    <div class="pack-sect">
+      <div class="pack-sect-hdr">💰 Currencies</div>
+      <div class="curr-grid">
+        <div class="field"><label>💵 Cash</label><div class="field-wrap"><input type="number" id="cp-cash" placeholder="0" min="0"><span class="field-unit">$</span></div></div>
+        <div class="field"><label>🪙 Gold</label><div class="field-wrap"><input type="number" id="cp-gold" placeholder="0" min="0"><span class="field-unit">G</span></div></div>
+        <div class="field"><label>🔑 Bronze Keys</label><div class="field-wrap"><input type="number" id="cp-bkeys" placeholder="0" min="0"><span class="field-unit">Bk</span></div></div>
+        <div class="field"><label>🗝️ Silver Keys</label><div class="field-wrap"><input type="number" id="cp-skeys" placeholder="0" min="0"><span class="field-unit">Sk</span></div></div>
+        <div class="field"><label>✨ Gold Keys</label><div class="field-wrap"><input type="number" id="cp-gkeys" placeholder="0" min="0"><span class="field-unit">Gk</span></div></div>
+        <div class="field"><label>⛽ Fuel</label><div class="field-wrap"><input type="number" id="cp-fuel" placeholder="0" min="0"><span class="field-unit">F</span></div></div>
+      </div>
     </div>
-    <div class="section-title" style="margin-top:14px">Fusion Tokens</div>
-    <div class="curr-grid">
-      <div class="field"><label><span class="token-dot" style="background:#4caf50"></span>Green</label><div class="field-wrap"><input type="number" id="cp-fgreen" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
-      <div class="field"><label><span class="token-dot" style="background:#2196F3"></span>Blue</label><div class="field-wrap"><input type="number" id="cp-fblue" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
-      <div class="field"><label><span class="token-dot" style="background:#e05252"></span>Red</label><div class="field-wrap"><input type="number" id="cp-fred" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
-      <div class="field"><label><span class="token-dot" style="background:#FFC107"></span>Yellow</label><div class="field-wrap"><input type="number" id="cp-fyellow" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+    <div class="pack-sect">
+      <div class="pack-sect-hdr">⚗️ Fusion Tokens</div>
+      <div class="curr-grid">
+        <div class="field"><label><span class="token-dot" style="background:#4caf50"></span>Green</label><div class="field-wrap"><input type="number" id="cp-fgreen" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+        <div class="field"><label><span class="token-dot" style="background:#2196F3"></span>Blue</label><div class="field-wrap"><input type="number" id="cp-fblue" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+        <div class="field"><label><span class="token-dot" style="background:#e05252"></span>Red</label><div class="field-wrap"><input type="number" id="cp-fred" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+        <div class="field"><label><span class="token-dot" style="background:#FFC107"></span>Yellow</label><div class="field-wrap"><input type="number" id="cp-fyellow" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+      </div>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <label class="toggle"><input type="checkbox" id="cp-cars-toggle" onchange="toggleCarsSection()"><span class="tslider"></span></label>
-      <span style="font-size:13px">Add Cars</span>
-    </div>
-    <div id="cp-cars-section" style="display:none;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
-      <div class="curr-grid" style="margin-bottom:10px">
-        <div class="field">
-          <label>Car Count</label>
-          <input type="number" id="cp-car-count" placeholder="e.g. 60" min="1">
+    <div class="pack-sect" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <label class="toggle"><input type="checkbox" id="cp-cars-toggle" onchange="toggleCarsSection()"><span class="tslider"></span></label>
+        <span style="font-size:13px;font-weight:500">🚗 Add Cars</span>
+      </div>
+      <div id="cp-cars-section" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="curr-grid" style="margin-bottom:10px">
+          <div class="field"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
+          <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
         </div>
-        <div class="field">
-          <label>Condition</label>
-          <select id="cp-car-condition">
-            <option value="stock">Stock</option>
-            <option value="maxed">Maxed</option>
+        <div class="field" style="margin-bottom:0">
+          <label>Selection Mode</label>
+          <select id="cp-car-mode">
+            <option value="random">Random (auto-picked, no duplicates)</option>
+            <option value="customizable">Customizable (buyer picks)</option>
+            <option value="all">All available (everything not owned)</option>
           </select>
         </div>
       </div>
-      <div class="field">
-        <label>Car Selection</label>
-        <select id="cp-car-mode">
-          <option value="random">Random (auto-picked, no duplicates)</option>
-          <option value="customizable">Customizable (buyer picks)</option>
-          <option value="all">All available cars (everything not owned)</option>
-        </select>
+    </div>
+    <div class="pack-sect" style="padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <label class="toggle"><input type="checkbox" id="cp-ver-toggle" onchange="toggleVersionSection()"><span class="tslider"></span></label>
+        <span style="font-size:13px;font-weight:500">🔖 Version Override</span>
+      </div>
+      <div id="cp-ver-section" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="field" style="margin-bottom:0">
+          <label>Game Version</label>
+          <input type="text" id="cp-version" placeholder="e.g. 6.3.0">
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Sets prvr &amp; adpvr in the save file</div>
       </div>
     </div>
     <div id="cp-notice" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('create-pack-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="savePack()" id="cp-save-btn">Save Pack</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Pack Confirm Modal -->
+<div class="modal-bg" id="delete-pack-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">Delete Pack?</div>
+    <p class="confirm-desc">This will permanently delete <strong id="del-pack-name"></strong>. This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('delete-pack-modal')">Cancel</button>
+      <button class="btn btn-danger" id="del-pack-confirm-btn" onclick="confirmDeletePack()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Apply Result Modal -->
+<div class="modal-bg" id="apply-result-modal">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <div class="result-icon" id="apply-result-icon">✅</div>
+    <div class="result-title" id="apply-result-title">Pack Applied!</div>
+    <div class="result-desc" id="apply-result-desc">The modified save file has been downloaded.</div>
+    <div class="modal-actions" style="justify-content:center;margin-top:18px">
+      <button class="btn btn-primary" onclick="hideModal('apply-result-modal');hideModal('apply-nsb-modal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Unban Confirm Modal -->
+<div class="modal-bg" id="unban-confirm-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">Apply Unban?</div>
+    <p class="confirm-desc">This will apply ban-reversal fixes to the loaded NSB file and download the modified save. Continue?</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('unban-confirm-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmApplyUnban()">Unban &amp; Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- NSB Output Folder Conflict Modal -->
+<div class="modal-bg" id="nsb-conflict-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">⚠️ File Already Exists</div>
+    <p class="confirm-desc">The output folder already contains an NSB file (<strong id="nsb-conflict-name"></strong>). Continuing will delete the existing file before saving the new one.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('nsb-conflict-modal')">Keep Existing</button>
+      <button class="btn btn-danger" id="nsb-conflict-confirm" onclick="confirmSaveToFolder()">Delete &amp; Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CSR2 Settings Modal -->
+<div class="modal-bg" id="csr2-settings-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">⚙ CSR2 Settings</div>
+    <div class="modal-sub">Configure where modified NSB files are saved</div>
+    <div class="field">
+      <label>Output Folder Path</label>
+      <input type="text" id="csr2-folder-input" placeholder="e.g. C:\Users\You\Documents\CSR2">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Leave empty to only download (no auto-save). Files in the folder are replaced on each apply.</div>
+    <div id="csr2-settings-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('csr2-settings-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCsr2Settings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit NSB Manual Modal -->
+<div class="modal-bg" id="edit-nsb-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">Edit NSB</div>
+    <div class="modal-sub">Load a save file to edit values manually or apply unban</div>
+    <div class="field">
+      <label>NSB File</label>
+      <div class="file-drop" id="ensb-drop" onclick="document.getElementById('ensb-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ensb')">
+        <input type="file" id="ensb-file" style="display:none" onchange="handleNsbFile(event,'ensb')">
+        <div class="file-drop-label">Click to select or drag &amp; drop your NSB file</div>
+        <div class="file-drop-name" id="ensb-file-name" style="display:none"></div>
+      </div>
+    </div>
+    <div id="ensb-form" style="display:none">
+      <div class="pack-sect-hdr" style="margin-bottom:8px">➕ Add to Account</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+        <div class="ensb-row"><span class="ensb-label">💵 Cash</span><input type="number" class="ensb-input" id="ensb-cash" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-cash-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label">🪙 Gold</span><input type="number" class="ensb-input" id="ensb-gold" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-gold-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label">🔑 Bronze Keys</span><input type="number" class="ensb-input" id="ensb-bkeys" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-bkeys-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label">🗝️ Silver Keys</span><input type="number" class="ensb-input" id="ensb-skeys" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-skeys-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label">✨ Gold Keys</span><input type="number" class="ensb-input" id="ensb-gkeys" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-gkeys-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label">⛽ Fuel</span><input type="number" class="ensb-input" id="ensb-fuel" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fuel-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#4caf50"></span>Green Tk</span><input type="number" class="ensb-input" id="ensb-fgreen" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fgreen-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#2196F3"></span>Blue Tk</span><input type="number" class="ensb-input" id="ensb-fblue" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fblue-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#e05252"></span>Red Tk</span><input type="number" class="ensb-input" id="ensb-fred" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fred-after">—</span></div>
+        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#FFC107"></span>Yellow Tk</span><input type="number" class="ensb-input" id="ensb-fyellow" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fyellow-after">—</span></div>
+      </div>
+    </div>
+    <div id="ensb-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('edit-nsb-modal')">Cancel</button>
+      <button class="btn btn-secondary" id="ensb-unban-btn" onclick="showModal('unban-confirm-modal')" disabled style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#ef4444">🚫 Unban</button>
+      <button class="btn btn-primary" id="ensb-apply-btn" onclick="applyManualEdit()" disabled>Apply &amp; Download</button>
     </div>
   </div>
 </div>
@@ -1533,11 +1666,16 @@ select{cursor:pointer}
       </div>
       <div id="ansb-car-section" style="display:none">
         <div class="section-title" style="margin-bottom:8px">Select Cars <span id="ansb-car-count-badge" style="font-weight:400;color:var(--muted);text-transform:none;font-size:11px;letter-spacing:0">(0 selected)</span></div>
-        <div class="car-search-wrap">
-          <span class="car-search-icon">⌕</span>
-          <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search cars by name..." oninput="searchCars(this.value)">
+        <div id="ansb-car-locked" style="font-size:12px;color:var(--muted);padding:10px 0;display:none">📂 Please upload NSB file first to enable car selection.</div>
+        <div id="ansb-car-controls" style="display:none">
+          <div class="car-filter-bar" id="ansb-tier-filters"></div>
+          <div class="car-filter-bar" id="ansb-brand-filters"></div>
+          <div class="car-search-wrap">
+            <span class="car-search-icon" style="font-size:14px">🔍</span>
+            <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search cars by name..." oninput="searchCars(this.value)" style="padding-left:34px">
+          </div>
+          <div id="ansb-car-results"></div>
         </div>
-        <div id="ansb-car-results"></div>
       </div>
       <div id="ansb-notice" style="display:none"></div>
       <div class="modal-actions" style="margin-top:0">
@@ -1550,6 +1688,7 @@ select{cursor:pointer}
       <div style="font-weight:600;font-size:14px">Selected Cars</div>
       <div id="ansb-selected-count" style="font-size:12px;color:var(--muted);margin-top:-4px">0 cars selected</div>
       <div id="ansb-selected-cars-list" style="flex:1;display:flex;flex-direction:column;gap:6px;overflow-y:auto"></div>
+      <div class="cars-remaining-note" id="ansb-cars-remaining-note" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -1599,8 +1738,10 @@ select{cursor:pointer}
 
 <script>
 var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection = null
-var _packs = [], _nsbData = { ansb: null, unban: null }, _selectedCars = []
-var _editingPackId = null
+var _packs = [], _nsbData = { ansb: null, unban: null, ensb: null }, _selectedCars = []
+var _editingPackId = null, _deletingPackId = null
+var _carFilter = { tier: null, brand: null }
+var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _selMode = false, _selected = new Set()
 var _debugOpen = false, _pollInterval = null
 var _scanAbort = false, _multiAbort = false, _multiRunId = 0
@@ -1611,6 +1752,7 @@ var _previewAcct = null, _importAcct = null, _afterImportId = null
 async function init() {
   var cfg = await apiFetch('/local/config', {}).catch(function(){ return {} })
   _url = (cfg.webappUrl || '').replace(/\\/$/, '')
+  _csr2OutputFolder = cfg.csr2OutputFolder || ''
   await fetchGames()
   await reloadAccounts()
   await reloadPacks()
@@ -2482,9 +2624,19 @@ function buildPackMeta(p) {
   return rows.length ? rows : ['<div class="pack-meta-row"><span>No modifiers</span></div>']
 }
 
-async function deletePack(e, id) {
+function deletePack(e, id) {
   e.stopPropagation()
-  await fetch('/csr2/packs/' + id, { method: 'DELETE' }).catch(function(){})
+  _deletingPackId = id
+  var pack = _packs.find(function(p){ return p.id === id })
+  document.getElementById('del-pack-name').textContent = pack ? (pack.name || 'this pack') : 'this pack'
+  showModal('delete-pack-modal')
+}
+
+async function confirmDeletePack() {
+  if (!_deletingPackId) return
+  hideModal('delete-pack-modal')
+  await fetch('/csr2/packs/' + _deletingPackId, { method: 'DELETE' }).catch(function(){})
+  _deletingPackId = null
   await reloadPacks()
   renderPacks()
 }
@@ -2515,6 +2667,9 @@ function openCreatePack() {
   document.getElementById('cp-car-count').value = ''
   document.getElementById('cp-car-condition').value = 'stock'
   document.getElementById('cp-car-mode').value = 'random'
+  document.getElementById('cp-ver-toggle').checked = false
+  document.getElementById('cp-ver-section').style.display = 'none'
+  document.getElementById('cp-version').value = ''
   hideNotice('cp-notice')
   showModal('create-pack-modal')
 }
@@ -2549,7 +2704,8 @@ async function savePack() {
     condition: document.getElementById('cp-car-condition').value,
     carMode: document.getElementById('cp-car-mode').value,
   } : null
-  var pack = { name, currencies, cars }
+  var version = document.getElementById('cp-ver-toggle').checked ? (document.getElementById('cp-version').value.trim() || null) : null
+  var pack = { name, currencies, cars, version: version || undefined }
   var url = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
   var method = _editingPackId ? 'PATCH' : 'POST'
   var res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pack) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
@@ -2562,69 +2718,71 @@ async function savePack() {
 // ─── Apply NSB Modal ──────────────────────────────────────────────────────────
 
 var CSR2_CARS = [
-  {id:'t1_polo_gti',name:'Volkswagen Polo GTI',tier:1},
-  {id:'t1_fiesta_st200',name:'Ford Fiesta ST200',tier:1},
-  {id:'t1_civic_si',name:'Honda Civic Si',tier:1},
-  {id:'t1_veloster',name:'Hyundai Veloster Turbo',tier:1},
-  {id:'t1_clio_rs',name:'Renault Clio R.S.',tier:1},
-  {id:'t1_cooper_s',name:'MINI Cooper S',tier:1},
-  {id:'t1_abarth_695',name:'Fiat Abarth 695',tier:1},
-  {id:'t1_208_gti',name:'Peugeot 208 GTi',tier:1},
-  {id:'t2_128ti',name:'BMW 128ti',tier:2},
-  {id:'t2_focus_st',name:'Ford Focus ST',tier:2},
-  {id:'t2_civic_tr',name:'Honda Civic Type R',tier:2},
-  {id:'t2_golf_r',name:'Volkswagen Golf R',tier:2},
-  {id:'t2_s3',name:'Audi S3 Sedan',tier:2},
-  {id:'t2_wrx_sti',name:'Subaru WRX STI',tier:2},
-  {id:'t2_evo_x',name:'Mitsubishi Lancer Evo X',tier:2},
-  {id:'t2_r34',name:'Nissan Skyline GT-R R34',tier:2},
-  {id:'t2_i30n',name:'Hyundai i30 N',tier:2},
-  {id:'t2_megane_rs',name:'Renault Mégane R.S.',tier:2},
-  {id:'t3_m3_comp',name:'BMW M3 Competition',tier:3},
-  {id:'t3_m4_comp',name:'BMW M4 Competition',tier:3},
-  {id:'t3_c63s',name:'Mercedes-AMG C 63 S',tier:3},
-  {id:'t3_rs5',name:'Audi RS 5 Coupé',tier:3},
-  {id:'t3_charger_hc',name:'Dodge Charger Hellcat',tier:3},
-  {id:'t3_gt500',name:'Ford Mustang Shelby GT500',tier:3},
-  {id:'t3_camaro_zl1',name:'Chevrolet Camaro ZL1',tier:3},
-  {id:'t3_r35',name:'Nissan GT-R R35',tier:3},
-  {id:'t3_giulia_qv',name:'Alfa Romeo Giulia Quadrifoglio',tier:3},
-  {id:'t3_corvette_c8',name:'Chevrolet Corvette C8 Stingray',tier:3},
-  {id:'t3_m8_comp',name:'BMW M8 Competition',tier:3},
-  {id:'t4_huracan',name:'Lamborghini Huracán EVO',tier:4},
-  {id:'t4_f8',name:'Ferrari F8 Tributo',tier:4},
-  {id:'t4_720s',name:'McLaren 720S',tier:4},
-  {id:'t4_911_gt3',name:'Porsche 911 GT3 RS',tier:4},
-  {id:'t4_amg_gt_r',name:'Mercedes-AMG GT R',tier:4},
-  {id:'t4_r8_v10',name:'Audi R8 V10 Plus',tier:4},
-  {id:'t4_viper_acr',name:'Dodge Viper ACR',tier:4},
-  {id:'t4_dbs',name:'Aston Martin DBS Superleggera',tier:4},
-  {id:'t4_765lt',name:'McLaren 765LT',tier:4},
-  {id:'t4_aventador_s',name:'Lamborghini Aventador S',tier:4},
-  {id:'t4_sf90',name:'Ferrari SF90 Stradale',tier:4},
-  {id:'t5_chiron',name:'Bugatti Chiron',tier:5},
-  {id:'t5_veyron_ss',name:'Bugatti Veyron Super Sport',tier:5},
-  {id:'t5_agera_rs',name:'Koenigsegg Agera RS',tier:5},
-  {id:'t5_svj',name:'Lamborghini Aventador SVJ',tier:5},
-  {id:'t5_laferrari',name:'Ferrari LaFerrari',tier:5},
-  {id:'t5_p1',name:'McLaren P1',tier:5},
-  {id:'t5_918',name:'Porsche 918 Spyder',tier:5},
-  {id:'t5_nevera',name:'Rimac Nevera',tier:5},
-  {id:'t5_huayra_r',name:'Pagani Huayra R',tier:5},
-  {id:'t5_sian',name:'Lamborghini Sián FKP 37',tier:5},
-  {id:'t5_amg_one',name:'Mercedes-AMG ONE',tier:5},
-  {id:'t5_regera',name:'Koenigsegg Regera',tier:5},
+  {id:'t1_polo_gti',name:'Volkswagen Polo GTI',tier:1,brand:'Volkswagen'},
+  {id:'t1_fiesta_st200',name:'Ford Fiesta ST200',tier:1,brand:'Ford'},
+  {id:'t1_civic_si',name:'Honda Civic Si',tier:1,brand:'Honda'},
+  {id:'t1_veloster',name:'Hyundai Veloster Turbo',tier:1,brand:'Hyundai'},
+  {id:'t1_clio_rs',name:'Renault Clio R.S.',tier:1,brand:'Renault'},
+  {id:'t1_cooper_s',name:'MINI Cooper S',tier:1,brand:'MINI'},
+  {id:'t1_abarth_695',name:'Fiat Abarth 695',tier:1,brand:'Fiat'},
+  {id:'t1_208_gti',name:'Peugeot 208 GTi',tier:1,brand:'Peugeot'},
+  {id:'t2_128ti',name:'BMW 128ti',tier:2,brand:'BMW'},
+  {id:'t2_focus_st',name:'Ford Focus ST',tier:2,brand:'Ford'},
+  {id:'t2_civic_tr',name:'Honda Civic Type R',tier:2,brand:'Honda'},
+  {id:'t2_golf_r',name:'Volkswagen Golf R',tier:2,brand:'Volkswagen'},
+  {id:'t2_s3',name:'Audi S3 Sedan',tier:2,brand:'Audi'},
+  {id:'t2_wrx_sti',name:'Subaru WRX STI',tier:2,brand:'Subaru'},
+  {id:'t2_evo_x',name:'Mitsubishi Lancer Evo X',tier:2,brand:'Mitsubishi'},
+  {id:'t2_r34',name:'Nissan Skyline GT-R R34',tier:2,brand:'Nissan'},
+  {id:'t2_i30n',name:'Hyundai i30 N',tier:2,brand:'Hyundai'},
+  {id:'t2_megane_rs',name:'Renault Mégane R.S.',tier:2,brand:'Renault'},
+  {id:'t3_m3_comp',name:'BMW M3 Competition',tier:3,brand:'BMW'},
+  {id:'t3_m4_comp',name:'BMW M4 Competition',tier:3,brand:'BMW'},
+  {id:'t3_c63s',name:'Mercedes-AMG C 63 S',tier:3,brand:'Mercedes'},
+  {id:'t3_rs5',name:'Audi RS 5 Coupé',tier:3,brand:'Audi'},
+  {id:'t3_charger_hc',name:'Dodge Charger Hellcat',tier:3,brand:'Dodge'},
+  {id:'t3_gt500',name:'Ford Mustang Shelby GT500',tier:3,brand:'Ford'},
+  {id:'t3_camaro_zl1',name:'Chevrolet Camaro ZL1',tier:3,brand:'Chevrolet'},
+  {id:'t3_r35',name:'Nissan GT-R R35',tier:3,brand:'Nissan'},
+  {id:'t3_giulia_qv',name:'Alfa Romeo Giulia Quadrifoglio',tier:3,brand:'Alfa Romeo'},
+  {id:'t3_corvette_c8',name:'Chevrolet Corvette C8 Stingray',tier:3,brand:'Chevrolet'},
+  {id:'t3_m8_comp',name:'BMW M8 Competition',tier:3,brand:'BMW'},
+  {id:'t4_huracan',name:'Lamborghini Huracán EVO',tier:4,brand:'Lamborghini'},
+  {id:'t4_f8',name:'Ferrari F8 Tributo',tier:4,brand:'Ferrari'},
+  {id:'t4_720s',name:'McLaren 720S',tier:4,brand:'McLaren'},
+  {id:'t4_911_gt3',name:'Porsche 911 GT3 RS',tier:4,brand:'Porsche'},
+  {id:'t4_amg_gt_r',name:'Mercedes-AMG GT R',tier:4,brand:'Mercedes'},
+  {id:'t4_r8_v10',name:'Audi R8 V10 Plus',tier:4,brand:'Audi'},
+  {id:'t4_viper_acr',name:'Dodge Viper ACR',tier:4,brand:'Dodge'},
+  {id:'t4_dbs',name:'Aston Martin DBS Superleggera',tier:4,brand:'Aston Martin'},
+  {id:'t4_765lt',name:'McLaren 765LT',tier:4,brand:'McLaren'},
+  {id:'t4_aventador_s',name:'Lamborghini Aventador S',tier:4,brand:'Lamborghini'},
+  {id:'t4_sf90',name:'Ferrari SF90 Stradale',tier:4,brand:'Ferrari'},
+  {id:'t5_chiron',name:'Bugatti Chiron',tier:5,brand:'Bugatti'},
+  {id:'t5_veyron_ss',name:'Bugatti Veyron Super Sport',tier:5,brand:'Bugatti'},
+  {id:'t5_agera_rs',name:'Koenigsegg Agera RS',tier:5,brand:'Koenigsegg'},
+  {id:'t5_svj',name:'Lamborghini Aventador SVJ',tier:5,brand:'Lamborghini'},
+  {id:'t5_laferrari',name:'Ferrari LaFerrari',tier:5,brand:'Ferrari'},
+  {id:'t5_p1',name:'McLaren P1',tier:5,brand:'McLaren'},
+  {id:'t5_918',name:'Porsche 918 Spyder',tier:5,brand:'Porsche'},
+  {id:'t5_nevera',name:'Rimac Nevera',tier:5,brand:'Rimac'},
+  {id:'t5_huayra_r',name:'Pagani Huayra R',tier:5,brand:'Pagani'},
+  {id:'t5_sian',name:'Lamborghini Sián FKP 37',tier:5,brand:'Lamborghini'},
+  {id:'t5_amg_one',name:'Mercedes-AMG ONE',tier:5,brand:'Mercedes'},
+  {id:'t5_regera',name:'Koenigsegg Regera',tier:5,brand:'Koenigsegg'},
 ]
+var CSR2_BRANDS = [...new Set(CSR2_CARS.map(function(c){return c.brand}))].sort()
 
 function openEditNsb(packId) {
   _nsbData.ansb = null
   _selectedCars = []
+  _carFilter = { tier: null, brand: null }
   document.getElementById('ansb-file-name').style.display = 'none'
   document.getElementById('ansb-compare').style.display = 'none'
   document.getElementById('ansb-apply-btn').disabled = true
   document.getElementById('ansb-drop').classList.remove('over')
-  document.getElementById('ansb-car-results').innerHTML = ''
   document.getElementById('ansb-car-search').value = ''
+  document.getElementById('ansb-car-results').innerHTML = ''
   hideNotice('ansb-notice')
   renderSelectedCars()
 
@@ -2647,6 +2805,25 @@ function openEditNsb(packId) {
   showModal('apply-nsb-modal')
 }
 
+function openEditNsbManual() {
+  _nsbData.ensb = null
+  _ensbCurrent = {}
+  document.getElementById('ensb-file-name').style.display = 'none'
+  document.getElementById('ensb-form').style.display = 'none'
+  document.getElementById('ensb-apply-btn').disabled = true
+  document.getElementById('ensb-unban-btn').disabled = true
+  document.getElementById('ensb-drop').classList.remove('over')
+  hideNotice('ensb-notice')
+  var fields = ['cash','gold','bkeys','skeys','gkeys','fuel','fgreen','fblue','fred','fyellow']
+  for (var i = 0; i < fields.length; i++) {
+    var el = document.getElementById('ensb-' + fields[i])
+    if (el) el.value = '0'
+    var af = document.getElementById('ensb-' + fields[i] + '-after')
+    if (af) af.textContent = '—'
+  }
+  showModal('edit-nsb-modal')
+}
+
 function renderPackInfoInModal(pack) {
   var box = document.getElementById('ansb-pack-info')
   var outer = document.getElementById('ansb-outer')
@@ -2655,19 +2832,19 @@ function renderPackInfoInModal(pack) {
 
   var c = pack.currencies || {}
   var chips = []
-  if (c.cash)       chips.push({val: fmtN(c.cash),       lbl: 'Cash'})
-  if (c.gold)       chips.push({val: fmtN(c.gold),       lbl: 'Gold'})
-  if (c.bronzeKeys) chips.push({val: fmtN(c.bronzeKeys), lbl: 'Bronze Keys'})
-  if (c.silverKeys) chips.push({val: fmtN(c.silverKeys), lbl: 'Silver Keys'})
-  if (c.goldKeys)   chips.push({val: fmtN(c.goldKeys),   lbl: 'Gold Keys'})
-  if (c.fuel)       chips.push({val: fmtN(c.fuel),       lbl: 'Fuel'})
+  if (c.cash)       chips.push({val: fmtN(c.cash),       lbl: 'Cash',        em: '💵'})
+  if (c.gold)       chips.push({val: fmtN(c.gold),       lbl: 'Gold',        em: '🪙'})
+  if (c.bronzeKeys) chips.push({val: fmtN(c.bronzeKeys), lbl: 'Bronze Keys', em: '🔑'})
+  if (c.silverKeys) chips.push({val: fmtN(c.silverKeys), lbl: 'Silver Keys', em: '🗝️'})
+  if (c.goldKeys)   chips.push({val: fmtN(c.goldKeys),   lbl: 'Gold Keys',   em: '✨'})
+  if (c.fuel)       chips.push({val: fmtN(c.fuel),       lbl: 'Fuel',        em: '⛽'})
 
   var html = '<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">' + escH(pack.name || 'Pack Contents') + '</div>'
 
   if (chips.length) {
     html += '<div class="pack-stat-grid">'
     for (var i = 0; i < chips.length; i++) {
-      html += '<div class="pack-stat-chip"><span class="psc-val">' + escH(chips[i].val) + '</span><span class="psc-lbl">' + escH(chips[i].lbl) + '</span></div>'
+      html += '<div class="pack-stat-chip"><span class="psc-val">' + chips[i].em + ' ' + escH(chips[i].val) + '</span><span class="psc-lbl">' + escH(chips[i].lbl) + '</span></div>'
     }
     html += '</div>'
   }
@@ -2689,7 +2866,50 @@ function renderPackInfoInModal(pack) {
 
   var isCustom = !!(pack.cars && pack.cars.carMode === 'customizable')
   carSection.style.display = isCustom ? '' : 'none'
-  if (isCustom) { outer.classList.add('has-cars') } else { outer.classList.remove('has-cars') }
+  if (isCustom) {
+    outer.classList.add('has-cars')
+    renderCarFilterBar()
+    setCarSectionLocked(!_nsbData.ansb)
+  } else {
+    outer.classList.remove('has-cars')
+  }
+}
+
+function renderCarFilterBar() {
+  var tierBar = document.getElementById('ansb-tier-filters')
+  var brandBar = document.getElementById('ansb-brand-filters')
+  if (!tierBar || !brandBar) return
+  var t = _carFilter.tier
+  tierBar.innerHTML = ['All',1,2,3,4,5].map(function(v){
+    var active = (v === 'All' && !t) || v === t
+    var lbl = v === 'All' ? 'All Tiers' : 'T'+v
+    return '<span class="car-filter-chip' + (active?' active':'') + '" data-tier="' + v + '" onclick="setTierFilter(this.dataset.tier)">' + lbl + '</span>'
+  }).join('')
+  var b = _carFilter.brand
+  brandBar.innerHTML = ['All'].concat(CSR2_BRANDS).map(function(v){
+    var active = (v === 'All' && !b) || v === b
+    return '<span class="car-filter-chip' + (active?' active':'') + '" data-brand="' + escH(v) + '" onclick="setBrandFilter(this.dataset.brand)">' + escH(v) + '</span>'
+  }).join('')
+}
+
+function setTierFilter(val) {
+  _carFilter.tier = (val === 'All' || val === 'null') ? null : +val
+  renderCarFilterBar()
+  searchCars(document.getElementById('ansb-car-search').value)
+}
+
+function setBrandFilter(val) {
+  _carFilter.brand = (val === 'All') ? null : val
+  renderCarFilterBar()
+  searchCars(document.getElementById('ansb-car-search').value)
+}
+
+function setCarSectionLocked(locked) {
+  var lockMsg = document.getElementById('ansb-car-locked')
+  var controls = document.getElementById('ansb-car-controls')
+  if (!lockMsg || !controls) return
+  lockMsg.style.display = locked ? '' : 'none'
+  controls.style.display = locked ? 'none' : ''
 }
 
 function handleNsbDrop(e, which) {
@@ -2721,11 +2941,28 @@ function readNsbFile(file, which) {
     if (which === 'ansb') {
       loadNsbComparison()
       document.getElementById('ansb-apply-btn').disabled = false
+    } else if (which === 'ensb') {
+      loadEnsbCurrent()
     } else {
       document.getElementById('unban-apply-btn').disabled = false
     }
   }
   reader.readAsArrayBuffer(file)
+}
+
+async function loadEnsbCurrent() {
+  if (!_nsbData.ensb) return
+  var res = await fetch('/csr2/read-nsb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nsbBase64: _nsbData.ensb.base64 })
+  }).then(function(r){ return r.json() }).catch(function(){ return null })
+  if (!res || res.error) { showNotice('ensb-notice', 'error', 'Could not read save file.'); return }
+  _ensbCurrent = res
+  document.getElementById('ensb-form').style.display = ''
+  document.getElementById('ensb-apply-btn').disabled = false
+  document.getElementById('ensb-unban-btn').disabled = false
+  updateEnsbAfter()
 }
 
 async function loadNsbComparison() {
@@ -2739,6 +2976,7 @@ async function loadNsbComparison() {
   }).then(function(r){ return r.json() }).catch(function(){ return null })
   if (!res || res.error) return
   renderComparison(pack, res)
+  setCarSectionLocked(false)
 }
 
 function renderComparison(pack, cur) {
@@ -2748,12 +2986,12 @@ function renderComparison(pack, cur) {
     if (!packVal) return
     rows.push({ lbl: lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal) })
   }
-  addRow('Cash',        c.cash,       cur.cash       || 0)
-  addRow('Gold',        c.gold,       cur.gold       || 0)
-  addRow('Bronze Keys', c.bronzeKeys, cur.bronzeKeys || 0)
-  addRow('Silver Keys', c.silverKeys, cur.silverKeys || 0)
-  addRow('Gold Keys',   c.goldKeys,   cur.goldKeys   || 0)
-  addRow('Fuel',        c.fuel,       cur.fuel       || 0)
+  addRow('💵 Cash',        c.cash,       cur.cash       || 0)
+  addRow('🪙 Gold',        c.gold,       cur.gold       || 0)
+  addRow('🔑 Bronze Keys', c.bronzeKeys, cur.bronzeKeys || 0)
+  addRow('🗝️ Silver Keys', c.silverKeys, cur.silverKeys || 0)
+  addRow('✨ Gold Keys',   c.goldKeys,   cur.goldKeys   || 0)
+  addRow('⛽ Fuel',        c.fuel,       cur.fuel       || 0)
   function addTkRow(color, lbl, packVal, curVal) {
     if (!packVal) return
     rows.push({ lbl: '<span class="token-dot" style="background:' + color + '"></span>' + lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal), isHtml: true })
@@ -2780,9 +3018,12 @@ function renderComparison(pack, cur) {
 
 function searchCars(query) {
   var results = document.getElementById('ansb-car-results')
-  if (!query || query.trim().length < 1) { results.innerHTML = ''; return }
-  var q = query.toLowerCase()
-  var matches = CSR2_CARS.filter(function(c){ return c.name.toLowerCase().indexOf(q) !== -1 }).slice(0, 12)
+  var q = query ? query.toLowerCase() : ''
+  var matches = CSR2_CARS.filter(function(c){
+    if (_carFilter.tier && c.tier !== _carFilter.tier) return false
+    if (_carFilter.brand && c.brand !== _carFilter.brand) return false
+    return !q || c.name.toLowerCase().indexOf(q) !== -1
+  }).slice(0, 14)
   if (!matches.length) {
     results.innerHTML = '<div class="car-result-list"><div class="car-result-item" style="color:var(--muted)">No cars found</div></div>'
     return
@@ -2823,12 +3064,14 @@ function renderSelectedCars() {
   var list = document.getElementById('ansb-selected-cars-list')
   var count = document.getElementById('ansb-selected-count')
   var badge = document.getElementById('ansb-car-count-badge')
+  var noteEl = document.getElementById('ansb-cars-remaining-note')
   var n = _selectedCars.length
   if (count) count.textContent = n + ' car' + (n === 1 ? '' : 's') + ' selected'
   if (badge) badge.textContent = '(' + n + ' selected)'
   if (!list) return
   if (!n) {
     list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:20px">No cars selected.<br>Search and add cars on the left.</div>'
+    if (noteEl) noteEl.style.display = 'none'
     return
   }
   var html = ''
@@ -2841,6 +3084,18 @@ function renderSelectedCars() {
     html += '</div>'
   }
   list.innerHTML = html
+  if (noteEl) {
+    var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
+    var pack = _packs.find(function(p){ return p.id === packId })
+    var total = pack && pack.cars && pack.cars.count ? pack.cars.count : 0
+    if (total > 0) {
+      var remaining = Math.max(0, total - n)
+      noteEl.style.display = ''
+      noteEl.textContent = n + '/' + total + ' cars selected' + (remaining > 0 ? '. Remaining ' + remaining + ' will be filled with cars you don\'t own yet.' : ' — all slots filled.')
+    } else {
+      noteEl.style.display = 'none'
+    }
+  }
 }
 
 async function applyNsb() {
@@ -2856,12 +3111,148 @@ async function applyNsb() {
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   hideLoading()
   if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
-  downloadBase64(res.resultBase64, _nsbData.ansb.name || 'nsb.txt')
-  if (res.note) {
-    showNotice('ansb-notice', 'info', res.note)
-  } else {
-    hideModal('apply-nsb-modal')
+  var fname = _nsbData.ansb.name || 'PlayerProfile'
+  downloadNsb(res.resultBase64, fname)
+  var desc = 'The modified save file has been downloaded.'
+  if (res.note) desc += '\n\n' + res.note
+  showApplyResult(true, 'Pack Applied!', desc)
+  if (_csr2OutputFolder) { saveNsbToFolder(res.resultBase64, fname) }
+}
+
+async function applyManualEdit() {
+  if (!_nsbData.ensb) return
+  showLoading('Applying edits...')
+  var additions = {
+    cash:       parseInt(document.getElementById('ensb-cash').value)   || 0,
+    gold:       parseInt(document.getElementById('ensb-gold').value)   || 0,
+    bronzeKeys: parseInt(document.getElementById('ensb-bkeys').value)  || 0,
+    silverKeys: parseInt(document.getElementById('ensb-skeys').value)  || 0,
+    goldKeys:   parseInt(document.getElementById('ensb-gkeys').value)  || 0,
+    fuel:       parseInt(document.getElementById('ensb-fuel').value)   || 0,
+    fusionGreen:  parseInt(document.getElementById('ensb-fgreen').value)  || 0,
+    fusionBlue:   parseInt(document.getElementById('ensb-fblue').value)   || 0,
+    fusionRed:    parseInt(document.getElementById('ensb-fred').value)    || 0,
+    fusionYellow: parseInt(document.getElementById('ensb-fyellow').value) || 0,
   }
+  var res = await fetch('/csr2/edit-nsb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nsbBase64: _nsbData.ensb.base64, additions: additions })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  hideLoading()
+  if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
+  var fname = _nsbData.ensb.name || 'PlayerProfile'
+  downloadNsb(res.resultBase64, fname)
+  showApplyResult(true, 'Edits Applied!', 'The modified save file has been downloaded.')
+  if (_csr2OutputFolder) { saveNsbToFolder(res.resultBase64, fname) }
+}
+
+function showApplyResult(ok, title, desc) {
+  document.getElementById('apply-result-icon').textContent = ok ? '✅' : '❌'
+  document.getElementById('apply-result-title').textContent = title
+  document.getElementById('apply-result-desc').textContent = desc
+  showModal('apply-result-modal')
+}
+
+function downloadNsb(b64, filename) {
+  var bytes = Uint8Array.from(atob(b64), function(c){ return c.charCodeAt(0) })
+  var blob = new Blob([bytes], { type: 'application/octet-stream' })
+  var a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+async function saveNsbToFolder(b64, filename) {
+  var res = await fetch('/csr2/save-nsb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64: b64, filename: filename })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.conflict) {
+    _pendingSavePack = { b64: b64, filename: filename }
+    document.getElementById('nsb-conflict-name').textContent = res.existingFile || 'existing file'
+    showModal('nsb-conflict-modal')
+  }
+}
+
+async function confirmSaveToFolder() {
+  hideModal('nsb-conflict-modal')
+  if (!_pendingSavePack) return
+  var p = _pendingSavePack
+  _pendingSavePack = null
+  await fetch('/csr2/save-nsb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64: p.b64, filename: p.filename, forceOverwrite: true })
+  }).catch(function(){})
+}
+
+function openCsr2Settings() {
+  document.getElementById('csr2-folder-input').value = _csr2OutputFolder || ''
+  hideNotice('csr2-settings-notice')
+  showModal('csr2-settings-modal')
+}
+
+async function saveCsr2Settings() {
+  var folder = document.getElementById('csr2-folder-input').value.trim()
+  _csr2OutputFolder = folder
+  var cfg = await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} })
+  cfg.csr2OutputFolder = folder
+  await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) }).catch(function(){})
+  showNotice('csr2-settings-notice', 'success', 'Saved!')
+  setTimeout(function(){ hideModal('csr2-settings-modal') }, 700)
+}
+
+function confirmApplyUnban() {
+  hideModal('unban-confirm-modal')
+  if (_nsbData.ensb) {
+    applyUnbanFromManual()
+  } else {
+    applyUnban()
+  }
+}
+
+async function applyUnbanFromManual() {
+  if (!_nsbData.ensb) return
+  showLoading('Applying unban...')
+  var res = await fetch('/csr2/unban', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nsbBase64: _nsbData.ensb.base64 })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  hideLoading()
+  if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
+  var fname = _nsbData.ensb.name || 'PlayerProfile'
+  downloadNsb(res.resultBase64, fname)
+  showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.')
+}
+
+function updateEnsbAfter() {
+  var fields = [
+    { key:'cash',   cur:_ensbCurrent.cash||0,   id:'ensb-cash'   },
+    { key:'gold',   cur:_ensbCurrent.gold||0,   id:'ensb-gold'   },
+    { key:'bronzeKeys',cur:_ensbCurrent.bronzeKeys||0,id:'ensb-bkeys'},
+    { key:'silverKeys',cur:_ensbCurrent.silverKeys||0,id:'ensb-skeys'},
+    { key:'goldKeys',  cur:_ensbCurrent.goldKeys||0,  id:'ensb-gkeys'},
+    { key:'fuel',   cur:_ensbCurrent.fuel||0,   id:'ensb-fuel'   },
+    { key:'fusionGreen', cur:_ensbCurrent.fusionGreen||0,  id:'ensb-fgreen'},
+    { key:'fusionBlue',  cur:_ensbCurrent.fusionBlue||0,   id:'ensb-fblue' },
+    { key:'fusionRed',   cur:_ensbCurrent.fusionRed||0,    id:'ensb-fred'  },
+    { key:'fusionYellow',cur:_ensbCurrent.fusionYellow||0, id:'ensb-fyellow'},
+  ]
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i]
+    var add = parseInt(document.getElementById(f.id) ? document.getElementById(f.id).value : '0') || 0
+    var af = document.getElementById(f.id + '-after')
+    if (af) af.textContent = add > 0 ? fmtN(f.cur + add) : '—'
+  }
+}
+
+function toggleVersionSection() {
+  var on = document.getElementById('cp-ver-toggle').checked
+  document.getElementById('cp-ver-section').style.display = on ? '' : 'none'
 }
 
 // ─── Unban Modal ──────────────────────────────────────────────────────────────
@@ -2885,8 +3276,9 @@ async function applyUnban() {
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   hideLoading()
   if (res.error) { showNotice('unban-notice', 'error', res.error); return }
-  downloadBase64(res.resultBase64, _nsbData.unban.name || 'nsb.txt')
+  downloadNsb(res.resultBase64, _nsbData.unban.name || 'PlayerProfile')
   hideModal('unban-modal')
+  showApplyResult(true, 'Unban Applied!', 'The account has been unbanned. The modified save file has been downloaded.')
 }
 
 // ─── Loading + Download utils ─────────────────────────────────────────────────
@@ -3204,6 +3596,67 @@ const server = http.createServer(async (req, res) => {
       const packs = loadPacks()
       savePacks(packs.filter(p => p.id !== id))
       return json(res, 200, { ok: true })
+    }
+  }
+
+  // CSR2 settings (output folder)
+  if (req.method === 'GET' && pathname === '/csr2/settings') {
+    const cfg = loadConfig()
+    return json(res, 200, { outputFolder: cfg.csr2OutputFolder || '' })
+  }
+
+  // CSR2 save-nsb (write modified save to output folder)
+  if (req.method === 'POST' && pathname === '/csr2/save-nsb') {
+    const body = await readBody(req)
+    if (!body.base64 || !body.filename) return json(res, 400, { error: 'Missing base64 or filename' })
+    const cfg = loadConfig()
+    const folder = cfg.csr2OutputFolder
+    if (!folder) return json(res, 400, { error: 'No output folder configured' })
+    if (!fs.existsSync(folder)) return json(res, 400, { error: 'Output folder not found: ' + folder })
+    try {
+      const files = fs.readdirSync(folder).filter(f => !f.startsWith('.'))
+      if (files.length > 0 && !body.forceOverwrite) {
+        return json(res, 200, { conflict: true, existingFile: files[0] })
+      }
+      if (body.forceOverwrite) {
+        for (const f of files) {
+          try { fs.unlinkSync(path.join(folder, f)) } catch {}
+        }
+      }
+      fs.writeFileSync(path.join(folder, body.filename), Buffer.from(body.base64, 'base64'))
+      log('[csr2/save-nsb] Saved to: ' + path.join(folder, body.filename))
+      return json(res, 200, { ok: true })
+    } catch (e) {
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // CSR2 edit-nsb (manual add to existing values)
+  if (req.method === 'POST' && pathname === '/csr2/edit-nsb') {
+    const body = await readBody(req)
+    if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
+    try {
+      const buf = Buffer.from(body.nsbBase64, 'base64')
+      const data = csr2ReadSave(buf)
+      const a = body.additions || {}
+      if (a.cash)         data.caea = (data.caea || 0) + a.cash
+      if (a.gold)         data.goea = (data.goea || 0) + a.gold
+      if (a.bronzeKeys)   data.gbke = (data.gbke || 0) + a.bronzeKeys
+      if (a.silverKeys)   data.gske = (data.gske || 0) + a.silverKeys
+      if (a.goldKeys)     data.ggke = (data.ggke || 0) + a.goldKeys
+      if (a.fuel)         data.fupi = (data.fupi || 0) + a.fuel
+      if (a.fusionGreen || a.fusionBlue || a.fusionRed || a.fusionYellow) {
+        if (!data.afme) data.afme = {}
+        if (a.fusionGreen)  data.afme.Green  = (data.afme.Green  || 0) + a.fusionGreen
+        if (a.fusionBlue)   data.afme.Blue   = (data.afme.Blue   || 0) + a.fusionBlue
+        if (a.fusionRed)    data.afme.Red    = (data.afme.Red    || 0) + a.fusionRed
+        if (a.fusionYellow) data.afme.Yellow = (data.afme.Yellow || 0) + a.fusionYellow
+      }
+      const out = csr2WriteSave(data)
+      return json(res, 200, { resultBase64: out.toString('base64') })
+    } catch (e) {
+      log('[csr2/edit-nsb] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
     }
   }
 
