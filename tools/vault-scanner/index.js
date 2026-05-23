@@ -947,9 +947,20 @@ async function pingLcu() {
 // ─── CSR2 Save Editor ────────────────────────────────────────────────────────
 
 function csr2ReadSave(buf) {
-  const raw = zlib.gunzipSync(buf).toString('utf8')
-  const nl = raw.indexOf('\n')
-  return JSON.parse(raw.slice(nl + 1))
+  let dec
+  try { dec = zlib.gunzipSync(buf) } catch (e) { throw new Error('Decompress failed: ' + e.message) }
+  const start = dec.indexOf(0x7B)
+  const end   = dec.lastIndexOf(0x7D)
+  if (start === -1 || end <= start) throw new Error('No JSON found in save file (start=' + start + ' end=' + end + ')')
+  const jsonStr = dec.slice(start, end + 1).toString('utf8')
+  try { return JSON.parse(jsonStr) } catch (e) {
+    const m = e.message.match(/position (\d+)/)
+    if (m) {
+      const p = +m[1], ctx = JSON.stringify(jsonStr.slice(Math.max(0,p-15), p+15))
+      throw new Error('JSON parse error at position ' + p + ' near ' + ctx)
+    }
+    throw e
+  }
 }
 
 function csr2WriteSave(data) {
@@ -958,14 +969,31 @@ function csr2WriteSave(data) {
   return zlib.gzipSync(Buffer.from(hash + '\n' + jsonStr, 'utf8'))
 }
 
-function csr2ApplyPack(data, pack) {
+function csr2ReadSaveStats(buf) {
+  const data = csr2ReadSave(buf)
+  return {
+    cash:         data.caea  || 0,
+    gold:         data.goea  || 0,
+    bronzeKeys:   data.gbke  || 0,
+    silverKeys:   data.gske  || 0,
+    goldKeys:     data.ggke  || 0,
+    fuel:         data.fupi  || 0,
+    fusionGreen:  (data.afme && data.afme.Green)  || 0,
+    fusionBlue:   (data.afme && data.afme.Blue)   || 0,
+    fusionRed:    (data.afme && data.afme.Red)    || 0,
+    fusionYellow: (data.afme && data.afme.Yellow) || 0,
+    carCount:     Array.isArray(data.caow) ? data.caow.length : 0,
+  }
+}
+
+function csr2ApplyPack(data, pack, selectedCars) {
   const c = pack.currencies || {}
   if ('cash'        in c) data.caea = c.cash
   if ('gold'        in c) data.goea = c.gold
   if ('bronzeKeys'  in c) data.gbke = c.bronzeKeys
   if ('silverKeys'  in c) data.gske = c.silverKeys
   if ('goldKeys'    in c) data.ggke = c.goldKeys
-  if ('fuel' in c) data.fupi = c.fuel
+  if ('fuel'        in c) data.fupi = c.fuel
   if (c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow) {
     if (!data.afme) data.afme = {}
     if (c.fusionGreen)  data.afme.Green  = (data.afme.Green  || 0) + c.fusionGreen
@@ -973,14 +1001,33 @@ function csr2ApplyPack(data, pack) {
     if (c.fusionRed)    data.afme.Red    = (data.afme.Red    || 0) + c.fusionRed
     if (c.fusionYellow) data.afme.Yellow = (data.afme.Yellow || 0) + c.fusionYellow
   }
-  if (Array.isArray(pack.cars) && pack.cars.length > 0) {
+
+  let note = null
+  const carConfig = pack.cars
+  if (carConfig && carConfig.count > 0) {
     if (!Array.isArray(data.caow)) data.caow = []
-    for (const car of pack.cars) {
-      const unid = data.ncui || 1
-      data.caow.push({ ...car, unid })
-      data.ncui = unid + 1
+    const ownedIds = new Set(data.caow.map(c => c.catp).filter(Boolean))
+    const maxed = carConfig.condition === 'maxed'
+    let added = 0
+
+    if (Array.isArray(selectedCars) && selectedCars.length > 0) {
+      for (const car of selectedCars) {
+        if (!ownedIds.has(car.id) && added < carConfig.count) {
+          const unid = data.ncui || 1
+          data.caow.push({ catp: car.id, stge: maxed ? 5 : 0, star: maxed ? 6 : 1, unid })
+          data.ncui = unid + 1
+          ownedIds.add(car.id)
+          added++
+        }
+      }
+      const remaining = carConfig.count - added
+      if (remaining > 0) {
+        note = added + ' car(s) added. ' + remaining + ' remaining slot(s) marked for random fill — verify in-game.'
+      }
     }
   }
+
+  return { note }
 }
 
 function csr2Unban(data) {
@@ -1176,6 +1223,38 @@ select{cursor:pointer}
 .pack-card-meta{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .pack-meta-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .pack-meta-row .token-dot{margin-right:1px}
+.ansb-outer{padding:0;overflow:hidden;display:flex;width:auto;max-width:520px;transition:max-width .25s}
+.ansb-outer.has-cars{max-width:860px}
+.ansb-left-pane{flex:1;min-width:0;padding:24px;overflow-y:auto;max-height:85vh;box-sizing:border-box;display:flex;flex-direction:column;gap:14px}
+.ansb-right-pane{width:280px;border-left:1px solid var(--border);display:none;flex-direction:column;padding:20px;gap:10px;max-height:85vh;overflow-y:auto;box-sizing:border-box}
+.ansb-outer.has-cars .ansb-right-pane{display:flex}
+.pack-stat-grid{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0}
+.pack-stat-chip{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;min-width:68px}
+.pack-stat-chip .psc-val{font-size:15px;font-weight:600;color:var(--text);display:block}
+.pack-stat-chip .psc-lbl{font-size:10px;color:var(--muted);margin-top:2px;display:block;text-transform:uppercase;letter-spacing:.5px}
+.compare-table{width:100%;font-size:12px;border-collapse:collapse}
+.compare-table th{text-align:left;color:var(--muted);font-weight:500;padding:4px 6px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+.compare-table td{padding:6px 6px;border-bottom:1px solid rgba(255,255,255,.05)}
+.comp-label{color:var(--muted);display:flex;align-items:center;gap:5px}
+.comp-delta{color:var(--accent);text-align:right;font-size:11px;padding-right:8px}
+.comp-arrow{text-align:right;white-space:nowrap}
+.comp-curr{color:var(--muted)}
+.comp-arrow-sym{color:var(--border);margin:0 5px}
+.comp-after{color:#4caf50;font-weight:600}
+.car-search-wrap{position:relative;margin-bottom:2px}
+.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 30px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
+.car-search-input:focus{border-color:var(--accent)}
+.car-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.car-result-list{border:1px solid var(--border);border-radius:8px;background:var(--surf2);overflow:hidden;margin-top:4px}
+.car-result-item{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px}
+.car-result-item:not(:last-child){border-bottom:1px solid rgba(255,255,255,.05)}
+.car-tier-badge{font-size:10px;background:var(--surf);border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--muted);flex-shrink:0}
+.car-result-add{background:var(--accent);border:none;color:#fff;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0}
+.car-result-add:hover{opacity:.8}
+.car-result-added{font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0}
+.selected-car-item{display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;font-size:12px}
+.selected-car-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;padding:0;line-height:1;margin-left:auto;flex-shrink:0}
+.selected-car-remove:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -1429,31 +1508,48 @@ select{cursor:pointer}
   </div>
 </div>
 
-<!-- Apply NSB Modal (used for both pack click and Edit NSB button) -->
+<!-- Apply NSB Modal -->
 <div class="modal-bg" id="apply-nsb-modal">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-title">Apply Pack to NSB</div>
-    <div class="modal-sub" id="ansb-pack-label">Select a pack and upload the NSB file</div>
-    <div class="field" id="ansb-pack-select-row" style="display:none">
-      <label>Pack</label>
-      <select id="ansb-pack-select"></select>
-    </div>
-    <div class="field">
-      <label>NSB File</label>
-      <div class="file-drop" id="ansb-drop" onclick="document.getElementById('ansb-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
-        <input type="file" id="ansb-file" style="display:none" onchange="handleNsbFile(event,'ansb')">
-        <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
-        <div class="file-drop-name" id="ansb-file-name" style="display:none"></div>
+  <div class="modal ansb-outer" id="ansb-outer">
+    <!-- Left pane -->
+    <div class="ansb-left-pane">
+      <div class="modal-title" style="margin-bottom:0">Apply Pack</div>
+      <div id="ansb-pack-info"></div>
+      <div class="field" id="ansb-pack-select-row" style="display:none;margin-bottom:0">
+        <label>Pack</label>
+        <select id="ansb-pack-select"></select>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>NSB File</label>
+        <div class="file-drop" id="ansb-drop" onclick="document.getElementById('ansb-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
+          <input type="file" id="ansb-file" style="display:none" onchange="handleNsbFile(event,'ansb')">
+          <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
+          <div class="file-drop-name" id="ansb-file-name" style="display:none"></div>
+        </div>
+      </div>
+      <div id="ansb-compare" style="display:none">
+        <div class="section-title" style="margin-bottom:6px">Account Preview</div>
+        <div id="ansb-compare-box"></div>
+      </div>
+      <div id="ansb-car-section" style="display:none">
+        <div class="section-title" style="margin-bottom:8px">Select Cars <span id="ansb-car-count-badge" style="font-weight:400;color:var(--muted);text-transform:none;font-size:11px;letter-spacing:0">(0 selected)</span></div>
+        <div class="car-search-wrap">
+          <span class="car-search-icon">⌕</span>
+          <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search cars by name..." oninput="searchCars(this.value)">
+        </div>
+        <div id="ansb-car-results"></div>
+      </div>
+      <div id="ansb-notice" style="display:none"></div>
+      <div class="modal-actions" style="margin-top:0">
+        <button class="btn btn-secondary" onclick="hideModal('apply-nsb-modal')">Cancel</button>
+        <button class="btn btn-primary" id="ansb-apply-btn" onclick="applyNsb()" disabled>Apply & Download</button>
       </div>
     </div>
-    <div id="ansb-preview" style="display:none">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500">Pack Preview</div>
-      <div class="preview-box" id="ansb-preview-box"></div>
-    </div>
-    <div id="ansb-notice" style="display:none"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="hideModal('apply-nsb-modal')">Cancel</button>
-      <button class="btn btn-primary" id="ansb-apply-btn" onclick="applyNsb()" disabled>Apply & Download</button>
+    <!-- Right pane: selected cars -->
+    <div class="ansb-right-pane" id="ansb-cars-pane">
+      <div style="font-weight:600;font-size:14px">Selected Cars</div>
+      <div id="ansb-selected-count" style="font-size:12px;color:var(--muted);margin-top:-4px">0 cars selected</div>
+      <div id="ansb-selected-cars-list" style="flex:1;display:flex;flex-direction:column;gap:6px;overflow-y:auto"></div>
     </div>
   </div>
 </div>
@@ -1503,7 +1599,7 @@ select{cursor:pointer}
 
 <script>
 var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection = null
-var _packs = [], _nsbData = { ansb: null, unban: null }
+var _packs = [], _nsbData = { ansb: null, unban: null }, _selectedCars = []
 var _editingPackId = null
 var _selMode = false, _selected = new Set()
 var _debugOpen = false, _pollInterval = null
@@ -2465,27 +2561,135 @@ async function savePack() {
 
 // ─── Apply NSB Modal ──────────────────────────────────────────────────────────
 
+var CSR2_CARS = [
+  {id:'t1_polo_gti',name:'Volkswagen Polo GTI',tier:1},
+  {id:'t1_fiesta_st200',name:'Ford Fiesta ST200',tier:1},
+  {id:'t1_civic_si',name:'Honda Civic Si',tier:1},
+  {id:'t1_veloster',name:'Hyundai Veloster Turbo',tier:1},
+  {id:'t1_clio_rs',name:'Renault Clio R.S.',tier:1},
+  {id:'t1_cooper_s',name:'MINI Cooper S',tier:1},
+  {id:'t1_abarth_695',name:'Fiat Abarth 695',tier:1},
+  {id:'t1_208_gti',name:'Peugeot 208 GTi',tier:1},
+  {id:'t2_128ti',name:'BMW 128ti',tier:2},
+  {id:'t2_focus_st',name:'Ford Focus ST',tier:2},
+  {id:'t2_civic_tr',name:'Honda Civic Type R',tier:2},
+  {id:'t2_golf_r',name:'Volkswagen Golf R',tier:2},
+  {id:'t2_s3',name:'Audi S3 Sedan',tier:2},
+  {id:'t2_wrx_sti',name:'Subaru WRX STI',tier:2},
+  {id:'t2_evo_x',name:'Mitsubishi Lancer Evo X',tier:2},
+  {id:'t2_r34',name:'Nissan Skyline GT-R R34',tier:2},
+  {id:'t2_i30n',name:'Hyundai i30 N',tier:2},
+  {id:'t2_megane_rs',name:'Renault Mégane R.S.',tier:2},
+  {id:'t3_m3_comp',name:'BMW M3 Competition',tier:3},
+  {id:'t3_m4_comp',name:'BMW M4 Competition',tier:3},
+  {id:'t3_c63s',name:'Mercedes-AMG C 63 S',tier:3},
+  {id:'t3_rs5',name:'Audi RS 5 Coupé',tier:3},
+  {id:'t3_charger_hc',name:'Dodge Charger Hellcat',tier:3},
+  {id:'t3_gt500',name:'Ford Mustang Shelby GT500',tier:3},
+  {id:'t3_camaro_zl1',name:'Chevrolet Camaro ZL1',tier:3},
+  {id:'t3_r35',name:'Nissan GT-R R35',tier:3},
+  {id:'t3_giulia_qv',name:'Alfa Romeo Giulia Quadrifoglio',tier:3},
+  {id:'t3_corvette_c8',name:'Chevrolet Corvette C8 Stingray',tier:3},
+  {id:'t3_m8_comp',name:'BMW M8 Competition',tier:3},
+  {id:'t4_huracan',name:'Lamborghini Huracán EVO',tier:4},
+  {id:'t4_f8',name:'Ferrari F8 Tributo',tier:4},
+  {id:'t4_720s',name:'McLaren 720S',tier:4},
+  {id:'t4_911_gt3',name:'Porsche 911 GT3 RS',tier:4},
+  {id:'t4_amg_gt_r',name:'Mercedes-AMG GT R',tier:4},
+  {id:'t4_r8_v10',name:'Audi R8 V10 Plus',tier:4},
+  {id:'t4_viper_acr',name:'Dodge Viper ACR',tier:4},
+  {id:'t4_dbs',name:'Aston Martin DBS Superleggera',tier:4},
+  {id:'t4_765lt',name:'McLaren 765LT',tier:4},
+  {id:'t4_aventador_s',name:'Lamborghini Aventador S',tier:4},
+  {id:'t4_sf90',name:'Ferrari SF90 Stradale',tier:4},
+  {id:'t5_chiron',name:'Bugatti Chiron',tier:5},
+  {id:'t5_veyron_ss',name:'Bugatti Veyron Super Sport',tier:5},
+  {id:'t5_agera_rs',name:'Koenigsegg Agera RS',tier:5},
+  {id:'t5_svj',name:'Lamborghini Aventador SVJ',tier:5},
+  {id:'t5_laferrari',name:'Ferrari LaFerrari',tier:5},
+  {id:'t5_p1',name:'McLaren P1',tier:5},
+  {id:'t5_918',name:'Porsche 918 Spyder',tier:5},
+  {id:'t5_nevera',name:'Rimac Nevera',tier:5},
+  {id:'t5_huayra_r',name:'Pagani Huayra R',tier:5},
+  {id:'t5_sian',name:'Lamborghini Sián FKP 37',tier:5},
+  {id:'t5_amg_one',name:'Mercedes-AMG ONE',tier:5},
+  {id:'t5_regera',name:'Koenigsegg Regera',tier:5},
+]
+
 function openEditNsb(packId) {
   _nsbData.ansb = null
+  _selectedCars = []
   document.getElementById('ansb-file-name').style.display = 'none'
-  document.getElementById('ansb-preview').style.display = 'none'
+  document.getElementById('ansb-compare').style.display = 'none'
   document.getElementById('ansb-apply-btn').disabled = true
   document.getElementById('ansb-drop').classList.remove('over')
+  document.getElementById('ansb-car-results').innerHTML = ''
+  document.getElementById('ansb-car-search').value = ''
   hideNotice('ansb-notice')
-  var noPresel = !packId
-  document.getElementById('ansb-pack-select-row').style.display = noPresel ? '' : 'none'
-  if (noPresel) {
+  renderSelectedCars()
+
+  var pack = null
+  if (!packId) {
     var sel = document.getElementById('ansb-pack-select')
-    sel.innerHTML = _packs.map(function(p){ return '<option value="' + p.id + '">' + escH(p.name) + '</option>' }).join('')
-    document.getElementById('ansb-pack-label').textContent = 'Select a pack and upload the NSB file'
+    sel.innerHTML = _packs.map(function(p){ return '<option value="' + escH(p.id) + '">' + escH(p.name || 'Unnamed') + '</option>' }).join('')
+    delete sel.dataset.forcedId
+    document.getElementById('ansb-pack-select-row').style.display = ''
+    pack = _packs[0] || null
   } else {
-    var pack = _packs.find(function(p){ return p.id === packId })
-    document.getElementById('ansb-pack-select').value = packId
-    document.getElementById('ansb-pack-label').textContent = pack ? 'Pack: ' + pack.name : 'Apply pack'
-    // Store selected pack id in select for applyNsb to read
-    document.getElementById('ansb-pack-select').dataset.forcedId = packId
+    pack = _packs.find(function(p){ return p.id === packId })
+    var sel2 = document.getElementById('ansb-pack-select')
+    sel2.value = packId
+    sel2.dataset.forcedId = packId
+    document.getElementById('ansb-pack-select-row').style.display = 'none'
   }
+
+  renderPackInfoInModal(pack)
   showModal('apply-nsb-modal')
+}
+
+function renderPackInfoInModal(pack) {
+  var box = document.getElementById('ansb-pack-info')
+  var outer = document.getElementById('ansb-outer')
+  var carSection = document.getElementById('ansb-car-section')
+  if (!pack) { box.innerHTML = ''; outer.classList.remove('has-cars'); carSection.style.display = 'none'; return }
+
+  var c = pack.currencies || {}
+  var chips = []
+  if (c.cash)       chips.push({val: fmtN(c.cash),       lbl: 'Cash'})
+  if (c.gold)       chips.push({val: fmtN(c.gold),       lbl: 'Gold'})
+  if (c.bronzeKeys) chips.push({val: fmtN(c.bronzeKeys), lbl: 'Bronze Keys'})
+  if (c.silverKeys) chips.push({val: fmtN(c.silverKeys), lbl: 'Silver Keys'})
+  if (c.goldKeys)   chips.push({val: fmtN(c.goldKeys),   lbl: 'Gold Keys'})
+  if (c.fuel)       chips.push({val: fmtN(c.fuel),       lbl: 'Fuel'})
+
+  var html = '<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">' + escH(pack.name || 'Pack Contents') + '</div>'
+
+  if (chips.length) {
+    html += '<div class="pack-stat-grid">'
+    for (var i = 0; i < chips.length; i++) {
+      html += '<div class="pack-stat-chip"><span class="psc-val">' + escH(chips[i].val) + '</span><span class="psc-lbl">' + escH(chips[i].lbl) + '</span></div>'
+    }
+    html += '</div>'
+  }
+
+  var fusion = []
+  if (c.fusionGreen)  fusion.push('<span class="token-dot" style="background:#4caf50"></span><span>' + fmtN(c.fusionGreen) + ' Green</span>')
+  if (c.fusionBlue)   fusion.push('<span class="token-dot" style="background:#2196F3"></span><span>' + fmtN(c.fusionBlue) + ' Blue</span>')
+  if (c.fusionRed)    fusion.push('<span class="token-dot" style="background:#e05252"></span><span>' + fmtN(c.fusionRed) + ' Red</span>')
+  if (c.fusionYellow) fusion.push('<span class="token-dot" style="background:#FFC107"></span><span>' + fmtN(c.fusionYellow) + ' Yellow</span>')
+  if (fusion.length) {
+    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">Fusion:</span>' + fusion.join('') + '</div>'
+  }
+
+  if (pack.cars && pack.cars.count) {
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">🚗 ' + fmtN(pack.cars.count) + ' cars &middot; ' + escH(pack.cars.carMode || 'random') + (pack.cars.condition === 'maxed' ? ' &middot; maxed' : '') + '</div>'
+  }
+
+  box.innerHTML = html
+
+  var isCustom = !!(pack.cars && pack.cars.carMode === 'customizable')
+  carSection.style.display = isCustom ? '' : 'none'
+  if (isCustom) { outer.classList.add('has-cars') } else { outer.classList.remove('has-cars') }
 }
 
 function handleNsbDrop(e, which) {
@@ -2515,7 +2719,7 @@ function readNsbFile(file, which) {
     document.getElementById(which + '-file-name').textContent = file.name
     document.getElementById(which + '-file-name').style.display = ''
     if (which === 'ansb') {
-      showAnsbPreview()
+      loadNsbComparison()
       document.getElementById('ansb-apply-btn').disabled = false
     } else {
       document.getElementById('unban-apply-btn').disabled = false
@@ -2524,29 +2728,140 @@ function readNsbFile(file, which) {
   reader.readAsArrayBuffer(file)
 }
 
-function showAnsbPreview() {
+async function loadNsbComparison() {
   var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
   var pack = _packs.find(function(p){ return p.id === packId })
-  if (!pack) return
-  var meta = buildPackMeta(pack)
-  var box = document.getElementById('ansb-preview-box')
-  box.innerHTML = meta.join('')
-  document.getElementById('ansb-preview').style.display = ''
+  if (!pack || !_nsbData.ansb) return
+  var res = await fetch('/csr2/read-nsb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nsbBase64: _nsbData.ansb.base64 })
+  }).then(function(r){ return r.json() }).catch(function(){ return null })
+  if (!res || res.error) return
+  renderComparison(pack, res)
+}
+
+function renderComparison(pack, cur) {
+  var c = pack.currencies || {}
+  var rows = []
+  function addRow(lbl, packVal, curVal) {
+    if (!packVal) return
+    rows.push({ lbl: lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal) })
+  }
+  addRow('Cash',        c.cash,       cur.cash       || 0)
+  addRow('Gold',        c.gold,       cur.gold       || 0)
+  addRow('Bronze Keys', c.bronzeKeys, cur.bronzeKeys || 0)
+  addRow('Silver Keys', c.silverKeys, cur.silverKeys || 0)
+  addRow('Gold Keys',   c.goldKeys,   cur.goldKeys   || 0)
+  addRow('Fuel',        c.fuel,       cur.fuel       || 0)
+  function addTkRow(color, lbl, packVal, curVal) {
+    if (!packVal) return
+    rows.push({ lbl: '<span class="token-dot" style="background:' + color + '"></span>' + lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal), isHtml: true })
+  }
+  addTkRow('#4caf50', ' Green Tk', c.fusionGreen,  cur.fusionGreen  || 0)
+  addTkRow('#2196F3', ' Blue Tk',  c.fusionBlue,   cur.fusionBlue   || 0)
+  addTkRow('#e05252', ' Red Tk',   c.fusionRed,    cur.fusionRed    || 0)
+  addTkRow('#FFC107', ' Yellow Tk',c.fusionYellow, cur.fusionYellow || 0)
+  if (!rows.length) { document.getElementById('ansb-compare').style.display = 'none'; return }
+  var html = '<table class="compare-table"><thead><tr>'
+  html += '<th>Item</th><th style="text-align:right">Pack</th><th style="text-align:right">Current → After</th>'
+  html += '</tr></thead><tbody>'
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i]
+    var lblHtml = r.isHtml ? r.lbl : escH(r.lbl)
+    html += '<tr><td class="comp-label">' + lblHtml + '</td>'
+    html += '<td class="comp-delta">' + escH(r.delta) + '</td>'
+    html += '<td class="comp-arrow"><span class="comp-curr">' + escH(r.curr) + '</span><span class="comp-arrow-sym">→</span><span class="comp-after">' + escH(r.after) + '</span></td></tr>'
+  }
+  html += '</tbody></table>'
+  document.getElementById('ansb-compare-box').innerHTML = html
+  document.getElementById('ansb-compare').style.display = ''
+}
+
+function searchCars(query) {
+  var results = document.getElementById('ansb-car-results')
+  if (!query || query.trim().length < 1) { results.innerHTML = ''; return }
+  var q = query.toLowerCase()
+  var matches = CSR2_CARS.filter(function(c){ return c.name.toLowerCase().indexOf(q) !== -1 }).slice(0, 12)
+  if (!matches.length) {
+    results.innerHTML = '<div class="car-result-list"><div class="car-result-item" style="color:var(--muted)">No cars found</div></div>'
+    return
+  }
+  var selectedIds = new Set(_selectedCars.map(function(c){ return c.id }))
+  var html = '<div class="car-result-list">'
+  for (var i = 0; i < matches.length; i++) {
+    var car = matches[i]
+    var added = selectedIds.has(car.id)
+    html += '<div class="car-result-item">'
+    html += '<span class="car-tier-badge">T' + car.tier + '</span>'
+    html += '<span style="flex:1">' + escH(car.name) + '</span>'
+    if (added) {
+      html += '<span class="car-result-added">Added</span>'
+    } else {
+      html += '<button class="car-result-add" data-id="' + escH(car.id) + '" data-name="' + escH(car.name) + '" data-tier="' + car.tier + '" onclick="addCarToSelection(this.dataset.id,this.dataset.name,+this.dataset.tier)">+ Add</button>'
+    }
+    html += '</div>'
+  }
+  html += '</div>'
+  results.innerHTML = html
+}
+
+function addCarToSelection(id, name, tier) {
+  if (_selectedCars.find(function(c){ return c.id === id })) return
+  _selectedCars.push({ id: id, name: name, tier: tier })
+  renderSelectedCars()
+  searchCars(document.getElementById('ansb-car-search').value)
+}
+
+function removeCarFromSelection(id) {
+  _selectedCars = _selectedCars.filter(function(c){ return c.id !== id })
+  renderSelectedCars()
+  searchCars(document.getElementById('ansb-car-search').value)
+}
+
+function renderSelectedCars() {
+  var list = document.getElementById('ansb-selected-cars-list')
+  var count = document.getElementById('ansb-selected-count')
+  var badge = document.getElementById('ansb-car-count-badge')
+  var n = _selectedCars.length
+  if (count) count.textContent = n + ' car' + (n === 1 ? '' : 's') + ' selected'
+  if (badge) badge.textContent = '(' + n + ' selected)'
+  if (!list) return
+  if (!n) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:20px">No cars selected.<br>Search and add cars on the left.</div>'
+    return
+  }
+  var html = ''
+  for (var i = 0; i < _selectedCars.length; i++) {
+    var car = _selectedCars[i]
+    html += '<div class="selected-car-item">'
+    html += '<span class="car-tier-badge">T' + car.tier + '</span>'
+    html += '<span style="flex:1">' + escH(car.name) + '</span>'
+    html += '<button class="selected-car-remove" data-id="' + escH(car.id) + '" onclick="removeCarFromSelection(this.dataset.id)" title="Remove">&times;</button>'
+    html += '</div>'
+  }
+  list.innerHTML = html
 }
 
 async function applyNsb() {
   if (!_nsbData.ansb) return
   var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
   showLoading('Applying pack...')
+  var payload = { nsbBase64: _nsbData.ansb.base64, packId: packId }
+  if (_selectedCars.length > 0) payload.selectedCars = _selectedCars
   var res = await fetch('/csr2/apply-nsb', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nsbBase64: _nsbData.ansb.base64, packId: packId })
+    body: JSON.stringify(payload)
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   hideLoading()
   if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
   downloadBase64(res.resultBase64, _nsbData.ansb.name || 'nsb.txt')
-  hideModal('apply-nsb-modal')
+  if (res.note) {
+    showNotice('ansb-notice', 'info', res.note)
+  } else {
+    hideModal('apply-nsb-modal')
+  }
 }
 
 // ─── Unban Modal ──────────────────────────────────────────────────────────────
@@ -2892,6 +3207,19 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // CSR2 read-nsb (returns current account stats for comparison preview)
+  if (req.method === 'POST' && pathname === '/csr2/read-nsb') {
+    const body = await readBody(req)
+    if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
+    try {
+      const buf = Buffer.from(body.nsbBase64, 'base64')
+      return json(res, 200, csr2ReadSaveStats(buf))
+    } catch (e) {
+      log('[csr2/read-nsb] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
   // CSR2 apply-nsb
   if (req.method === 'POST' && pathname === '/csr2/apply-nsb') {
     const body = await readBody(req)
@@ -2902,9 +3230,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const buf = Buffer.from(body.nsbBase64, 'base64')
       const data = csr2ReadSave(buf)
-      csr2ApplyPack(data, pack)
+      const { note } = csr2ApplyPack(data, pack, body.selectedCars || null)
       const out = csr2WriteSave(data)
-      return json(res, 200, { resultBase64: out.toString('base64') })
+      return json(res, 200, { resultBase64: out.toString('base64'), note: note || null })
     } catch (e) {
       log('[csr2/apply-nsb] Error: ' + e.message)
       return json(res, 500, { error: e.message })
