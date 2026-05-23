@@ -8,14 +8,17 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.21'
+const VERSION = '0.6.22'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
 const DATA_DIR = path.join(process.env.APPDATA || os.homedir(), 'aio-tool')
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json')
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
-const PACKS_FILE = path.join(DATA_DIR, 'csr2-packs.json')
+const PACKS_FILE     = path.join(DATA_DIR, 'csr2-packs.json')
+const CSR2_CARS_FILE = path.join(DATA_DIR, 'csr2-cars.json')
+const CSR2_SHA_FILE  = path.join(DATA_DIR, 'csr2-cars-sha.json')
+const INT32_MAX = 2147483647
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -34,8 +37,12 @@ function loadAccounts() { return loadJson(ACCOUNTS_FILE, []) }
 function saveAccounts(a) { saveJson(ACCOUNTS_FILE, a) }
 function loadConfig() { const c = loadJson(CONFIG_FILE, {}); if (!c.webappUrl) c.webappUrl = 'https://antlervaults.store'; return c }
 function saveConfig(c) { saveJson(CONFIG_FILE, c) }
-function loadPacks() { return loadJson(PACKS_FILE, []) }
-function savePacks(p) { saveJson(PACKS_FILE, p) }
+function loadPacks()    { return loadJson(PACKS_FILE, []) }
+function savePacks(p)  { saveJson(PACKS_FILE, p) }
+function loadCsr2Cars() { return loadJson(CSR2_CARS_FILE, []) }
+function saveCsr2Cars(d) { saveJson(CSR2_CARS_FILE, d) }
+function loadCsr2Sha() { return loadJson(CSR2_SHA_FILE, {}) }
+function saveCsr2Sha(d) { saveJson(CSR2_SHA_FILE, d) }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
 // ─── Riot Client API ─────────────────────────────────────────────────────────
@@ -944,6 +951,42 @@ async function pingLcu() {
   } catch { return false }
 }
 
+// ─── GitHub Helpers ───────────────────────────────────────────────────────────
+
+function fetchGithubApi(apiPath) {
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.github.com',
+      path: apiPath,
+      method: 'GET',
+      headers: { 'User-Agent': 'aio-tool-v' + VERSION, Accept: 'application/vnd.github.v3+json' },
+    }, (res) => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)) } catch (e) { reject(new Error('GitHub API parse error: ' + data.slice(0, 120))) }
+      })
+    })
+    req.on('error', reject)
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error('GitHub API timeout')) })
+    req.end()
+  })
+}
+
+function fetchRawGithub(rawUrl) {
+  return new Promise((resolve, reject) => {
+    const get = (url) => {
+      https.get(url, { headers: { 'User-Agent': 'aio-tool-v' + VERSION } }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) return get(res.headers.location)
+        let data = ''
+        res.on('data', c => data += c)
+        res.on('end', () => resolve(data))
+      }).on('error', reject)
+    }
+    get(rawUrl)
+  })
+}
+
 // ─── CSR2 Save Editor ────────────────────────────────────────────────────────
 
 function csr2ReadSave(buf) {
@@ -971,6 +1014,7 @@ function csr2WriteSave(data) {
 
 function csr2ReadSaveStats(buf) {
   const data = csr2ReadSave(buf)
+  const ownedCrdbs = Array.isArray(data.caow) ? data.caow.map(c => c.crdb).filter(Boolean) : []
   return {
     cash:         Math.max(0, (data.caea || 0) - (data.casp || 0)),
     gold:         Math.max(0, (data.goea || 0) - (data.gosp || 0)),
@@ -983,49 +1027,79 @@ function csr2ReadSaveStats(buf) {
     fusionRed:    (data.afme && data.afme.Red)    || 0,
     fusionYellow: (data.afme && data.afme.Yellow) || 0,
     carCount:     Array.isArray(data.caow) ? data.caow.length : 0,
+    ownedCrdbs:   ownedCrdbs,
   }
 }
 
-function csr2ApplyPack(data, pack, selectedCars) {
+async function csr2ApplyPack(data, pack, selectedCars) {
   const c = pack.currencies || {}
-  if ('cash'        in c) data.caea = c.cash
-  if ('gold'        in c) data.goea = c.gold
-  if ('bronzeKeys'  in c) data.gbke = c.bronzeKeys
-  if ('silverKeys'  in c) data.gske = c.silverKeys
-  if ('goldKeys'    in c) data.ggke = c.goldKeys
-  if ('fuel'        in c) data.fupi = c.fuel
+
+  // Apply currencies — cash/gold reset spent to 0 and clamp to INT32_MAX
+  if ('cash'       in c) { data.caea = Math.min(c.cash, INT32_MAX);       data.casp = 0 }
+  if ('gold'       in c) { data.goea = Math.min(c.gold, INT32_MAX);       data.gosp = 0 }
+  if ('bronzeKeys' in c) { data.gbke = c.bronzeKeys; data.gbks = 0 }
+  if ('silverKeys' in c) { data.gske = c.silverKeys; data.gsks = 0 }
+  if ('goldKeys'   in c) { data.ggke = c.goldKeys;   data.ggks = 0 }
+  if ('fuel'       in c) data.fupi = c.fuel
   if (c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow) {
     if (!data.afme) data.afme = {}
-    if (c.fusionGreen)  data.afme.Green  = (data.afme.Green  || 0) + c.fusionGreen
-    if (c.fusionBlue)   data.afme.Blue   = (data.afme.Blue   || 0) + c.fusionBlue
-    if (c.fusionRed)    data.afme.Red    = (data.afme.Red    || 0) + c.fusionRed
-    if (c.fusionYellow) data.afme.Yellow = (data.afme.Yellow || 0) + c.fusionYellow
+    if (!data.afms) data.afms = {}
+    if (c.fusionGreen)  { data.afme.Green  = c.fusionGreen;  data.afms.Green  = 0 }
+    if (c.fusionBlue)   { data.afme.Blue   = c.fusionBlue;   data.afms.Blue   = 0 }
+    if (c.fusionRed)    { data.afme.Red    = c.fusionRed;    data.afms.Red    = 0 }
+    if (c.fusionYellow) { data.afme.Yellow = c.fusionYellow; data.afms.Yellow = 0 }
   }
 
   if (pack.version) { data.prvr = pack.version; data.adpvr = pack.version }
 
   let note = null
   const carConfig = pack.cars
-  if (carConfig && carConfig.count > 0) {
+  if (carConfig && carConfig.count > 0 && Array.isArray(selectedCars) && selectedCars.length > 0) {
     if (!Array.isArray(data.caow)) data.caow = []
-    const ownedIds = new Set(data.caow.map(c => c.catp).filter(Boolean))
-    const maxed = carConfig.condition === 'maxed'
-    let added = 0
+    if (typeof data.ncui !== 'number' || data.ncui < data.caow.length) {
+      data.ncui = data.caow.length
+    }
 
-    if (Array.isArray(selectedCars) && selectedCars.length > 0) {
-      for (const car of selectedCars) {
-        if (!ownedIds.has(car.id) && added < carConfig.count) {
-          const unid = data.ncui || 1
-          data.caow.push({ catp: car.id, stge: maxed ? 5 : 0, star: maxed ? 6 : 1, unid })
-          data.ncui = unid + 1
-          ownedIds.add(car.id)
-          added++
+    const ownedCrdbs = new Set(data.caow.map(c => c.crdb).filter(Boolean))
+    const maxed = carConfig.condition === 'maxed'
+    const toAdd = selectedCars.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).slice(0, carConfig.count)
+
+    // Fetch car JSONs in parallel batches, then assign unids sequentially
+    const BATCH = 10
+    const fetched = []
+    for (let i = 0; i < toAdd.length; i += BATCH) {
+      const batch = toAdd.slice(i, i + BATCH)
+      const results = await Promise.all(batch.map(async (car) => {
+        try {
+          const txtUrl = maxed ? (car.maxedTxtUrl || car.stockTxtUrl) : car.stockTxtUrl
+          if (!txtUrl) throw new Error('no txtUrl')
+          const txt = await fetchRawGithub(txtUrl)
+          return { ok: true, carJson: JSON.parse(txt), crdb: car.crdb }
+        } catch (e) {
+          log('[cars-add] Failed ' + (car.crdb || '?') + ': ' + e.message)
+          return { ok: false, crdb: car.crdb }
         }
+      }))
+      fetched.push(...results)
+    }
+
+    let added = 0
+    for (const r of fetched) {
+      if (r.ok && !ownedCrdbs.has(r.crdb)) {
+        r.carJson.unid = data.ncui
+        data.ncui++
+        data.caow.push(r.carJson)
+        ownedCrdbs.add(r.crdb)
+        added++
       }
-      const remaining = carConfig.count - added
-      if (remaining > 0) {
-        note = added + ' car(s) added. ' + remaining + ' remaining slot(s) marked for random fill — verify in-game.'
-      }
+    }
+
+    // Rebuild garage position index — must always be [0..ncui-1, -1]
+    data.cgpi = [...Array(data.ncui).keys(), -1]
+
+    const remaining = carConfig.count - added
+    if (remaining > 0) {
+      note = added + ' car(s) added. ' + remaining + ' slot(s) could not be fetched from GitHub.'
     }
   }
 
@@ -1276,6 +1350,20 @@ select{cursor:pointer}
 .result-desc{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;max-width:320px;margin:0 auto}
 .confirm-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:16px}
 .cars-remaining-note{margin-top:auto;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5}
+.color-swatches-grid{display:flex;flex-wrap:wrap;gap:8px;max-height:340px;overflow-y:auto;padding-right:2px}
+.color-swatch{width:120px;background:var(--surf2);border:2px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .1s;flex-shrink:0}
+.color-swatch:hover{border-color:var(--accent);transform:scale(1.03)}
+.color-swatch img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--surf)}
+.color-swatch-name{padding:4px 6px 6px;font-size:11px;text-align:center;color:var(--text);line-height:1.3}
+.color-swatch.loading{opacity:.5;pointer-events:none}
+.selected-car-photo{width:44px;height:30px;object-fit:cover;border-radius:4px;background:var(--surf2);flex-shrink:0}
+.selected-car-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.selected-car-info .scar-name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.selected-car-info .scar-color{font-size:10px;color:var(--muted)}
+.cars-update-bar{background:var(--surf2);border-radius:4px;height:6px;margin:10px 0;overflow:hidden}
+.cars-update-bar-fill{background:var(--accent);height:100%;width:0%;transition:width .4s}
+.allow-dup-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--muted);cursor:pointer}
+.allow-dup-row input{cursor:pointer}
 </style>
 </head>
 <body>
@@ -1321,6 +1409,8 @@ select{cursor:pointer}
       <div class="main-hdr">
         <span class="main-title">CSR2 Services</span>
         <div class="spacer"></div>
+        <button class="btn btn-sm" onclick="openUnban()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#ef4444">🚫 Unban</button>
+        <button class="btn btn-secondary btn-sm" id="cars-update-btn" onclick="openCarsUpdate()">↺ Car DB <span id="cars-db-count" style="font-size:10px;opacity:.6"></span></button>
         <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
         <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
         <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
@@ -1668,11 +1758,13 @@ select{cursor:pointer}
         <div class="section-title" style="margin-bottom:8px">Select Cars <span id="ansb-car-count-badge" style="font-weight:400;color:var(--muted);text-transform:none;font-size:11px;letter-spacing:0">(0 selected)</span></div>
         <div id="ansb-car-locked" style="font-size:12px;color:var(--muted);padding:10px 0;display:none">📂 Please upload NSB file first to enable car selection.</div>
         <div id="ansb-car-controls" style="display:none">
+          <label class="allow-dup-row"><input type="checkbox" id="ansb-allow-dup" onchange="toggleAllowDuplicates()"> Allow Duplicates (show owned cars)</label>
           <div class="car-filter-bar" id="ansb-tier-filters"></div>
-          <div class="car-filter-bar" id="ansb-brand-filters"></div>
-          <div class="car-search-wrap">
-            <span class="car-search-icon" style="font-size:14px">🔍</span>
-            <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search cars by name..." oninput="searchCars(this.value)" style="padding-left:34px">
+          <div class="car-filter-bar" id="ansb-star-filters"></div>
+          <div class="car-filter-bar" id="ansb-brand-filters" style="max-height:48px;overflow:hidden" id="ansb-brand-filters"></div>
+          <div class="car-search-wrap" style="margin-top:4px">
+            <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
+            <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search by name or brand..." oninput="searchCars(this.value)">
           </div>
           <div id="ansb-car-results"></div>
         </div>
@@ -1724,6 +1816,34 @@ select{cursor:pointer}
   </div>
 </div>
 
+<!-- Color Picker Modal -->
+<div class="modal-bg" id="color-picker-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title" id="cp2-car-name">Select Color</div>
+    <div class="modal-sub" id="cp2-car-sub">Choose a paint color to add this car</div>
+    <div class="color-swatches-grid" id="cp2-colors-grid"></div>
+    <div id="cp2-notice" style="display:none;margin-top:10px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('color-picker-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Car DB Update Modal -->
+<div class="modal-bg" id="cars-update-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">Car Database</div>
+    <div id="cars-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Checking for updates...</div>
+    <div class="cars-update-bar"><div class="cars-update-bar-fill" id="cars-update-bar-fill"></div></div>
+    <div id="cars-update-info" style="font-size:12px;color:var(--muted);margin-bottom:4px"></div>
+    <div id="cars-update-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('cars-update-modal')" id="cars-update-close-btn">Cancel</button>
+      <button class="btn btn-primary" onclick="doCarsUpdate()" id="cars-update-go-btn" style="display:none">Update Now</button>
+    </div>
+  </div>
+</div>
+
 <!-- Debug Panel -->
 <div class="debug-panel" id="debug-panel">
   <div class="debug-hdr">
@@ -1740,12 +1860,14 @@ select{cursor:pointer}
 var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection = null
 var _packs = [], _nsbData = { ansb: null, unban: null, ensb: null }, _selectedCars = []
 var _editingPackId = null, _deletingPackId = null
-var _carFilter = { tier: null, brand: null }
+var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _selMode = false, _selected = new Set()
 var _debugOpen = false, _pollInterval = null
 var _scanAbort = false, _multiAbort = false, _multiRunId = 0
 var _previewAcct = null, _importAcct = null, _afterImportId = null
+var _csr2CarsDb = [], _ownedCrdbs = new Set(), _allowDuplicates = false
+var _colorPickerCar = null, _colorPickerCarIdx = -1, _selectingColor = false
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -1756,8 +1878,19 @@ async function init() {
   await fetchGames()
   await reloadAccounts()
   await reloadPacks()
+  // Load car database
+  var carsData = await apiFetch('/csr2/cars', null).catch(function(){ return null })
+  _csr2CarsDb = Array.isArray(carsData) ? carsData : []
+  updateCarDbCountBadge()
   renderView()
   startPoll()
+  // Silently check for car DB updates after UI is ready
+  setTimeout(checkCsr2CarsUpdate, 3000)
+}
+
+function updateCarDbCountBadge() {
+  var el = document.getElementById('cars-db-count')
+  if (el) el.textContent = _csr2CarsDb.length ? '(' + _csr2CarsDb.length + ')' : '(empty)'
 }
 
 async function apiFetch(path, fallback) {
@@ -2715,74 +2848,88 @@ async function savePack() {
   renderPacks()
 }
 
-// ─── Apply NSB Modal ──────────────────────────────────────────────────────────
+// ─── Apply NSB Modal + Car DB ──────────────────────────────────────────────────
 
-var CSR2_CARS = [
-  {id:'t1_polo_gti',name:'Volkswagen Polo GTI',tier:1,brand:'Volkswagen'},
-  {id:'t1_fiesta_st200',name:'Ford Fiesta ST200',tier:1,brand:'Ford'},
-  {id:'t1_civic_si',name:'Honda Civic Si',tier:1,brand:'Honda'},
-  {id:'t1_veloster',name:'Hyundai Veloster Turbo',tier:1,brand:'Hyundai'},
-  {id:'t1_clio_rs',name:'Renault Clio R.S.',tier:1,brand:'Renault'},
-  {id:'t1_cooper_s',name:'MINI Cooper S',tier:1,brand:'MINI'},
-  {id:'t1_abarth_695',name:'Fiat Abarth 695',tier:1,brand:'Fiat'},
-  {id:'t1_208_gti',name:'Peugeot 208 GTi',tier:1,brand:'Peugeot'},
-  {id:'t2_128ti',name:'BMW 128ti',tier:2,brand:'BMW'},
-  {id:'t2_focus_st',name:'Ford Focus ST',tier:2,brand:'Ford'},
-  {id:'t2_civic_tr',name:'Honda Civic Type R',tier:2,brand:'Honda'},
-  {id:'t2_golf_r',name:'Volkswagen Golf R',tier:2,brand:'Volkswagen'},
-  {id:'t2_s3',name:'Audi S3 Sedan',tier:2,brand:'Audi'},
-  {id:'t2_wrx_sti',name:'Subaru WRX STI',tier:2,brand:'Subaru'},
-  {id:'t2_evo_x',name:'Mitsubishi Lancer Evo X',tier:2,brand:'Mitsubishi'},
-  {id:'t2_r34',name:'Nissan Skyline GT-R R34',tier:2,brand:'Nissan'},
-  {id:'t2_i30n',name:'Hyundai i30 N',tier:2,brand:'Hyundai'},
-  {id:'t2_megane_rs',name:'Renault Mégane R.S.',tier:2,brand:'Renault'},
-  {id:'t3_m3_comp',name:'BMW M3 Competition',tier:3,brand:'BMW'},
-  {id:'t3_m4_comp',name:'BMW M4 Competition',tier:3,brand:'BMW'},
-  {id:'t3_c63s',name:'Mercedes-AMG C 63 S',tier:3,brand:'Mercedes'},
-  {id:'t3_rs5',name:'Audi RS 5 Coupé',tier:3,brand:'Audi'},
-  {id:'t3_charger_hc',name:'Dodge Charger Hellcat',tier:3,brand:'Dodge'},
-  {id:'t3_gt500',name:'Ford Mustang Shelby GT500',tier:3,brand:'Ford'},
-  {id:'t3_camaro_zl1',name:'Chevrolet Camaro ZL1',tier:3,brand:'Chevrolet'},
-  {id:'t3_r35',name:'Nissan GT-R R35',tier:3,brand:'Nissan'},
-  {id:'t3_giulia_qv',name:'Alfa Romeo Giulia Quadrifoglio',tier:3,brand:'Alfa Romeo'},
-  {id:'t3_corvette_c8',name:'Chevrolet Corvette C8 Stingray',tier:3,brand:'Chevrolet'},
-  {id:'t3_m8_comp',name:'BMW M8 Competition',tier:3,brand:'BMW'},
-  {id:'t4_huracan',name:'Lamborghini Huracán EVO',tier:4,brand:'Lamborghini'},
-  {id:'t4_f8',name:'Ferrari F8 Tributo',tier:4,brand:'Ferrari'},
-  {id:'t4_720s',name:'McLaren 720S',tier:4,brand:'McLaren'},
-  {id:'t4_911_gt3',name:'Porsche 911 GT3 RS',tier:4,brand:'Porsche'},
-  {id:'t4_amg_gt_r',name:'Mercedes-AMG GT R',tier:4,brand:'Mercedes'},
-  {id:'t4_r8_v10',name:'Audi R8 V10 Plus',tier:4,brand:'Audi'},
-  {id:'t4_viper_acr',name:'Dodge Viper ACR',tier:4,brand:'Dodge'},
-  {id:'t4_dbs',name:'Aston Martin DBS Superleggera',tier:4,brand:'Aston Martin'},
-  {id:'t4_765lt',name:'McLaren 765LT',tier:4,brand:'McLaren'},
-  {id:'t4_aventador_s',name:'Lamborghini Aventador S',tier:4,brand:'Lamborghini'},
-  {id:'t4_sf90',name:'Ferrari SF90 Stradale',tier:4,brand:'Ferrari'},
-  {id:'t5_chiron',name:'Bugatti Chiron',tier:5,brand:'Bugatti'},
-  {id:'t5_veyron_ss',name:'Bugatti Veyron Super Sport',tier:5,brand:'Bugatti'},
-  {id:'t5_agera_rs',name:'Koenigsegg Agera RS',tier:5,brand:'Koenigsegg'},
-  {id:'t5_svj',name:'Lamborghini Aventador SVJ',tier:5,brand:'Lamborghini'},
-  {id:'t5_laferrari',name:'Ferrari LaFerrari',tier:5,brand:'Ferrari'},
-  {id:'t5_p1',name:'McLaren P1',tier:5,brand:'McLaren'},
-  {id:'t5_918',name:'Porsche 918 Spyder',tier:5,brand:'Porsche'},
-  {id:'t5_nevera',name:'Rimac Nevera',tier:5,brand:'Rimac'},
-  {id:'t5_huayra_r',name:'Pagani Huayra R',tier:5,brand:'Pagani'},
-  {id:'t5_sian',name:'Lamborghini Sián FKP 37',tier:5,brand:'Lamborghini'},
-  {id:'t5_amg_one',name:'Mercedes-AMG ONE',tier:5,brand:'Mercedes'},
-  {id:'t5_regera',name:'Koenigsegg Regera',tier:5,brand:'Koenigsegg'},
-]
-var CSR2_BRANDS = [...new Set(CSR2_CARS.map(function(c){return c.brand}))].sort()
+async function openCarsUpdate() {
+  document.getElementById('cars-update-status').textContent = 'Checking GitHub for updates...'
+  document.getElementById('cars-update-info').textContent = ''
+  document.getElementById('cars-update-bar-fill').style.width = '0%'
+  document.getElementById('cars-update-go-btn').style.display = 'none'
+  document.getElementById('cars-update-close-btn').textContent = 'Close'
+  hideNotice('cars-update-notice')
+  showModal('cars-update-modal')
+  try {
+    var res = await fetch('/csr2/cars-check').then(function(r){ return r.json() })
+    if (res.error) {
+      document.getElementById('cars-update-status').textContent = 'Could not reach GitHub.'
+      document.getElementById('cars-update-info').textContent = res.error
+      return
+    }
+    var count = res.carCount || 0
+    if (count === 0) {
+      document.getElementById('cars-update-status').textContent = 'Car database is empty.'
+      document.getElementById('cars-update-info').textContent = 'Download the full car list from GitHub to enable the car picker.'
+    } else if (res.hasUpdate) {
+      document.getElementById('cars-update-status').textContent = 'Update available!'
+      document.getElementById('cars-update-info').textContent = 'Current: ' + count + ' cars. A newer version is available on GitHub.'
+    } else {
+      document.getElementById('cars-update-status').textContent = 'Car database is up to date.'
+      document.getElementById('cars-update-info').textContent = count + ' cars loaded.'
+    }
+    document.getElementById('cars-update-go-btn').style.display = (count === 0 || res.hasUpdate) ? '' : 'none'
+  } catch (e) {
+    document.getElementById('cars-update-status').textContent = 'Check failed: ' + e.message
+  }
+}
+
+async function doCarsUpdate() {
+  document.getElementById('cars-update-go-btn').style.display = 'none'
+  document.getElementById('cars-update-close-btn').textContent = 'Cancel'
+  document.getElementById('cars-update-status').textContent = 'Downloading car database from GitHub...'
+  document.getElementById('cars-update-bar-fill').style.width = '30%'
+  hideNotice('cars-update-notice')
+  try {
+    var res = await fetch('/csr2/cars-update', { method: 'POST' }).then(function(r){ return r.json() })
+    if (res.error) { showNotice('cars-update-notice', 'error', res.error); document.getElementById('cars-update-close-btn').textContent = 'Close'; return }
+    document.getElementById('cars-update-bar-fill').style.width = '100%'
+    document.getElementById('cars-update-status').textContent = 'Done! ' + res.count + ' cars loaded.'
+    document.getElementById('cars-update-close-btn').textContent = 'Close'
+    // Reload car DB
+    var carsData = await fetch('/csr2/cars').then(function(r){ return r.json() }).catch(function(){ return [] })
+    _csr2CarsDb = Array.isArray(carsData) ? carsData : []
+    updateCarDbCountBadge()
+    showNotice('cars-update-notice', 'success', res.count + ' cars ready.')
+  } catch (e) {
+    showNotice('cars-update-notice', 'error', 'Update failed: ' + e.message)
+    document.getElementById('cars-update-close-btn').textContent = 'Close'
+  }
+}
+
+async function checkCsr2CarsUpdate() {
+  if (_csr2CarsDb.length === 0) return  // already empty — user will notice the badge
+  try {
+    var res = await fetch('/csr2/cars-check').then(function(r){ return r.json() })
+    if (res.hasUpdate) {
+      var btn = document.getElementById('cars-update-btn')
+      if (btn) btn.style.borderColor = 'var(--accent)'
+    }
+  } catch {}
+}
 
 function openEditNsb(packId) {
   _nsbData.ansb = null
   _selectedCars = []
-  _carFilter = { tier: null, brand: null }
+  _carFilter = { tier: null, brand: null, starType: null }
+  _ownedCrdbs = new Set()
+  _allowDuplicates = false
   document.getElementById('ansb-file-name').style.display = 'none'
   document.getElementById('ansb-compare').style.display = 'none'
   document.getElementById('ansb-apply-btn').disabled = true
   document.getElementById('ansb-drop').classList.remove('over')
   document.getElementById('ansb-car-search').value = ''
   document.getElementById('ansb-car-results').innerHTML = ''
+  var dupChk = document.getElementById('ansb-allow-dup')
+  if (dupChk) dupChk.checked = false
   hideNotice('ansb-notice')
   renderSelectedCars()
 
@@ -2876,20 +3023,36 @@ function renderPackInfoInModal(pack) {
 }
 
 function renderCarFilterBar() {
-  var tierBar = document.getElementById('ansb-tier-filters')
+  var tierBar  = document.getElementById('ansb-tier-filters')
+  var starBar  = document.getElementById('ansb-star-filters')
   var brandBar = document.getElementById('ansb-brand-filters')
-  if (!tierBar || !brandBar) return
+  if (!tierBar) return
   var t = _carFilter.tier
   tierBar.innerHTML = ['All',1,2,3,4,5].map(function(v){
     var active = (v === 'All' && !t) || v === t
-    var lbl = v === 'All' ? 'All Tiers' : 'T'+v
-    return '<span class="car-filter-chip' + (active?' active':'') + '" data-tier="' + v + '" onclick="setTierFilter(this.dataset.tier)">' + lbl + '</span>'
+    return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setTierFilter(\'' + v + '\')">' + (v === 'All' ? 'All' : 'T'+v) + '</span>'
   }).join('')
-  var b = _carFilter.brand
-  brandBar.innerHTML = ['All'].concat(CSR2_BRANDS).map(function(v){
-    var active = (v === 'All' && !b) || v === b
-    return '<span class="car-filter-chip' + (active?' active':'') + '" data-brand="' + escH(v) + '" onclick="setBrandFilter(this.dataset.brand)">' + escH(v) + '</span>'
-  }).join('')
+  if (starBar) {
+    var s = _carFilter.starType
+    starBar.innerHTML = [
+      {v:'All', l:'⭐ All Stars'}, {v:'Gold', l:'⭐ Gold'}, {v:'Purple', l:'💜 Purple'}, {v:'Legends', l:'🌟 Legends'},
+    ].map(function(x){
+      var active = (x.v === 'All' && !s) || x.v === s
+      return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setStarFilter(\'' + x.v + '\')">' + x.l + '</span>'
+    }).join('')
+  }
+  if (brandBar) {
+    var b = _carFilter.brand
+    var brands = []
+    for (var i = 0; i < _csr2CarsDb.length; i++) {
+      if (_csr2CarsDb[i].brand && brands.indexOf(_csr2CarsDb[i].brand) === -1) brands.push(_csr2CarsDb[i].brand)
+    }
+    brands.sort()
+    brandBar.innerHTML = ['All'].concat(brands).map(function(v){
+      var active = (v === 'All' && !b) || v === b
+      return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setBrandFilter(\'' + escH(v) + '\')">' + escH(v === 'All' ? 'All Brands' : v) + '</span>'
+    }).join('')
+  }
 }
 
 function setTierFilter(val) {
@@ -2898,9 +3061,20 @@ function setTierFilter(val) {
   searchCars(document.getElementById('ansb-car-search').value)
 }
 
+function setStarFilter(val) {
+  _carFilter.starType = (val === 'All') ? null : val
+  renderCarFilterBar()
+  searchCars(document.getElementById('ansb-car-search').value)
+}
+
 function setBrandFilter(val) {
   _carFilter.brand = (val === 'All') ? null : val
   renderCarFilterBar()
+  searchCars(document.getElementById('ansb-car-search').value)
+}
+
+function toggleAllowDuplicates() {
+  _allowDuplicates = document.getElementById('ansb-allow-dup').checked
   searchCars(document.getElementById('ansb-car-search').value)
 }
 
@@ -2975,8 +3149,11 @@ async function loadNsbComparison() {
     body: JSON.stringify({ nsbBase64: _nsbData.ansb.base64 })
   }).then(function(r){ return r.json() }).catch(function(){ return null })
   if (!res || res.error) return
+  // Store owned car CRDBs so we can filter them from the search list
+  _ownedCrdbs = new Set(Array.isArray(res.ownedCrdbs) ? res.ownedCrdbs : [])
   renderComparison(pack, res)
   setCarSectionLocked(false)
+  searchCars(document.getElementById('ansb-car-search').value)
 }
 
 function renderComparison(pack, cur) {
@@ -3018,28 +3195,46 @@ function renderComparison(pack, cur) {
 
 function searchCars(query) {
   var results = document.getElementById('ansb-car-results')
+  if (!results) return
+
+  if (_csr2CarsDb.length === 0) {
+    results.innerHTML = '<div class="car-result-list"><div class="car-result-item" style="color:var(--muted)">Car database empty — click "↺ Car DB" to download.</div></div>'
+    return
+  }
+
   var q = query ? query.toLowerCase() : ''
-  var matches = CSR2_CARS.filter(function(c){
-    if (_carFilter.tier && c.tier !== _carFilter.tier) return false
-    if (_carFilter.brand && c.brand !== _carFilter.brand) return false
-    return !q || c.name.toLowerCase().indexOf(q) !== -1
-  }).slice(0, 14)
+  var matches = []
+  for (var i = 0; i < _csr2CarsDb.length && matches.length < 16; i++) {
+    var c = _csr2CarsDb[i]
+    if (!_allowDuplicates && _ownedCrdbs.has(c.crdb)) continue
+    if (_carFilter.tier && c.tier !== _carFilter.tier) continue
+    if (_carFilter.brand && c.brand !== _carFilter.brand) continue
+    if (_carFilter.starType && c.starType !== _carFilter.starType) continue
+    if (q && c.name.toLowerCase().indexOf(q) === -1 && c.brand.toLowerCase().indexOf(q) === -1) continue
+    matches.push({ car: c, idx: i })
+  }
+
   if (!matches.length) {
     results.innerHTML = '<div class="car-result-list"><div class="car-result-item" style="color:var(--muted)">No cars found</div></div>'
     return
   }
-  var selectedIds = new Set(_selectedCars.map(function(c){ return c.id }))
+
+  var selectedCrdbs = new Set(_selectedCars.map(function(c){ return c.crdb }))
+  var starIcon = { Gold: '⭐', Purple: '💜', Legends: '🌟' }
   var html = '<div class="car-result-list">'
-  for (var i = 0; i < matches.length; i++) {
-    var car = matches[i]
-    var added = selectedIds.has(car.id)
+  for (var j = 0; j < matches.length; j++) {
+    var car = matches[j].car, idx = matches[j].idx
+    var added = selectedCrdbs.has(car.crdb)
+    var si = starIcon[car.starType] || ''
     html += '<div class="car-result-item">'
     html += '<span class="car-tier-badge">T' + car.tier + '</span>'
-    html += '<span style="flex:1">' + escH(car.name) + '</span>'
+    if (si) html += '<span style="font-size:11px">' + si + '</span>'
+    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(car.name) + '</span>'
+    if (car.colors && car.colors.length > 1) html += '<span style="font-size:10px;color:var(--muted);flex-shrink:0">' + car.colors.length + ' clrs</span>'
     if (added) {
       html += '<span class="car-result-added">Added</span>'
     } else {
-      html += '<button class="car-result-add" data-id="' + escH(car.id) + '" data-name="' + escH(car.name) + '" data-tier="' + car.tier + '" onclick="addCarToSelection(this.dataset.id,this.dataset.name,+this.dataset.tier)">+ Add</button>'
+      html += '<button class="car-result-add" onclick="addCarToSelection(' + idx + ')">+ Add</button>'
     }
     html += '</div>'
   }
@@ -3047,17 +3242,108 @@ function searchCars(query) {
   results.innerHTML = html
 }
 
-function addCarToSelection(id, name, tier) {
-  if (_selectedCars.find(function(c){ return c.id === id })) return
-  _selectedCars.push({ id: id, name: name, tier: tier })
+function addCarToSelection(carIdx) {
+  var car = _csr2CarsDb[carIdx]
+  if (!car) return
+  // If already fully added (all colors selected for single-color car) skip
+  if (car.colors && car.colors.length === 1) {
+    if (_selectedCars.find(function(c){ return c.crdb === car.crdb && c.colorName === car.colors[0].name })) return
+    addCarWithColor(car, car.colors[0])
+  } else if (car.colors && car.colors.length > 1) {
+    openColorPicker(carIdx)
+  } else {
+    // No color info (shouldn't happen with real DB)
+    if (_selectedCars.find(function(c){ return c.crdb === car.crdb })) return
+    _selectedCars.push({ crdb: car.crdb, name: car.name, tier: car.tier, colorName: '', photoUrl: '', stockTxtUrl: '', maxedTxtUrl: null })
+    renderSelectedCars()
+    searchCars(document.getElementById('ansb-car-search').value)
+  }
+}
+
+async function addCarWithColor(car, color) {
+  if (_selectingColor) return
+  _selectingColor = true
+  var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
+  var pack = _packs.find(function(p){ return p.id === packId })
+  var condition = (pack && pack.cars && pack.cars.condition === 'maxed') ? 'maxed' : 'stock'
+  var txtUrl = condition === 'maxed' ? (color.maxedTxtUrl || color.stockTxtUrl) : color.stockTxtUrl
+
+  // Show loading indicator on the swatch if color picker is open
+  var grid = document.getElementById('cp2-colors-grid')
+  if (grid) grid.style.opacity = '0.5'
+  showLoading('Loading car data...')
+
+  try {
+    if (!txtUrl) throw new Error('No car data URL for this color.')
+    var resp = await fetch(txtUrl)
+    if (!resp.ok) throw new Error('HTTP ' + resp.status)
+    var txt = await resp.text()
+    JSON.parse(txt)  // validate it's real JSON before adding
+    _selectedCars.push({
+      crdb: car.crdb,
+      name: car.name,
+      tier: car.tier,
+      colorName: color.name,
+      photoUrl: color.photoUrl || '',
+      stockTxtUrl: color.stockTxtUrl || '',
+      maxedTxtUrl: color.maxedTxtUrl || null,
+    })
+    hideLoading()
+    if (grid) grid.style.opacity = ''
+    if (document.getElementById('color-picker-modal').classList.contains('on')) {
+      hideModal('color-picker-modal')
+    }
+    renderSelectedCars()
+    searchCars(document.getElementById('ansb-car-search').value)
+  } catch (e) {
+    hideLoading()
+    if (grid) grid.style.opacity = ''
+    showNotice('ansb-notice', 'error', 'Failed to load car: ' + e.message)
+  }
+  _selectingColor = false
+}
+
+function removeCarFromSelection(crdb, colorName) {
+  _selectedCars = _selectedCars.filter(function(c){ return !(c.crdb === crdb && c.colorName === colorName) })
   renderSelectedCars()
   searchCars(document.getElementById('ansb-car-search').value)
 }
 
-function removeCarFromSelection(id) {
-  _selectedCars = _selectedCars.filter(function(c){ return c.id !== id })
-  renderSelectedCars()
-  searchCars(document.getElementById('ansb-car-search').value)
+function openColorPicker(carIdx) {
+  var car = _csr2CarsDb[carIdx]
+  if (!car) return
+  _colorPickerCar = car
+  _colorPickerCarIdx = carIdx
+  document.getElementById('cp2-car-name').textContent = car.name
+  document.getElementById('cp2-car-sub').textContent = 'T' + car.tier + ' · ' + (car.starType || '') + ' · ' + (car.colors ? car.colors.length : 0) + ' colors'
+  hideNotice('cp2-notice')
+  var grid = document.getElementById('cp2-colors-grid')
+  if (!grid) return
+  var selectedKeys = new Set(_selectedCars.map(function(c){ return c.crdb + '|' + c.colorName }))
+  var html = ''
+  var colors = car.colors || []
+  for (var i = 0; i < colors.length; i++) {
+    var col = colors[i]
+    var alreadySelected = selectedKeys.has(car.crdb + '|' + col.name)
+    html += '<div class="color-swatch' + (alreadySelected ? ' loading' : '') + '" onclick="selectColorByIdx(' + carIdx + ',' + i + ')" title="' + escH(col.name) + '">'
+    html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\'none\'" loading="lazy">'
+    html += '<div class="color-swatch-name">' + escH(col.name) + (alreadySelected ? ' ✓' : '') + '</div>'
+    html += '</div>'
+  }
+  grid.innerHTML = html
+  showModal('color-picker-modal')
+}
+
+function selectColorByIdx(carIdx, colorIdx) {
+  var car = _csr2CarsDb[carIdx]
+  if (!car || !car.colors) return
+  var color = car.colors[colorIdx]
+  if (!color) return
+  if (_selectedCars.find(function(c){ return c.crdb === car.crdb && c.colorName === color.name })) {
+    showNotice('cp2-notice', 'info', 'This color is already in your selection.')
+    return
+  }
+  addCarWithColor(car, color)
 }
 
 function renderSelectedCars() {
@@ -3077,10 +3363,19 @@ function renderSelectedCars() {
   var html = ''
   for (var i = 0; i < _selectedCars.length; i++) {
     var car = _selectedCars[i]
+    var crdbEsc = escH(car.crdb || '')
+    var colEsc = escH(car.colorName || '')
     html += '<div class="selected-car-item">'
-    html += '<span class="car-tier-badge">T' + car.tier + '</span>'
-    html += '<span style="flex:1">' + escH(car.name) + '</span>'
-    html += '<button class="selected-car-remove" data-id="' + escH(car.id) + '" onclick="removeCarFromSelection(this.dataset.id)" title="Remove">&times;</button>'
+    if (car.photoUrl) {
+      html += '<img class="selected-car-photo" src="' + escH(car.photoUrl) + '" onerror="this.style.display=\'none\'" loading="lazy">'
+    } else {
+      html += '<span class="car-tier-badge" style="width:44px;height:30px;display:flex;align-items:center;justify-content:center">T' + car.tier + '</span>'
+    }
+    html += '<div class="selected-car-info">'
+    html += '<div class="scar-name">' + escH(car.name) + '</div>'
+    if (car.colorName) html += '<div class="scar-color">' + escH(car.colorName) + '</div>'
+    html += '</div>'
+    html += '<button class="selected-car-remove" data-crdb="' + crdbEsc + '" data-col="' + colEsc + '" onclick="removeCarFromSelection(this.dataset.crdb,this.dataset.col)" title="Remove">&times;</button>'
     html += '</div>'
   }
   list.innerHTML = html
@@ -3091,7 +3386,7 @@ function renderSelectedCars() {
     if (total > 0) {
       var remaining = Math.max(0, total - n)
       noteEl.style.display = ''
-      noteEl.textContent = n + '/' + total + ' cars selected' + (remaining > 0 ? '. Remaining ' + remaining + ' will be filled with cars you don\'t own yet.' : ' — all slots filled.')
+      noteEl.textContent = n + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled with cars you don\'t own yet.' : 'All slots filled.')
     } else {
       noteEl.style.display = 'none'
     }
@@ -3683,7 +3978,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const buf = Buffer.from(body.nsbBase64, 'base64')
       const data = csr2ReadSave(buf)
-      const { note } = csr2ApplyPack(data, pack, body.selectedCars || null)
+      const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null)
       const out = csr2WriteSave(data)
       return json(res, 200, { resultBase64: out.toString('base64'), note: note || null })
     } catch (e) {
@@ -3704,6 +3999,125 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { resultBase64: out.toString('base64') })
     } catch (e) {
       log('[csr2/unban] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // CSR2 car database — return stored list
+  if (req.method === 'GET' && pathname === '/csr2/cars') {
+    return json(res, 200, loadCsr2Cars())
+  }
+
+  // CSR2 car database — check if GitHub has newer commit
+  if (req.method === 'GET' && pathname === '/csr2/cars-check') {
+    try {
+      const stored = loadCsr2Sha()
+      const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/main')
+      const remoteSha = commit.sha || ''
+      return json(res, 200, {
+        hasUpdate: remoteSha !== (stored.sha || ''),
+        storedSha: stored.sha || '',
+        remoteSha,
+        carCount: loadCsr2Cars().length,
+      })
+    } catch (e) {
+      return json(res, 200, { hasUpdate: false, error: e.message, carCount: loadCsr2Cars().length })
+    }
+  }
+
+  // CSR2 car database — rebuild from GitHub
+  if (req.method === 'POST' && pathname === '/csr2/cars-update') {
+    try {
+      log('[csr2/cars-update] Fetching latest commit SHA...')
+      const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/main')
+      const sha = commit.sha || ''
+
+      log('[csr2/cars-update] Fetching file tree...')
+      const treeData = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/main?recursive=1')
+      const tree = treeData.tree || []
+
+      const enc = (s) => encodeURIComponent(s)
+      const rawBase = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/main/'
+      const rawUrl = (parts) => rawBase + parts.map(enc).join('/')
+
+      // Group Stock .txt files by brand+model+starType
+      const carMap = new Map()
+      for (const item of tree) {
+        if (item.type !== 'blob') continue
+        if (!item.path.startsWith('1.Cars/1.Stock/') || !item.path.endsWith('.txt')) continue
+        const parts = item.path.split('/')
+        if (parts.length < 6) continue
+        const starRaw = parts[2], brand = parts[3], model = parts[4]
+        const colorName = parts[5].replace(/\.txt$/, '')
+        const starType = /gold/i.test(starRaw) ? 'Gold' : /purple/i.test(starRaw) ? 'Purple' : /legend/i.test(starRaw) ? 'Legends' : 'Other'
+        const key = brand + '|' + model + '|' + starType
+        const sUrl = rawUrl(parts)
+        const pUrl = rawUrl(parts.slice(0, -1).concat(colorName + '.jpg'))
+        if (!carMap.has(key)) {
+          carMap.set(key, { brand, model, starType, colors: [], firstTxtUrl: sUrl })
+        }
+        carMap.get(key).colors.push({ name: colorName, photoUrl: pUrl, stockTxtUrl: sUrl, maxedTxtUrl: null })
+      }
+
+      // Map maxed .txt files by brand+model+colorName
+      const maxedIdx = new Map()
+      for (const item of tree) {
+        if (item.type !== 'blob') continue
+        if (!item.path.startsWith('1.Cars/2.Maxed/') || !item.path.endsWith('.txt')) continue
+        const parts = item.path.split('/')
+        // Handle with or without starType subfolder (depth 5 or 6)
+        let brand, model, colorName
+        if (parts.length >= 6) {
+          brand = parts[parts.length - 3]; model = parts[parts.length - 2]
+          colorName = parts[parts.length - 1].replace(/\.txt$/, '')
+        } else continue
+        maxedIdx.set(brand + '|' + model + '|' + colorName, rawUrl(parts))
+      }
+
+      for (const car of carMap.values()) {
+        for (const c of car.colors) {
+          c.maxedTxtUrl = maxedIdx.get(car.brand + '|' + car.model + '|' + c.name) || null
+        }
+      }
+
+      // Fetch one .txt per car model to get crdb + tier
+      const cars = [...carMap.values()]
+      log('[csr2/cars-update] Resolving crdb+tier for ' + cars.length + ' models...')
+      const BATCH = 20
+      let done = 0
+      for (let i = 0; i < cars.length; i += BATCH) {
+        await Promise.all(cars.slice(i, i + BATCH).map(async (car) => {
+          try {
+            const txt = await fetchRawGithub(car.firstTxtUrl)
+            const obj = JSON.parse(txt)
+            car.crdb = obj.crdb || null
+            car.tier = parseInt((obj.ctie || 'TIER_1').replace(/\D/g, '')) || 1
+          } catch { car.crdb = null; car.tier = 1 }
+          done++
+        }))
+        log('[csr2/cars-update] ' + done + '/' + cars.length)
+      }
+
+      const result = cars.filter(c => c.crdb).map(c => ({
+        crdb: c.crdb,
+        name: c.brand + ' ' + c.model,
+        tier: c.tier,
+        brand: c.brand,
+        starType: c.starType,
+        colors: c.colors.map(col => ({
+          name: col.name,
+          photoUrl: col.photoUrl,
+          stockTxtUrl: col.stockTxtUrl,
+          maxedTxtUrl: col.maxedTxtUrl,
+        })),
+      }))
+
+      saveCsr2Cars(result)
+      saveCsr2Sha({ sha, updatedAt: new Date().toISOString() })
+      log('[csr2/cars-update] Done — ' + result.length + ' cars saved.')
+      return json(res, 200, { ok: true, count: result.length })
+    } catch (e) {
+      log('[csr2/cars-update] Error: ' + e.message)
       return json(res, 500, { error: e.message })
     }
   }
