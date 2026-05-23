@@ -965,11 +965,13 @@ function csr2ApplyPack(data, pack) {
   if ('bronzeKeys'  in c) data.gbke = c.bronzeKeys
   if ('silverKeys'  in c) data.gske = c.silverKeys
   if ('goldKeys'    in c) data.ggke = c.goldKeys
-  if ('fuel'        in c) data.fupi = c.fuel
-  if ('eliteTokens' in c) {
-    if (!data.icnd) data.icnd = {}
-    if (!data.icnd.crpe) data.icnd.crpe = {}
-    data.icnd.EliteTuners_Credits = (data.icnd.EliteTuners_Credits || 0) + c.eliteTokens
+  if ('fuel' in c) data.fupi = c.fuel
+  if (c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow) {
+    if (!data.afme) data.afme = {}
+    if (c.fusionGreen)  data.afme.Green  = (data.afme.Green  || 0) + c.fusionGreen
+    if (c.fusionBlue)   data.afme.Blue   = (data.afme.Blue   || 0) + c.fusionBlue
+    if (c.fusionRed)    data.afme.Red    = (data.afme.Red    || 0) + c.fusionRed
+    if (c.fusionYellow) data.afme.Yellow = (data.afme.Yellow || 0) + c.fusionYellow
   }
   if (Array.isArray(pack.cars) && pack.cars.length > 0) {
     if (!Array.isArray(data.caow)) data.caow = []
@@ -1159,6 +1161,21 @@ select{cursor:pointer}
 .preview-key{color:var(--muted)}
 .preview-val{color:var(--text);font-weight:500}
 .curr-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.section-title{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;margin-top:4px}
+.field label{display:flex;align-items:center;gap:5px}
+.token-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.field-wrap{position:relative}
+.field-wrap input{padding-right:36px}
+.field-unit{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--muted);pointer-events:none}
+.game-icon{width:18px;height:18px;border-radius:4px;object-fit:cover;flex-shrink:0;background:var(--surf2)}
+.game-icon-init{width:18px;height:18px;border-radius:4px;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0;vertical-align:middle}
+.card-game-img{width:100%;height:100%;object-fit:cover;display:block}
+.pack-card-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.pack-card-hdr .game-icon,.pack-card-hdr .game-icon-init{width:22px;height:22px;border-radius:5px}
+.pack-card-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.pack-card-meta{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.pack-meta-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.pack-meta-row .token-dot{margin-right:1px}
 </style>
 </head>
 <body>
@@ -1361,16 +1378,22 @@ select{cursor:pointer}
       <label>Pack Name</label>
       <input type="text" id="cp-name" placeholder="e.g. Starter Pack">
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:500">Currencies</div>
+    <div class="section-title">Currencies</div>
     <div class="curr-grid">
-      <div class="field"><label>Cash</label><input type="number" id="cp-cash" placeholder="0" min="0"></div>
-      <div class="field"><label>Gold</label><input type="number" id="cp-gold" placeholder="0" min="0"></div>
-      <div class="field"><label>Bronze Keys</label><input type="number" id="cp-bkeys" placeholder="0" min="0"></div>
-      <div class="field"><label>Silver Keys</label><input type="number" id="cp-skeys" placeholder="0" min="0"></div>
-      <div class="field"><label>Gold Keys</label><input type="number" id="cp-gkeys" placeholder="0" min="0"></div>
-      <div class="field"><label>Fuel Pips</label><input type="number" id="cp-fuel" placeholder="0" min="0"></div>
+      <div class="field"><label>Cash</label><div class="field-wrap"><input type="number" id="cp-cash" placeholder="0" min="0"><span class="field-unit">$</span></div></div>
+      <div class="field"><label>Gold</label><div class="field-wrap"><input type="number" id="cp-gold" placeholder="0" min="0"><span class="field-unit">G</span></div></div>
+      <div class="field"><label>Bronze Keys</label><div class="field-wrap"><input type="number" id="cp-bkeys" placeholder="0" min="0"><span class="field-unit">Bk</span></div></div>
+      <div class="field"><label>Silver Keys</label><div class="field-wrap"><input type="number" id="cp-skeys" placeholder="0" min="0"><span class="field-unit">Sk</span></div></div>
+      <div class="field"><label>Gold Keys</label><div class="field-wrap"><input type="number" id="cp-gkeys" placeholder="0" min="0"><span class="field-unit">Gk</span></div></div>
+      <div class="field"><label>Fuel Pips</label><div class="field-wrap"><input type="number" id="cp-fuel" placeholder="0" min="0"><span class="field-unit">F</span></div></div>
     </div>
-    <div class="field"><label>Elite Tokens</label><input type="number" id="cp-elite" placeholder="0" min="0"></div>
+    <div class="section-title" style="margin-top:14px">Fusion Tokens</div>
+    <div class="curr-grid">
+      <div class="field"><label><span class="token-dot" style="background:#4caf50"></span>Green</label><div class="field-wrap"><input type="number" id="cp-fgreen" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+      <div class="field"><label><span class="token-dot" style="background:#2196F3"></span>Blue</label><div class="field-wrap"><input type="number" id="cp-fblue" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+      <div class="field"><label><span class="token-dot" style="background:#e05252"></span>Red</label><div class="field-wrap"><input type="number" id="cp-fred" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+      <div class="field"><label><span class="token-dot" style="background:#FFC107"></span>Yellow</label><div class="field-wrap"><input type="number" id="cp-fyellow" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
       <label class="toggle"><input type="checkbox" id="cp-cars-toggle" onchange="toggleCarsSection()"><span class="tslider"></span></label>
       <span style="font-size:13px">Add Cars</span>
@@ -1556,7 +1579,7 @@ function renderGames(list, err) {
       var g = games[gi]
       var isActive = _activeGame && _activeGame.id === g.id && _activeSection === cat.key
       html += '<div class="sidebar-item' + (isActive ? ' active' : '') + '" data-gid="' + escH(g.id) + '" data-sec="' + cat.key + '" onclick="pickGame(this.dataset.gid,this.dataset.sec)">'
-      html += '<span class="s-dot' + (isActive ? ' on' : '') + '"></span>' + escH(g.name || g.id) + '</div>'
+      html += gameIconHtml(g, 18) + escH(g.name || g.id) + '</div>'
     }
     html += '</div></div>'
   }
@@ -1626,11 +1649,14 @@ function renderAccounts() {
     var skins = Array.isArray(a.ownedSkinIds) ? a.ownedSkinIds.length : 0
     var rank = a.soloRank || 'Unranked'
     var isSel = _selected.has(a.id)
+    var thumbInner = (_activeGame && _activeGame.image)
+      ? '<img src="' + escH(_activeGame.image) + '" class="card-game-img">'
+      : '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#3a4050" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'
     html += '<div class="card' + (isSel ? ' sel' : '') + '" id="c-' + a.id + '">' +
       (_selMode ? '<div class="chk' + (isSel ? ' on' : '') + '" data-id="' + a.id + '" onclick="toggleSel(this.dataset.id,event)">' +
         (isSel ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : '') +
         '</div>' : '') +
-      '<div class="card-thumb"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#3a4050" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>' +
+      '<div class="card-thumb">' + thumbInner + '</div>' +
       '<div class="card-body"><div class="card-name" title="' + escH(name) + '">' + escH(name) + '</div>' +
       '<div class="card-meta"><span>' + skins + ' skins</span><span>' + escH(rank) + '</span></div></div>' +
       '<div class="card-overlay">' +
@@ -1643,6 +1669,14 @@ function renderAccounts() {
 }
 
 function escH(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') }
+
+function gameIconHtml(g, size) {
+  size = size || 18
+  var st = 'width:' + size + 'px;height:' + size + 'px;'
+  if (g && g.image) return '<img src="' + escH(g.image) + '" class="game-icon" style="' + st + '">'
+  var init = g && g.name ? g.name[0].toUpperCase() : '?'
+  return '<span class="game-icon-init" style="' + st + '">' + escH(init) + '</span>'
+}
 
 // ─── Status Polling ───────────────────────────────────────────────────────────
 
@@ -2308,35 +2342,45 @@ function renderPacks() {
   var html = ''
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
-    var meta = buildPackMeta(p)
+    var rows = buildPackMeta(p)
     html += '<div class="pack-card" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)">'
     html += '<button class="pack-card-del" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)" title="Delete pack">'
     html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
-    html += '<div class="pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div>'
-    html += '<div class="pack-card-meta">' + meta.map(function(m){ return '<span>' + escH(m) + '</span>' }).join('') + '</div>'
+    html += '<div class="pack-card-hdr">' + gameIconHtml(_activeGame, 22) + '<div class="pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
+    html += '<div class="pack-card-meta">' + rows.join('') + '</div>'
     html += '</div>'
   }
   grid.innerHTML = html
 }
 
+function fmtN(n) {
+  if (!n) return '0'
+  if (n >= 1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'') + 'M'
+  if (n >= 1e3) return (n/1e3).toFixed(1).replace(/\.0$/,'') + 'K'
+  return String(n)
+}
+
 function buildPackMeta(p) {
-  var lines = []
+  var rows = []
   var c = p.currencies || {}
   var parts = []
-  if (c.cash)       parts.push(c.cash.toLocaleString() + ' Cash')
-  if (c.gold)       parts.push(c.gold.toLocaleString() + ' Gold')
-  if (c.bronzeKeys) parts.push(c.bronzeKeys + ' Bronze Keys')
-  if (c.silverKeys) parts.push(c.silverKeys + ' Silver Keys')
-  if (c.goldKeys)   parts.push(c.goldKeys + ' Gold Keys')
-  if (c.fuel)       parts.push(c.fuel + ' Fuel')
-  if (c.eliteTokens) parts.push(c.eliteTokens + ' Elite Tokens')
-  if (parts.length) lines.push(parts.join(' · '))
+  if (c.cash)       parts.push(fmtN(c.cash) + ' Cash')
+  if (c.gold)       parts.push(fmtN(c.gold) + ' Gold')
+  if (c.bronzeKeys) parts.push(fmtN(c.bronzeKeys) + ' Bk')
+  if (c.silverKeys) parts.push(fmtN(c.silverKeys) + ' Sk')
+  if (c.goldKeys)   parts.push(fmtN(c.goldKeys) + ' Gk')
+  if (c.fuel)       parts.push(fmtN(c.fuel) + ' Fuel')
+  if (parts.length) rows.push('<div class="pack-meta-row">' + parts.map(function(t){ return '<span>' + escH(t) + '</span>' }).join('<span style="color:var(--border)">·</span>') + '</div>')
+  var fusion = []
+  if (c.fusionGreen)  fusion.push('<span class="token-dot" style="background:#4caf50"></span>' + fmtN(c.fusionGreen))
+  if (c.fusionBlue)   fusion.push('<span class="token-dot" style="background:#2196F3"></span>' + fmtN(c.fusionBlue))
+  if (c.fusionRed)    fusion.push('<span class="token-dot" style="background:#e05252"></span>' + fmtN(c.fusionRed))
+  if (c.fusionYellow) fusion.push('<span class="token-dot" style="background:#FFC107"></span>' + fmtN(c.fusionYellow))
+  if (fusion.length) rows.push('<div class="pack-meta-row">' + fusion.join('') + '</div>')
   if (p.cars && p.cars.carMode) {
-    var carLine = p.cars.count + ' cars · ' + p.cars.carMode
-    if (p.cars.condition === 'maxed') carLine += ' · Maxed'
-    lines.push(carLine)
+    rows.push('<div class="pack-meta-row"><span>' + escH(fmtN(p.cars.count) + ' cars · ' + p.cars.carMode + (p.cars.condition === 'maxed' ? ' · Maxed' : '')) + '</span></div>')
   }
-  return lines.length ? lines : ['No modifiers']
+  return rows.length ? rows : ['<div class="pack-meta-row"><span>No modifiers</span></div>']
 }
 
 async function deletePack(e, id) {
@@ -2363,7 +2407,10 @@ function openCreatePack() {
   document.getElementById('cp-skeys').value = ''
   document.getElementById('cp-gkeys').value = ''
   document.getElementById('cp-fuel').value = ''
-  document.getElementById('cp-elite').value = ''
+  document.getElementById('cp-fgreen').value = ''
+  document.getElementById('cp-fblue').value = ''
+  document.getElementById('cp-fred').value = ''
+  document.getElementById('cp-fyellow').value = ''
   document.getElementById('cp-cars-toggle').checked = false
   document.getElementById('cp-cars-section').style.display = 'none'
   document.getElementById('cp-car-count').value = ''
@@ -2382,15 +2429,21 @@ async function savePack() {
   var bkeys = parseInt(document.getElementById('cp-bkeys').value) || 0
   var skeys = parseInt(document.getElementById('cp-skeys').value) || 0
   var gkeys = parseInt(document.getElementById('cp-gkeys').value) || 0
-  var fuel = parseInt(document.getElementById('cp-fuel').value) || 0
-  var elite = parseInt(document.getElementById('cp-elite').value) || 0
-  if (cash)   currencies.cash = cash
-  if (gold)   currencies.gold = gold
-  if (bkeys)  currencies.bronzeKeys = bkeys
-  if (skeys)  currencies.silverKeys = skeys
-  if (gkeys)  currencies.goldKeys = gkeys
-  if (fuel)   currencies.fuel = fuel
-  if (elite)  currencies.eliteTokens = elite
+  var fuel    = parseInt(document.getElementById('cp-fuel').value)    || 0
+  var fgreen  = parseInt(document.getElementById('cp-fgreen').value)  || 0
+  var fblue   = parseInt(document.getElementById('cp-fblue').value)   || 0
+  var fred    = parseInt(document.getElementById('cp-fred').value)    || 0
+  var fyellow = parseInt(document.getElementById('cp-fyellow').value) || 0
+  if (cash)    currencies.cash = cash
+  if (gold)    currencies.gold = gold
+  if (bkeys)   currencies.bronzeKeys = bkeys
+  if (skeys)   currencies.silverKeys = skeys
+  if (gkeys)   currencies.goldKeys = gkeys
+  if (fuel)    currencies.fuel = fuel
+  if (fgreen)  currencies.fusionGreen = fgreen
+  if (fblue)   currencies.fusionBlue = fblue
+  if (fred)    currencies.fusionRed = fred
+  if (fyellow) currencies.fusionYellow = fyellow
   var carsOn = document.getElementById('cp-cars-toggle').checked
   var cars = carsOn ? {
     count: parseInt(document.getElementById('cp-car-count').value) || 0,
@@ -2444,10 +2497,17 @@ function handleNsbFile(e, which) {
   if (file) readNsbFile(file, which)
 }
 
+function bufToBase64(buf) {
+  var bytes = new Uint8Array(buf), out = '', chunk = 8192
+  for (var i = 0; i < bytes.length; i += chunk)
+    out += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk))
+  return btoa(out)
+}
+
 function readNsbFile(file, which) {
   var reader = new FileReader()
   reader.onload = function(e) {
-    var base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(e.target.result)))
+    var base64 = bufToBase64(e.target.result)
     _nsbData[which] = { base64: base64, name: file.name }
     document.getElementById(which + '-file-name').textContent = file.name
     document.getElementById(which + '-file-name').style.display = ''
