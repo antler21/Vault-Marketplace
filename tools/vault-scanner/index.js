@@ -2339,16 +2339,19 @@ function renderPacks() {
     grid.innerHTML = '<div class="empty"><h3>No packs yet</h3><p>Click <b>+ Create Pack</b> to define a service pack.</p></div>'
     return
   }
+  var thumb = (_activeGame && _activeGame.image)
+    ? '<img src="' + escH(_activeGame.image) + '" class="card-game-img">'
+    : '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#3a4050" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 12h6M12 9v6"/></svg>'
   var html = ''
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
-    var rows = buildPackMeta(p)
-    html += '<div class="pack-card" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)">'
-    html += '<button class="pack-card-del" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)" title="Delete pack">'
-    html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
-    html += '<div class="pack-card-hdr">' + gameIconHtml(_activeGame, 22) + '<div class="pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
-    html += '<div class="pack-card-meta">' + rows.join('') + '</div>'
-    html += '</div>'
+    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '">'
+    html += '<div class="card-thumb">' + thumb + '</div>'
+    html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
+    html += '<div class="card-overlay">'
+    html += '<button class="ov-btn ov-import" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)">Apply Pack</button>'
+    html += '<button class="ov-btn ov-remove" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">Delete</button>'
+    html += '</div></div>'
   }
   grid.innerHTML = html
 }
