@@ -914,9 +914,9 @@ function html(res, body) {
 
 function readBody(req) {
   return new Promise((resolve) => {
-    let data = ''
-    req.on('data', c => data += c)
-    req.on('end', () => { try { resolve(JSON.parse(data)) } catch { resolve({}) } })
+    const chunks = []
+    req.on('data', c => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)))
+    req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))) } catch { resolve({}) } })
   })
 }
 
@@ -2530,7 +2530,7 @@ function showAnsbPreview() {
   if (!pack) return
   var meta = buildPackMeta(pack)
   var box = document.getElementById('ansb-preview-box')
-  box.innerHTML = meta.map(function(m){ return '<div>' + escH(m) + '</div>' }).join('')
+  box.innerHTML = meta.join('')
   document.getElementById('ansb-preview').style.display = ''
 }
 
