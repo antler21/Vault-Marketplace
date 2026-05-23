@@ -1548,7 +1548,7 @@ function renderGames(list, err) {
     var games = catGames[cat.key] || []
     if (!games.length) continue
     html += '<div class="sidebar-cat" id="scat-' + cat.key + '">'
-    html += '<div class="sidebar-cat-hdr" onclick="toggleCat(\'' + cat.key + '\')">'
+    html += '<div class="sidebar-cat-hdr" data-key="' + cat.key + '" onclick="toggleCat(this.dataset.key)">'
     html += '<span>' + cat.label + '</span>'
     html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>'
     html += '</div><div class="sidebar-cat-items">'
@@ -2309,7 +2309,7 @@ function renderPacks() {
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
     var meta = buildPackMeta(p)
-    html += '<div class="pack-card" onclick="openEditNsb(\'' + p.id + '\')">'
+    html += '<div class="pack-card" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)">'
     html += '<button class="pack-card-del" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)" title="Delete pack">'
     html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
     html += '<div class="pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div>'
