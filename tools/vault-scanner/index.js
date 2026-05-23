@@ -907,6 +907,7 @@ function json(res, status, body) {
 
 function html(res, body) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-store')
   res.writeHead(200)
   res.end(body)
 }
