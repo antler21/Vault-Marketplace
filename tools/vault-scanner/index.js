@@ -3,6 +3,8 @@ const https = require('https')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const zlib = require('zlib')
+const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
@@ -13,6 +15,7 @@ const VERSION = '0.6.21'
 const DATA_DIR = path.join(process.env.APPDATA || os.homedir(), 'aio-tool')
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json')
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
+const PACKS_FILE = path.join(DATA_DIR, 'csr2-packs.json')
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -31,6 +34,8 @@ function loadAccounts() { return loadJson(ACCOUNTS_FILE, []) }
 function saveAccounts(a) { saveJson(ACCOUNTS_FILE, a) }
 function loadConfig() { const c = loadJson(CONFIG_FILE, {}); if (!c.webappUrl) c.webappUrl = 'https://antlervaults.store'; return c }
 function saveConfig(c) { saveJson(CONFIG_FILE, c) }
+function loadPacks() { return loadJson(PACKS_FILE, []) }
+function savePacks(p) { saveJson(PACKS_FILE, p) }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
 // ─── Riot Client API ─────────────────────────────────────────────────────────
@@ -938,6 +943,89 @@ async function pingLcu() {
   } catch { return false }
 }
 
+// ─── CSR2 Save Editor ────────────────────────────────────────────────────────
+
+function csr2ReadSave(buf) {
+  const raw = zlib.gunzipSync(buf).toString('utf8')
+  const nl = raw.indexOf('\n')
+  return JSON.parse(raw.slice(nl + 1))
+}
+
+function csr2WriteSave(data) {
+  const jsonStr = JSON.stringify(data)
+  const hash = crypto.createHash('sha1').update(jsonStr, 'utf8').digest('hex')
+  return zlib.gzipSync(Buffer.from(hash + '\n' + jsonStr, 'utf8'))
+}
+
+function csr2ApplyPack(data, pack) {
+  const c = pack.currencies || {}
+  if ('cash'        in c) data.caea = c.cash
+  if ('gold'        in c) data.goea = c.gold
+  if ('bronzeKeys'  in c) data.gbke = c.bronzeKeys
+  if ('silverKeys'  in c) data.gske = c.silverKeys
+  if ('goldKeys'    in c) data.ggke = c.goldKeys
+  if ('fuel'        in c) data.fupi = c.fuel
+  if ('eliteTokens' in c) {
+    if (!data.icnd) data.icnd = {}
+    if (!data.icnd.crpe) data.icnd.crpe = {}
+    data.icnd.EliteTuners_Credits = (data.icnd.EliteTuners_Credits || 0) + c.eliteTokens
+  }
+  if (Array.isArray(pack.cars) && pack.cars.length > 0) {
+    if (!Array.isArray(data.caow)) data.caow = []
+    for (const car of pack.cars) {
+      const unid = data.ncui || 1
+      data.caow.push({ ...car, unid })
+      data.ncui = unid + 1
+    }
+  }
+}
+
+function csr2Unban(data) {
+  Object.assign(data, {
+    rpsp: 0, iags: 0, igbk: 0, igsk: 0, iggk: 0,
+    hsif: false, hsig: false, hsez: false,
+    liap: 0, lbrp: 0, iapc: [], iapx: '', pupr: [],
+    hcfr: false, cbam: 2, tcbl: 0, trhi: [], cbcc: -1, cbcm: -1, lbcr: 0, picl: [],
+    demo: false, hsdm: false,
+    ehshopitemsrefreshlimitcount: [], ehshopitemsrefreshlimitcooldown: [],
+    ehshopitemsautorefreshtimestamp: [], ehshopallactivetabitems: [],
+    ehshoprefreshcooldown: '', ehshoprefreshcost: 0,
+    shwdnrecs: [], showdnsrt: false, showdneut: false, showdnsrc: 0, smptr: 0,
+  })
+  function replaceIAP(obj) {
+    if (!obj || typeof obj !== 'object') return
+    if (Array.isArray(obj)) { for (const i of obj) replaceIAP(i) }
+    else { for (const k of Object.keys(obj)) { if (k === 'csrc' && obj[k] === 'IAPSpecial') obj[k] = 'Prize'; else if (obj[k] && typeof obj[k] === 'object') replaceIAP(obj[k]) } }
+  }
+  replaceIAP(data)
+  for (const f of [
+    'lecb','smpsoc','gppl','splr','eslr','cubl','acmk','acid','acna','acec',
+    'acel','acla','acmt','acsl','acli','acpr','acpl','aclp','acrp','acrs',
+    'aprs','ecrs','eprs','fcrw','cspe','cjrp','scrp','nccc','cjls','bich','csps',
+    'nnjc','nnri','nnkc','vifc','vrtj','ncbp','cht5','chs7','cpnd','cpns',
+    'clby','clne','clce','clbi','clbp','clsp','cl3e','fktc','cl3i','clpl',
+    'crpe','schi','dlcc','dlci','dlca','dlft','dlsm','dlea','dlel','dldm',
+    'vips','vip5','vies','vie5','vipt','vipn','vipe',
+  ]) delete data[f]
+  if (data.icnd) {
+    for (const t of ['EliteTuners_Credits','Halloween_Credits','HeroCar_Credits','AmericaSeries_Credits','EuropeSeries_Credits']) {
+      if (t in data.icnd) data.icnd[t] = 0
+    }
+  }
+  for (const [earned, spent] of [['caea','casp'],['goea','gosp'],['gbke','gbks'],['gske','gsks'],['ggke','ggks']]) {
+    if (typeof data[earned] === 'number' && typeof data[spent] === 'number') {
+      const bal = data[earned] - data[spent]
+      if (bal > 0) data[earned] = data[spent] + Math.floor(bal * 0.7)
+    }
+  }
+  if (data.afme && typeof data.afme === 'object') {
+    data.afms = { Green: 0, Blue: 0, Red: 0, Yellow: 0 }
+    for (const c of Object.keys(data.afme)) {
+      if (typeof data.afme[c] === 'number') data.afme[c] = Math.floor(data.afme[c] * 0.5)
+    }
+  }
+}
+
 // ─── UI HTML ─────────────────────────────────────────────────────────────────
 
 const UI_HTML = `<!DOCTYPE html>
@@ -1045,6 +1133,31 @@ select{cursor:pointer}
 .debug-title{font-size:14px;font-weight:600;flex:1}
 .debug-log{flex:1;overflow-y:auto;padding:12px;font-family:'Consolas','Fira Code',monospace;font-size:11px;color:#9ca3af;line-height:1.65}
 .log-line{border-bottom:1px solid rgba(255,255,255,.04);padding:2px 0}
+.sidebar-cat-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;cursor:pointer;user-select:none;transition:color .12s}
+.sidebar-cat-hdr:hover{color:var(--text)}
+.sidebar-cat-hdr svg{transition:transform .2s;flex-shrink:0}
+.sidebar-cat.collapsed .sidebar-cat-hdr svg{transform:rotate(-90deg)}
+.sidebar-cat.collapsed .sidebar-cat-items{display:none}
+.pack-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:border-color .15s,transform .1s;position:relative}
+.pack-card:hover{border-color:var(--accent);transform:translateY(-1px)}
+.pack-card-name{font-size:13px;font-weight:600;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pack-card-meta{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.pack-card-del{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--muted);cursor:pointer;padding:3px;border-radius:4px;opacity:0;transition:opacity .15s}
+.pack-card:hover .pack-card-del{opacity:1}
+.pack-card-del:hover{color:var(--red)}
+#loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+#loading-overlay.on{display:flex}
+.big-spinner{width:40px;height:40px;border:3px solid rgba(126,101,81,.25);border-top-color:var(--accent-hi);border-radius:50%;animation:spin .8s linear infinite}
+#loading-msg{font-size:14px;color:var(--text)}
+.file-drop{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.file-drop:hover,.file-drop.over{border-color:var(--accent);background:rgba(126,101,81,.08)}
+.file-drop-label{font-size:13px;color:var(--muted)}
+.file-drop-name{font-size:12px;color:var(--accent);margin-top:6px;font-weight:500}
+.preview-box{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;line-height:1.7}
+.preview-row{display:flex;justify-content:space-between;align-items:baseline}
+.preview-key{color:var(--muted)}
+.preview-val{color:var(--text);font-weight:500}
+.curr-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 </style>
 </head>
 <body>
@@ -1063,26 +1176,39 @@ select{cursor:pointer}
 
 <div class="app-body">
   <aside>
-    <div class="sidebar-label">Games</div>
-    <div id="games-list"><div class="sidebar-item" style="font-size:12px;opacity:.5">Loading...</div></div>
+    <div id="sidebar-content"><div class="sidebar-item" style="font-size:12px;opacity:.5">Loading...</div></div>
   </aside>
   <main>
-    <div class="main-hdr">
-      <span class="main-title">Accounts</span>
-      <div class="spacer"></div>
-      <button class="btn btn-secondary btn-sm" id="sel-btn" onclick="toggleSelect()" style="display:none">Select</button>
-      <button class="btn btn-secondary btn-sm" id="unfriend-btn" onclick="openUnfriendModal()" style="display:none">Unfriend All</button>
-      <button class="btn btn-secondary btn-sm" id="scan-current-btn" onclick="scanCurrentAccount()" style="display:none">Scan Current</button>
-      <button class="btn btn-secondary btn-sm" id="multi-btn" onclick="openMultiScan()" style="display:none">Multi Scan</button>
-      <button class="btn btn-primary btn-sm" id="scan-btn" onclick="openSingleScan()" style="display:none">+ Single Scan</button>
+    <!-- Accounts panel -->
+    <div id="accounts-panel">
+      <div class="main-hdr">
+        <span class="main-title">Accounts</span>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary btn-sm" id="sel-btn" onclick="toggleSelect()" style="display:none">Select</button>
+        <button class="btn btn-secondary btn-sm" id="unfriend-btn" onclick="openUnfriendModal()" style="display:none">Unfriend All</button>
+        <button class="btn btn-secondary btn-sm" id="scan-current-btn" onclick="scanCurrentAccount()" style="display:none">Scan Current</button>
+        <button class="btn btn-secondary btn-sm" id="multi-btn" onclick="openMultiScan()" style="display:none">Multi Scan</button>
+        <button class="btn btn-primary btn-sm" id="scan-btn" onclick="openSingleScan()" style="display:none">+ Single Scan</button>
+      </div>
+      <div class="scan-banner" id="scan-banner">Webapp is using the scanner — please wait...</div>
+      <div class="sel-bar hide" id="sel-bar">
+        <span style="flex:1;font-size:13px;color:var(--accent)" id="sel-count">0 selected</span>
+        <button class="btn btn-secondary btn-sm" onclick="clearSel()">Cancel</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteSel()">Delete</button>
+      </div>
+      <div class="grid" id="grid"></div>
     </div>
-    <div class="scan-banner" id="scan-banner">Webapp is using the scanner — please wait...</div>
-    <div class="sel-bar hide" id="sel-bar">
-      <span style="flex:1;font-size:13px;color:var(--accent)" id="sel-count">0 selected</span>
-      <button class="btn btn-secondary btn-sm" onclick="clearSel()">Cancel</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteSel()">Delete</button>
+    <!-- CSR2 Services panel -->
+    <div id="csr2-panel" style="display:none">
+      <div class="main-hdr">
+        <span class="main-title">CSR2 Services</span>
+        <div class="spacer"></div>
+        <button class="btn btn-secondary btn-sm" onclick="openUnban()">Unban</button>
+        <button class="btn btn-secondary btn-sm" onclick="openEditNsb(null)">Edit NSB</button>
+        <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
+      </div>
+      <div class="grid" id="packs-grid"></div>
     </div>
-    <div class="grid" id="grid"></div>
   </main>
 </div>
 
@@ -1219,6 +1345,126 @@ select{cursor:pointer}
   </div>
 </div>
 
+<!-- Loading Overlay -->
+<div id="loading-overlay">
+  <div class="big-spinner"></div>
+  <div id="loading-msg">Processing...</div>
+</div>
+
+<!-- Create Pack Modal -->
+<div class="modal-bg" id="create-pack-modal">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title" id="cp-title-label">Create Pack</div>
+    <div class="modal-sub">Define currencies and car options for this pack</div>
+    <div class="field">
+      <label>Pack Name</label>
+      <input type="text" id="cp-name" placeholder="e.g. Starter Pack">
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:500">Currencies</div>
+    <div class="curr-grid">
+      <div class="field"><label>Cash</label><input type="number" id="cp-cash" placeholder="0" min="0"></div>
+      <div class="field"><label>Gold</label><input type="number" id="cp-gold" placeholder="0" min="0"></div>
+      <div class="field"><label>Bronze Keys</label><input type="number" id="cp-bkeys" placeholder="0" min="0"></div>
+      <div class="field"><label>Silver Keys</label><input type="number" id="cp-skeys" placeholder="0" min="0"></div>
+      <div class="field"><label>Gold Keys</label><input type="number" id="cp-gkeys" placeholder="0" min="0"></div>
+      <div class="field"><label>Fuel Pips</label><input type="number" id="cp-fuel" placeholder="0" min="0"></div>
+    </div>
+    <div class="field"><label>Elite Tokens</label><input type="number" id="cp-elite" placeholder="0" min="0"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <label class="toggle"><input type="checkbox" id="cp-cars-toggle" onchange="toggleCarsSection()"><span class="tslider"></span></label>
+      <span style="font-size:13px">Add Cars</span>
+    </div>
+    <div id="cp-cars-section" style="display:none;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div class="curr-grid" style="margin-bottom:10px">
+        <div class="field">
+          <label>Car Count</label>
+          <input type="number" id="cp-car-count" placeholder="e.g. 60" min="1">
+        </div>
+        <div class="field">
+          <label>Condition</label>
+          <select id="cp-car-condition">
+            <option value="stock">Stock</option>
+            <option value="maxed">Maxed</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Car Selection</label>
+        <select id="cp-car-mode">
+          <option value="random">Random (auto-picked, no duplicates)</option>
+          <option value="customizable">Customizable (buyer picks)</option>
+          <option value="all">All available cars (everything not owned)</option>
+        </select>
+      </div>
+    </div>
+    <div id="cp-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('create-pack-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePack()" id="cp-save-btn">Save Pack</button>
+    </div>
+  </div>
+</div>
+
+<!-- Apply NSB Modal (used for both pack click and Edit NSB button) -->
+<div class="modal-bg" id="apply-nsb-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">Apply Pack to NSB</div>
+    <div class="modal-sub" id="ansb-pack-label">Select a pack and upload the NSB file</div>
+    <div class="field" id="ansb-pack-select-row" style="display:none">
+      <label>Pack</label>
+      <select id="ansb-pack-select"></select>
+    </div>
+    <div class="field">
+      <label>NSB File</label>
+      <div class="file-drop" id="ansb-drop" onclick="document.getElementById('ansb-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
+        <input type="file" id="ansb-file" style="display:none" onchange="handleNsbFile(event,'ansb')">
+        <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
+        <div class="file-drop-name" id="ansb-file-name" style="display:none"></div>
+      </div>
+    </div>
+    <div id="ansb-preview" style="display:none">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:500">Pack Preview</div>
+      <div class="preview-box" id="ansb-preview-box"></div>
+    </div>
+    <div id="ansb-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('apply-nsb-modal')">Cancel</button>
+      <button class="btn btn-primary" id="ansb-apply-btn" onclick="applyNsb()" disabled>Apply & Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Unban Modal -->
+<div class="modal-bg" id="unban-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">Unban NSB</div>
+    <div class="modal-sub">Upload the NSB file to apply unban fixes</div>
+    <div class="field">
+      <label>NSB File</label>
+      <div class="file-drop" id="unban-drop" onclick="document.getElementById('unban-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'unban')">
+        <input type="file" id="unban-file" style="display:none" onchange="handleNsbFile(event,'unban')">
+        <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
+        <div class="file-drop-name" id="unban-file-name" style="display:none"></div>
+      </div>
+    </div>
+    <div style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:4px">
+      <div style="color:var(--text);font-weight:500;margin-bottom:6px">What this does:</div>
+      <div>• Resets ban detection fields</div>
+      <div>• Fixes auto-start races</div>
+      <div>• Clears IAPSpecial purchase markers</div>
+      <div>• Removes restricted account sections</div>
+      <div>• Resets event ticket counts to 0</div>
+      <div>• Reduces resource balances by 30%</div>
+      <div>• Halves aftermarket parts, zeros spent</div>
+    </div>
+    <div id="unban-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('unban-modal')">Cancel</button>
+      <button class="btn btn-primary" id="unban-apply-btn" onclick="applyUnban()" disabled>Apply & Download</button>
+    </div>
+  </div>
+</div>
+
 <!-- Debug Panel -->
 <div class="debug-panel" id="debug-panel">
   <div class="debug-hdr">
@@ -1232,7 +1478,9 @@ select{cursor:pointer}
 </div>
 
 <script>
-var _url = '', _games = [], _accounts = [], _activeGame = null
+var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection = null
+var _packs = [], _nsbData = { ansb: null, unban: null }
+var _editingPackId = null
 var _selMode = false, _selected = new Set()
 var _debugOpen = false, _pollInterval = null
 var _scanAbort = false, _multiAbort = false, _multiRunId = 0
@@ -1245,7 +1493,8 @@ async function init() {
   _url = (cfg.webappUrl || '').replace(/\\/$/, '')
   await fetchGames()
   await reloadAccounts()
-  renderAccounts()
+  await reloadPacks()
+  renderView()
   startPoll()
 }
 
@@ -1268,42 +1517,89 @@ async function fetchGames() {
   } catch(e) { renderGames([], 'fetch-error:' + e.message) }
 }
 
+var SIDEBAR_CATS = [
+  { key: 'accounts', label: 'Accounts' },
+  { key: 'gacha',    label: 'Gacha Accounts' },
+  { key: 'services', label: 'Services' },
+  { key: 'tools',    label: 'Tools' },
+]
+
 function renderGames(list, err) {
-  var el = document.getElementById('games-list')
-  var hasScan = list.length > 0
-  document.getElementById('scan-btn').style.display = hasScan ? '' : 'none'
-  document.getElementById('scan-current-btn').style.display = hasScan ? '' : 'none'
-  document.getElementById('multi-btn').style.display = hasScan ? '' : 'none'
-  document.getElementById('unfriend-btn').style.display = hasScan ? '' : 'none'
+  var el = document.getElementById('sidebar-content')
   if (!list.length) {
-    var msg = err === 'no-url'
-      ? 'No webapp URL — open Settings'
-      : err
-      ? 'Failed to load games (' + err + ')'
-      : 'No scanner games found'
+    var msg = err === 'no-url' ? 'No webapp URL — open Settings' : err ? 'Failed to load (' + err + ')' : 'No scanner games found'
     el.innerHTML = '<div class="sidebar-item" style="font-size:11px;opacity:.5">' + msg + '</div>'
-    _activeGame = null
+    _activeGame = null; _activeSection = null
     return
   }
-  var html = ''
+  var catGames = {}
   for (var i = 0; i < list.length; i++) {
-    html += '<div class="sidebar-item' + (i === 0 ? ' active' : '') + '" data-gi="' + i + '" onclick="pickGame(' + i + ')">' +
-      '<span class="s-dot' + (i === 0 ? ' on' : '') + '"></span>' +
-      escH(list[i].name || list[i].id) + '</div>'
+    var g = list[i]
+    var secs = g.script_sections || []
+    for (var j = 0; j < secs.length; j++) {
+      if (!catGames[secs[j]]) catGames[secs[j]] = []
+      catGames[secs[j]].push(g)
+    }
+  }
+  var html = ''
+  for (var c = 0; c < SIDEBAR_CATS.length; c++) {
+    var cat = SIDEBAR_CATS[c]
+    var games = catGames[cat.key] || []
+    if (!games.length) continue
+    html += '<div class="sidebar-cat" id="scat-' + cat.key + '">'
+    html += '<div class="sidebar-cat-hdr" onclick="toggleCat(\'' + cat.key + '\')">'
+    html += '<span>' + cat.label + '</span>'
+    html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>'
+    html += '</div><div class="sidebar-cat-items">'
+    for (var gi = 0; gi < games.length; gi++) {
+      var g = games[gi]
+      var isActive = _activeGame && _activeGame.id === g.id && _activeSection === cat.key
+      html += '<div class="sidebar-item' + (isActive ? ' active' : '') + '" data-gid="' + escH(g.id) + '" data-sec="' + cat.key + '" onclick="pickGame(this.dataset.gid,this.dataset.sec)">'
+      html += '<span class="s-dot' + (isActive ? ' on' : '') + '"></span>' + escH(g.name || g.id) + '</div>'
+    }
+    html += '</div></div>'
   }
   el.innerHTML = html
-  if (!_activeGame) pickGame(0)
+  if (!_activeGame) {
+    var first = el.querySelector('.sidebar-item')
+    if (first) pickGame(first.dataset.gid, first.dataset.sec)
+  }
 }
 
-function pickGame(idx) {
-  _activeGame = _games[idx] || null
-  var items = document.querySelectorAll('#games-list .sidebar-item')
-  items.forEach(function(el, i) {
-    el.classList.toggle('active', i === idx)
+function toggleCat(key) {
+  var el = document.getElementById('scat-' + key)
+  if (el) el.classList.toggle('collapsed')
+}
+
+function pickGame(gid, sec) {
+  _activeGame = null
+  for (var i = 0; i < _games.length; i++) { if (_games[i].id === gid) { _activeGame = _games[i]; break } }
+  _activeSection = sec || null
+  document.querySelectorAll('#sidebar-content .sidebar-item').forEach(function(el) {
+    var active = el.dataset.gid === gid && el.dataset.sec === sec
+    el.classList.toggle('active', active)
     var dot = el.querySelector('.s-dot')
-    if (dot) dot.classList.toggle('on', i === idx)
+    if (dot) dot.classList.toggle('on', active)
   })
-  renderAccounts()
+  renderView()
+}
+
+function renderView() {
+  var isCSR2 = _activeGame && _activeGame.scanner_type === 'csr2services'
+  document.getElementById('accounts-panel').style.display = isCSR2 ? 'none' : ''
+  document.getElementById('csr2-panel').style.display = isCSR2 ? '' : 'none'
+  if (isCSR2) {
+    renderPacks()
+  } else {
+    renderAccounts()
+    var list = _activeGame ? _accounts.filter(function(a){ return a.gameId === _activeGame.id }) : _accounts
+    var hasScan = !!_activeGame
+    document.getElementById('scan-btn').style.display = hasScan ? '' : 'none'
+    document.getElementById('scan-current-btn').style.display = hasScan ? '' : 'none'
+    document.getElementById('multi-btn').style.display = hasScan ? '' : 'none'
+    document.getElementById('unfriend-btn').style.display = hasScan ? '' : 'none'
+    document.getElementById('sel-btn').style.display = list.length ? '' : 'none'
+  }
 }
 
 // ─── Accounts ─────────────────────────────────────────────────────────────────
@@ -1996,6 +2292,245 @@ function sleep(ms) { return new Promise(function(r){ setTimeout(r, ms) }) }
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
+// ─── CSR2 Packs ───────────────────────────────────────────────────────────────
+
+async function reloadPacks() {
+  _packs = await apiFetch('/csr2/packs', [])
+}
+
+function renderPacks() {
+  var grid = document.getElementById('packs-grid')
+  if (!_packs.length) {
+    grid.innerHTML = '<div class="empty"><h3>No packs yet</h3><p>Click <b>+ Create Pack</b> to define a service pack.</p></div>'
+    return
+  }
+  var html = ''
+  for (var i = 0; i < _packs.length; i++) {
+    var p = _packs[i]
+    var meta = buildPackMeta(p)
+    html += '<div class="pack-card" onclick="openEditNsb(\'' + p.id + '\')">'
+    html += '<button class="pack-card-del" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)" title="Delete pack">'
+    html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>'
+    html += '<div class="pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div>'
+    html += '<div class="pack-card-meta">' + meta.map(function(m){ return '<span>' + escH(m) + '</span>' }).join('') + '</div>'
+    html += '</div>'
+  }
+  grid.innerHTML = html
+}
+
+function buildPackMeta(p) {
+  var lines = []
+  var c = p.currencies || {}
+  var parts = []
+  if (c.cash)       parts.push(c.cash.toLocaleString() + ' Cash')
+  if (c.gold)       parts.push(c.gold.toLocaleString() + ' Gold')
+  if (c.bronzeKeys) parts.push(c.bronzeKeys + ' Bronze Keys')
+  if (c.silverKeys) parts.push(c.silverKeys + ' Silver Keys')
+  if (c.goldKeys)   parts.push(c.goldKeys + ' Gold Keys')
+  if (c.fuel)       parts.push(c.fuel + ' Fuel')
+  if (c.eliteTokens) parts.push(c.eliteTokens + ' Elite Tokens')
+  if (parts.length) lines.push(parts.join(' · '))
+  if (p.cars && p.cars.carMode) {
+    var carLine = p.cars.count + ' cars · ' + p.cars.carMode
+    if (p.cars.condition === 'maxed') carLine += ' · Maxed'
+    lines.push(carLine)
+  }
+  return lines.length ? lines : ['No modifiers']
+}
+
+async function deletePack(e, id) {
+  e.stopPropagation()
+  await fetch('/csr2/packs/' + id, { method: 'DELETE' }).catch(function(){})
+  await reloadPacks()
+  renderPacks()
+}
+
+// ─── Create Pack Modal ────────────────────────────────────────────────────────
+
+function toggleCarsSection() {
+  var on = document.getElementById('cp-cars-toggle').checked
+  document.getElementById('cp-cars-section').style.display = on ? '' : 'none'
+}
+
+function openCreatePack() {
+  _editingPackId = null
+  document.getElementById('cp-title-label').textContent = 'Create Pack'
+  document.getElementById('cp-name').value = ''
+  document.getElementById('cp-cash').value = ''
+  document.getElementById('cp-gold').value = ''
+  document.getElementById('cp-bkeys').value = ''
+  document.getElementById('cp-skeys').value = ''
+  document.getElementById('cp-gkeys').value = ''
+  document.getElementById('cp-fuel').value = ''
+  document.getElementById('cp-elite').value = ''
+  document.getElementById('cp-cars-toggle').checked = false
+  document.getElementById('cp-cars-section').style.display = 'none'
+  document.getElementById('cp-car-count').value = ''
+  document.getElementById('cp-car-condition').value = 'stock'
+  document.getElementById('cp-car-mode').value = 'random'
+  hideNotice('cp-notice')
+  showModal('create-pack-modal')
+}
+
+async function savePack() {
+  var name = document.getElementById('cp-name').value.trim()
+  if (!name) { showNotice('cp-notice', 'error', 'Enter a pack name.'); return }
+  var currencies = {}
+  var cash = parseInt(document.getElementById('cp-cash').value) || 0
+  var gold = parseInt(document.getElementById('cp-gold').value) || 0
+  var bkeys = parseInt(document.getElementById('cp-bkeys').value) || 0
+  var skeys = parseInt(document.getElementById('cp-skeys').value) || 0
+  var gkeys = parseInt(document.getElementById('cp-gkeys').value) || 0
+  var fuel = parseInt(document.getElementById('cp-fuel').value) || 0
+  var elite = parseInt(document.getElementById('cp-elite').value) || 0
+  if (cash)   currencies.cash = cash
+  if (gold)   currencies.gold = gold
+  if (bkeys)  currencies.bronzeKeys = bkeys
+  if (skeys)  currencies.silverKeys = skeys
+  if (gkeys)  currencies.goldKeys = gkeys
+  if (fuel)   currencies.fuel = fuel
+  if (elite)  currencies.eliteTokens = elite
+  var carsOn = document.getElementById('cp-cars-toggle').checked
+  var cars = carsOn ? {
+    count: parseInt(document.getElementById('cp-car-count').value) || 0,
+    condition: document.getElementById('cp-car-condition').value,
+    carMode: document.getElementById('cp-car-mode').value,
+  } : null
+  var pack = { name, currencies, cars }
+  var url = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
+  var method = _editingPackId ? 'PATCH' : 'POST'
+  var res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pack) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('cp-notice', 'error', res.error); return }
+  hideModal('create-pack-modal')
+  await reloadPacks()
+  renderPacks()
+}
+
+// ─── Apply NSB Modal ──────────────────────────────────────────────────────────
+
+function openEditNsb(packId) {
+  _nsbData.ansb = null
+  document.getElementById('ansb-file-name').style.display = 'none'
+  document.getElementById('ansb-preview').style.display = 'none'
+  document.getElementById('ansb-apply-btn').disabled = true
+  document.getElementById('ansb-drop').classList.remove('over')
+  hideNotice('ansb-notice')
+  var noPresel = !packId
+  document.getElementById('ansb-pack-select-row').style.display = noPresel ? '' : 'none'
+  if (noPresel) {
+    var sel = document.getElementById('ansb-pack-select')
+    sel.innerHTML = _packs.map(function(p){ return '<option value="' + p.id + '">' + escH(p.name) + '</option>' }).join('')
+    document.getElementById('ansb-pack-label').textContent = 'Select a pack and upload the NSB file'
+  } else {
+    var pack = _packs.find(function(p){ return p.id === packId })
+    document.getElementById('ansb-pack-select').value = packId
+    document.getElementById('ansb-pack-label').textContent = pack ? 'Pack: ' + pack.name : 'Apply pack'
+    // Store selected pack id in select for applyNsb to read
+    document.getElementById('ansb-pack-select').dataset.forcedId = packId
+  }
+  showModal('apply-nsb-modal')
+}
+
+function handleNsbDrop(e, which) {
+  e.preventDefault()
+  document.getElementById(which + '-drop').classList.remove('over')
+  var file = e.dataTransfer.files[0]
+  if (file) readNsbFile(file, which)
+}
+
+function handleNsbFile(e, which) {
+  var file = e.target.files[0]
+  if (file) readNsbFile(file, which)
+}
+
+function readNsbFile(file, which) {
+  var reader = new FileReader()
+  reader.onload = function(e) {
+    var base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(e.target.result)))
+    _nsbData[which] = { base64: base64, name: file.name }
+    document.getElementById(which + '-file-name').textContent = file.name
+    document.getElementById(which + '-file-name').style.display = ''
+    if (which === 'ansb') {
+      showAnsbPreview()
+      document.getElementById('ansb-apply-btn').disabled = false
+    } else {
+      document.getElementById('unban-apply-btn').disabled = false
+    }
+  }
+  reader.readAsArrayBuffer(file)
+}
+
+function showAnsbPreview() {
+  var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
+  var pack = _packs.find(function(p){ return p.id === packId })
+  if (!pack) return
+  var meta = buildPackMeta(pack)
+  var box = document.getElementById('ansb-preview-box')
+  box.innerHTML = meta.map(function(m){ return '<div>' + escH(m) + '</div>' }).join('')
+  document.getElementById('ansb-preview').style.display = ''
+}
+
+async function applyNsb() {
+  if (!_nsbData.ansb) return
+  var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
+  showLoading('Applying pack...')
+  var res = await fetch('/csr2/apply-nsb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nsbBase64: _nsbData.ansb.base64, packId: packId })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  hideLoading()
+  if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
+  downloadBase64(res.resultBase64, _nsbData.ansb.name || 'nsb.txt')
+  hideModal('apply-nsb-modal')
+}
+
+// ─── Unban Modal ──────────────────────────────────────────────────────────────
+
+function openUnban() {
+  _nsbData.unban = null
+  document.getElementById('unban-file-name').style.display = 'none'
+  document.getElementById('unban-apply-btn').disabled = true
+  document.getElementById('unban-drop').classList.remove('over')
+  hideNotice('unban-notice')
+  showModal('unban-modal')
+}
+
+async function applyUnban() {
+  if (!_nsbData.unban) return
+  showLoading('Applying unban...')
+  var res = await fetch('/csr2/unban', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nsbBase64: _nsbData.unban.base64 })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  hideLoading()
+  if (res.error) { showNotice('unban-notice', 'error', res.error); return }
+  downloadBase64(res.resultBase64, _nsbData.unban.name || 'nsb.txt')
+  hideModal('unban-modal')
+}
+
+// ─── Loading + Download utils ─────────────────────────────────────────────────
+
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg || 'Processing...'
+  document.getElementById('loading-overlay').classList.add('on')
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').classList.remove('on')
+}
+
+function downloadBase64(b64, filename) {
+  var bytes = Uint8Array.from(atob(b64), function(c){ return c.charCodeAt(0) })
+  var blob = new Blob([bytes])
+  var a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 init()
@@ -2257,6 +2792,75 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req)
     saveConfig(body)
     return json(res, 200, { ok: true })
+  }
+
+  // CSR2 packs CRUD
+  if (req.method === 'GET' && pathname === '/csr2/packs') {
+    return json(res, 200, loadPacks())
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/packs') {
+    const body = await readBody(req)
+    const packs = loadPacks()
+    body.id = uid()
+    body.createdAt = new Date().toISOString()
+    packs.push(body)
+    savePacks(packs)
+    return json(res, 200, body)
+  }
+
+  const packM = pathname.match(/^\/csr2\/packs\/(.+)$/)
+  if (packM) {
+    const id = packM[1]
+    if (req.method === 'PATCH') {
+      const body = await readBody(req)
+      const packs = loadPacks()
+      const idx = packs.findIndex(p => p.id === id)
+      if (idx === -1) return json(res, 404, { error: 'Pack not found' })
+      packs[idx] = { ...packs[idx], ...body }
+      savePacks(packs)
+      return json(res, 200, packs[idx])
+    }
+    if (req.method === 'DELETE') {
+      const packs = loadPacks()
+      savePacks(packs.filter(p => p.id !== id))
+      return json(res, 200, { ok: true })
+    }
+  }
+
+  // CSR2 apply-nsb
+  if (req.method === 'POST' && pathname === '/csr2/apply-nsb') {
+    const body = await readBody(req)
+    if (!body.nsbBase64 || !body.packId) return json(res, 400, { error: 'Missing nsbBase64 or packId' })
+    const packs = loadPacks()
+    const pack = packs.find(p => p.id === body.packId)
+    if (!pack) return json(res, 404, { error: 'Pack not found' })
+    try {
+      const buf = Buffer.from(body.nsbBase64, 'base64')
+      const data = csr2ReadSave(buf)
+      csr2ApplyPack(data, pack)
+      const out = csr2WriteSave(data)
+      return json(res, 200, { resultBase64: out.toString('base64') })
+    } catch (e) {
+      log('[csr2/apply-nsb] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // CSR2 unban
+  if (req.method === 'POST' && pathname === '/csr2/unban') {
+    const body = await readBody(req)
+    if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
+    try {
+      const buf = Buffer.from(body.nsbBase64, 'base64')
+      const data = csr2ReadSave(buf)
+      csr2Unban(data)
+      const out = csr2WriteSave(data)
+      return json(res, 200, { resultBase64: out.toString('base64') })
+    } catch (e) {
+      log('[csr2/unban] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
   }
 
   json(res, 404, { error: 'Not found' })
