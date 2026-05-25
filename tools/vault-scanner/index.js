@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.23'
+const VERSION = '0.6.24'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1319,17 +1319,17 @@ select{cursor:pointer}
 .comp-arrow-sym{color:var(--border);margin:0 5px}
 .comp-after{color:#4caf50;font-weight:600}
 .car-search-wrap{position:relative;margin-bottom:2px}
-.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 30px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
+.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 34px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
 .car-search-input:focus{border-color:var(--accent)}
 .car-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
-.car-result-list{border:1px solid var(--border);border-radius:8px;background:var(--surf2);overflow:hidden;margin-top:4px}
+.car-result-list{border:1px solid var(--border);border-radius:8px;background:var(--surf2);overflow-y:auto;max-height:260px;margin-top:4px}
 .car-result-item{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px}
 .car-result-item:not(:last-child){border-bottom:1px solid rgba(255,255,255,.05)}
 .car-tier-badge{font-size:10px;background:var(--surf);border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--muted);flex-shrink:0}
 .car-result-add{background:var(--accent);border:none;color:#fff;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px;margin-left:auto;flex-shrink:0}
 .car-result-add:hover{opacity:.8}
 .car-result-added{font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0}
-.selected-car-item{display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;font-size:12px}
+.selected-car-item{display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;font-size:12px;overflow:hidden}
 .selected-car-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;padding:0;line-height:1;margin-left:auto;flex-shrink:0}
 .selected-car-remove:hover{color:var(--text)}
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -1642,7 +1642,7 @@ select{cursor:pointer}
 </div>
 
 <!-- Apply Result Modal -->
-<div class="modal-bg" id="apply-result-modal">
+<div class="modal-bg" id="apply-result-modal" style="z-index:150">
   <div class="modal" style="max-width:360px;text-align:center">
     <div class="result-icon" id="apply-result-icon">✅</div>
     <div class="result-title" id="apply-result-title">Pack Applied!</div>
@@ -3077,6 +3077,7 @@ function setBrandFilter(val) {
 
 function toggleAllowDuplicates() {
   _allowDuplicates = document.getElementById('ansb-allow-dup').checked
+  renderSelectedCars()
   searchCars(document.getElementById('ansb-car-search').value)
 }
 
@@ -3116,6 +3117,8 @@ function readNsbFile(file, which) {
     nameEl.innerHTML = '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(file.name) + '</span><button onclick="event.stopPropagation();clearNsbFile(\\'' + which + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Clear">×</button>'
     nameEl.style.display = 'flex'
     nameEl.style.alignItems = 'center'
+    var labelEl = document.getElementById(which + '-drop').querySelector('.file-drop-label')
+    if (labelEl) labelEl.style.display = 'none'
     if (which === 'ansb') {
       loadNsbComparison()
       document.getElementById('ansb-apply-btn').disabled = false
@@ -3137,6 +3140,8 @@ function clearNsbFile(which) {
   var nameEl = document.getElementById(which + '-file-name')
   nameEl.innerHTML = ''
   nameEl.style.display = 'none'
+  var labelEl = document.getElementById(which + '-drop').querySelector('.file-drop-label')
+  if (labelEl) labelEl.style.display = ''
   var fileInput = document.getElementById(which + '-file')
   if (fileInput) fileInput.value = ''
   if (which === 'ansb') {
@@ -3240,7 +3245,7 @@ function searchCars(query) {
 
   var q = query ? query.toLowerCase() : ''
   var matches = []
-  for (var i = 0; i < _csr2CarsDb.length && matches.length < 16; i++) {
+  for (var i = 0; i < _csr2CarsDb.length; i++) {
     var c = _csr2CarsDb[i]
     if (!_allowDuplicates && _ownedCrdbs.has(c.crdb)) continue
     if (_carFilter.tier && c.tier !== _carFilter.tier) continue
@@ -3425,9 +3430,9 @@ function renderSelectedCars() {
     html += '<div class="selected-car-info">'
     html += '<div class="scar-name">' + escH(car.name) + '</div>'
     if (car.colorName) html += '<div class="scar-color">' + escH(car.colorName) + '</div>'
-    if (isOwned) html += '<div style="font-size:10px;color:var(--red)">Won\\'t be added (already owned)</div>'
     html += '</div>'
     html += '<button class="selected-car-remove" data-crdb="' + crdbEsc + '" data-col="' + colEsc + '" onclick="removeCarFromSelection(this.dataset.crdb,this.dataset.col)" title="Remove">&times;</button>'
+    if (isOwned) html += '<div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none"><span style="font-size:11px;color:#fff;font-weight:600">Duplicate car</span><span style="font-size:10px;color:rgba(255,255,255,.7)">Enable Allow Duplicates</span></div>'
     html += '</div>'
   }
   list.innerHTML = html
@@ -3462,6 +3467,8 @@ async function applyNsb() {
   hideLoading()
   if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
   var fname = _nsbData.ansb.name || 'PlayerProfile'
+  var ansbInput = document.getElementById('ansb-file')
+  if (ansbInput) ansbInput.value = ''
   if (_csr2OutputFolder) {
     await saveNsbToFolder(res.resultBase64, fname)
     showApplyResult(true, 'Pack Applied!', res.note || '', true)
@@ -3494,6 +3501,8 @@ async function applyManualEdit() {
   hideLoading()
   if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
   var fname = _nsbData.ensb.name || 'PlayerProfile'
+  var ensbInput = document.getElementById('ensb-file')
+  if (ensbInput) ensbInput.value = ''
   if (_csr2OutputFolder) {
     await saveNsbToFolder(res.resultBase64, fname)
     showApplyResult(true, 'Edits Applied!', '', true)
