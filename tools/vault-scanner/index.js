@@ -1701,11 +1701,11 @@ select{cursor:pointer}
     <div class="modal-sub">Load a save file to edit values manually or apply unban</div>
     <div class="field">
       <label>NSB File</label>
-      <div class="file-drop" id="ensb-drop" onclick="document.getElementById('ensb-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ensb')">
+      <label class="file-drop" id="ensb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ensb')">
         <input type="file" id="ensb-file" style="display:none" onchange="handleNsbFile(event,'ensb')">
         <div class="file-drop-label">Click to select or drag &amp; drop your NSB file</div>
         <div class="file-drop-name" id="ensb-file-name" style="display:none"></div>
-      </div>
+      </label>
     </div>
     <div id="ensb-form" style="display:none">
       <div class="pack-sect-hdr" style="margin-bottom:8px">➕ Add to Account</div>
@@ -1744,11 +1744,11 @@ select{cursor:pointer}
       </div>
       <div class="field" style="margin-bottom:0">
         <label>NSB File</label>
-        <div class="file-drop" id="ansb-drop" onclick="document.getElementById('ansb-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
+        <label class="file-drop" id="ansb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
           <input type="file" id="ansb-file" style="display:none" onchange="handleNsbFile(event,'ansb')">
           <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
           <div class="file-drop-name" id="ansb-file-name" style="display:none"></div>
-        </div>
+        </label>
       </div>
       <div id="ansb-compare" style="display:none">
         <div class="section-title" style="margin-bottom:6px">Account Preview</div>
@@ -1792,11 +1792,11 @@ select{cursor:pointer}
     <div class="modal-sub">Upload the NSB file to apply unban fixes</div>
     <div class="field">
       <label>NSB File</label>
-      <div class="file-drop" id="unban-drop" onclick="document.getElementById('unban-file').click()" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'unban')">
+      <label class="file-drop" id="unban-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'unban')">
         <input type="file" id="unban-file" style="display:none" onchange="handleNsbFile(event,'unban')">
         <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
         <div class="file-drop-name" id="unban-file-name" style="display:none"></div>
-      </div>
+      </label>
     </div>
     <div style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:4px">
       <div style="color:var(--text);font-weight:500;margin-bottom:6px">What this does:</div>
@@ -3121,6 +3121,10 @@ function readNsbFile(file, which) {
       document.getElementById('unban-apply-btn').disabled = false
     }
   }
+  reader.onerror = function() {
+    var noticeId = which === 'ansb' ? 'ansb-notice' : which === 'ensb' ? 'ensb-notice' : 'unban-notice'
+    showNotice(noticeId, 'error', 'Could not read file: ' + (reader.error ? reader.error.message : 'unknown error'))
+  }
   reader.readAsArrayBuffer(file)
 }
 
@@ -3161,7 +3165,7 @@ function renderComparison(pack, cur) {
   var rows = []
   function addRow(lbl, packVal, curVal) {
     if (!packVal) return
-    rows.push({ lbl: lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal) })
+    rows.push({ lbl: lbl, delta: fmtN(packVal), curr: fmtN(curVal), after: fmtN(packVal) })
   }
   addRow('💵 Cash',        c.cash,       cur.cash       || 0)
   addRow('🪙 Gold',        c.gold,       cur.gold       || 0)
@@ -3171,7 +3175,7 @@ function renderComparison(pack, cur) {
   addRow('⛽ Fuel',        c.fuel,       cur.fuel       || 0)
   function addTkRow(color, lbl, packVal, curVal) {
     if (!packVal) return
-    rows.push({ lbl: '<span class="token-dot" style="background:' + color + '"></span>' + lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal), isHtml: true })
+    rows.push({ lbl: '<span class="token-dot" style="background:' + color + '"></span>' + lbl, delta: fmtN(packVal), curr: fmtN(curVal), after: fmtN(packVal), isHtml: true })
   }
   addTkRow('#4caf50', ' Green Tk', c.fusionGreen,  cur.fusionGreen  || 0)
   addTkRow('#2196F3', ' Blue Tk',  c.fusionBlue,   cur.fusionBlue   || 0)
@@ -3179,7 +3183,7 @@ function renderComparison(pack, cur) {
   addTkRow('#FFC107', ' Yellow Tk',c.fusionYellow, cur.fusionYellow || 0)
   if (!rows.length) { document.getElementById('ansb-compare').style.display = 'none'; return }
   var html = '<table class="compare-table"><thead><tr>'
-  html += '<th>Item</th><th style="text-align:right">Pack</th><th style="text-align:right">Current → After</th>'
+  html += '<th>Item</th><th style="text-align:right">Sets to</th><th style="text-align:right">Current → After</th>'
   html += '</tr></thead><tbody>'
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i]
