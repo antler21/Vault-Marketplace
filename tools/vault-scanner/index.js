@@ -1031,23 +1031,22 @@ function csr2ReadSaveStats(buf) {
   }
 }
 
-async function csr2ApplyPack(data, pack, selectedCars) {
+async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates) {
   const c = pack.currencies || {}
 
-  // Apply currencies — cash/gold reset spent to 0 and clamp to INT32_MAX
-  if ('cash'       in c) { data.caea = Math.min(c.cash, INT32_MAX);       data.casp = 0 }
-  if ('gold'       in c) { data.goea = Math.min(c.gold, INT32_MAX);       data.gosp = 0 }
-  if ('bronzeKeys' in c) { data.gbke = c.bronzeKeys; data.gbks = 0 }
-  if ('silverKeys' in c) { data.gske = c.silverKeys; data.gsks = 0 }
-  if ('goldKeys'   in c) { data.ggke = c.goldKeys;   data.ggks = 0 }
-  if ('fuel'       in c) data.fupi = c.fuel
+  // Apply currencies — ADD to existing balance, clamp to INT32_MAX
+  if ('cash'       in c) data.caea = Math.min((data.caea || 0) + c.cash,       INT32_MAX)
+  if ('gold'       in c) data.goea = Math.min((data.goea || 0) + c.gold,       INT32_MAX)
+  if ('bronzeKeys' in c) data.gbke = Math.min((data.gbke || 0) + c.bronzeKeys, INT32_MAX)
+  if ('silverKeys' in c) data.gske = Math.min((data.gske || 0) + c.silverKeys, INT32_MAX)
+  if ('goldKeys'   in c) data.ggke = Math.min((data.ggke || 0) + c.goldKeys,   INT32_MAX)
+  if ('fuel'       in c) data.fupi = Math.min((data.fupi || 0) + c.fuel,       INT32_MAX)
   if (c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow) {
     if (!data.afme) data.afme = {}
-    if (!data.afms) data.afms = {}
-    if (c.fusionGreen)  { data.afme.Green  = c.fusionGreen;  data.afms.Green  = 0 }
-    if (c.fusionBlue)   { data.afme.Blue   = c.fusionBlue;   data.afms.Blue   = 0 }
-    if (c.fusionRed)    { data.afme.Red    = c.fusionRed;    data.afms.Red    = 0 }
-    if (c.fusionYellow) { data.afme.Yellow = c.fusionYellow; data.afms.Yellow = 0 }
+    if (c.fusionGreen)  data.afme.Green  = Math.min((data.afme.Green  || 0) + c.fusionGreen,  INT32_MAX)
+    if (c.fusionBlue)   data.afme.Blue   = Math.min((data.afme.Blue   || 0) + c.fusionBlue,   INT32_MAX)
+    if (c.fusionRed)    data.afme.Red    = Math.min((data.afme.Red    || 0) + c.fusionRed,    INT32_MAX)
+    if (c.fusionYellow) data.afme.Yellow = Math.min((data.afme.Yellow || 0) + c.fusionYellow, INT32_MAX)
   }
 
   if (pack.version) { data.prvr = pack.version; data.adpvr = pack.version }
@@ -1062,7 +1061,9 @@ async function csr2ApplyPack(data, pack, selectedCars) {
 
     const ownedCrdbs = new Set(data.caow.map(c => c.crdb).filter(Boolean))
     const maxed = carConfig.condition === 'maxed'
-    const toAdd = selectedCars.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).slice(0, carConfig.count)
+    const toAdd = allowDuplicates
+      ? selectedCars.filter(car => car.crdb).slice(0, carConfig.count)
+      : selectedCars.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).slice(0, carConfig.count)
 
     // Fetch car JSONs in parallel batches, then assign unids sequentially
     const BATCH = 10
@@ -1085,11 +1086,11 @@ async function csr2ApplyPack(data, pack, selectedCars) {
 
     let added = 0
     for (const r of fetched) {
-      if (r.ok && !ownedCrdbs.has(r.crdb)) {
+      if (r.ok && (allowDuplicates || !ownedCrdbs.has(r.crdb))) {
         r.carJson.unid = data.ncui
         data.ncui++
         data.caow.push(r.carJson)
-        ownedCrdbs.add(r.crdb)
+        if (!allowDuplicates) ownedCrdbs.add(r.crdb)
         added++
       }
     }
@@ -1219,7 +1220,7 @@ main{flex:1;overflow-y:auto;padding:20px}
 .modal-sub{font-size:12px;color:var(--muted);margin-bottom:18px}
 .field{margin-bottom:14px}
 label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
-input[type=text],input[type=password],textarea,select{width:100%;padding:9px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;transition:border-color .15s;font-family:inherit}
+input[type=text],input[type=password],input[type=number],textarea,select{width:100%;padding:9px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;transition:border-color .15s;font-family:inherit}
 input:focus,textarea:focus,select:focus{border-color:var(--accent)}
 textarea{resize:vertical;min-height:100px}
 select{cursor:pointer}
@@ -1350,8 +1351,8 @@ select{cursor:pointer}
 .result-desc{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;max-width:320px;margin:0 auto}
 .confirm-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:16px}
 .cars-remaining-note{margin-top:auto;padding-top:12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);line-height:1.5}
-.color-swatches-grid{display:flex;flex-wrap:wrap;gap:8px;max-height:340px;overflow-y:auto;padding-right:2px}
-.color-swatch{width:120px;background:var(--surf2);border:2px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .1s;flex-shrink:0}
+.color-swatches-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;max-height:340px;overflow-y:auto;padding-right:2px}
+.color-swatch{background:var(--surf2);border:2px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .1s}
 .color-swatch:hover{border-color:var(--accent);transform:scale(1.03)}
 .color-swatch img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:var(--surf)}
 .color-swatch-name{padding:4px 6px 6px;font-size:11px;text-align:center;color:var(--text);line-height:1.3}
@@ -1645,8 +1646,8 @@ select{cursor:pointer}
   <div class="modal" style="max-width:360px;text-align:center">
     <div class="result-icon" id="apply-result-icon">✅</div>
     <div class="result-title" id="apply-result-title">Pack Applied!</div>
-    <div class="result-desc" id="apply-result-desc">The modified save file has been downloaded.</div>
-    <div class="modal-actions" style="justify-content:center;margin-top:18px">
+    <div class="result-desc" id="apply-result-desc" style="display:none"></div>
+    <div class="modal-actions" id="apply-result-actions" style="justify-content:center;margin-top:18px">
       <button class="btn btn-primary" onclick="hideModal('apply-result-modal');hideModal('apply-nsb-modal')">Done</button>
     </div>
   </div>
@@ -1761,7 +1762,7 @@ select{cursor:pointer}
           <label class="allow-dup-row"><input type="checkbox" id="ansb-allow-dup" onchange="toggleAllowDuplicates()"> Allow Duplicates (show owned cars)</label>
           <div class="car-filter-bar" id="ansb-tier-filters"></div>
           <div class="car-filter-bar" id="ansb-star-filters"></div>
-          <div class="car-filter-bar" id="ansb-brand-filters" style="max-height:48px;overflow:hidden" id="ansb-brand-filters"></div>
+          <div id="ansb-brand-filters" style="margin-bottom:4px"></div>
           <div class="car-search-wrap" style="margin-top:4px">
             <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
             <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search by name or brand..." oninput="searchCars(this.value)">
@@ -3048,10 +3049,11 @@ function renderCarFilterBar() {
       if (_csr2CarsDb[i].brand && brands.indexOf(_csr2CarsDb[i].brand) === -1) brands.push(_csr2CarsDb[i].brand)
     }
     brands.sort()
-    brandBar.innerHTML = ['All'].concat(brands).map(function(v){
-      var active = (v === 'All' && !b) || v === b
-      return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setBrandFilter(\\'' + escH(v) + '\\')">' + escH(v === 'All' ? 'All Brands' : v) + '</span>'
+    var opts = ['All'].concat(brands).map(function(v){
+      var sel = ((v === 'All' && !b) || v === b) ? ' selected' : ''
+      return '<option value="' + escH(v) + '"' + sel + '>' + escH(v === 'All' ? 'All Brands' : v) + '</option>'
     }).join('')
+    brandBar.innerHTML = '<select onchange="setBrandFilter(this.value)" style="width:auto;padding:4px 8px;font-size:12px;border-radius:6px">' + opts + '</select>'
   }
 }
 
@@ -3110,8 +3112,10 @@ function readNsbFile(file, which) {
   reader.onload = function(e) {
     var base64 = bufToBase64(e.target.result)
     _nsbData[which] = { base64: base64, name: file.name }
-    document.getElementById(which + '-file-name').textContent = file.name
-    document.getElementById(which + '-file-name').style.display = ''
+    var nameEl = document.getElementById(which + '-file-name')
+    nameEl.innerHTML = '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(file.name) + '</span><button onclick="event.stopPropagation();clearNsbFile(\\'' + which + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Clear">×</button>'
+    nameEl.style.display = 'flex'
+    nameEl.style.alignItems = 'center'
     if (which === 'ansb') {
       loadNsbComparison()
       document.getElementById('ansb-apply-btn').disabled = false
@@ -3126,6 +3130,34 @@ function readNsbFile(file, which) {
     showNotice(noticeId, 'error', 'Could not read file: ' + (reader.error ? reader.error.message : 'unknown error'))
   }
   reader.readAsArrayBuffer(file)
+}
+
+function clearNsbFile(which) {
+  _nsbData[which] = null
+  var nameEl = document.getElementById(which + '-file-name')
+  nameEl.innerHTML = ''
+  nameEl.style.display = 'none'
+  var fileInput = document.getElementById(which + '-file')
+  if (fileInput) fileInput.value = ''
+  if (which === 'ansb') {
+    document.getElementById('ansb-apply-btn').disabled = true
+    document.getElementById('ansb-compare').style.display = 'none'
+    _ownedCrdbs = new Set()
+    setCarSectionLocked(true)
+    renderSelectedCars()
+    searchCars('')
+  } else if (which === 'ensb') {
+    document.getElementById('ensb-apply-btn').disabled = true
+    document.getElementById('ensb-unban-btn').disabled = true
+    document.getElementById('ensb-form').style.display = 'none'
+    _ensbCurrent = {}
+  } else {
+    document.getElementById('unban-apply-btn').disabled = true
+  }
+}
+
+async function openOutputFolder() {
+  await fetch('/csr2/open-folder', { method: 'POST' }).catch(function(){})
 }
 
 async function loadEnsbCurrent() {
@@ -3165,7 +3197,7 @@ function renderComparison(pack, cur) {
   var rows = []
   function addRow(lbl, packVal, curVal) {
     if (!packVal) return
-    rows.push({ lbl: lbl, delta: fmtN(packVal), curr: fmtN(curVal), after: fmtN(packVal) })
+    rows.push({ lbl: lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal) })
   }
   addRow('💵 Cash',        c.cash,       cur.cash       || 0)
   addRow('🪙 Gold',        c.gold,       cur.gold       || 0)
@@ -3175,7 +3207,7 @@ function renderComparison(pack, cur) {
   addRow('⛽ Fuel',        c.fuel,       cur.fuel       || 0)
   function addTkRow(color, lbl, packVal, curVal) {
     if (!packVal) return
-    rows.push({ lbl: '<span class="token-dot" style="background:' + color + '"></span>' + lbl, delta: fmtN(packVal), curr: fmtN(curVal), after: fmtN(packVal), isHtml: true })
+    rows.push({ lbl: '<span class="token-dot" style="background:' + color + '"></span>' + lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal), isHtml: true })
   }
   addTkRow('#4caf50', ' Green Tk', c.fusionGreen,  cur.fusionGreen  || 0)
   addTkRow('#2196F3', ' Blue Tk',  c.fusionBlue,   cur.fusionBlue   || 0)
@@ -3183,7 +3215,7 @@ function renderComparison(pack, cur) {
   addTkRow('#FFC107', ' Yellow Tk',c.fusionYellow, cur.fusionYellow || 0)
   if (!rows.length) { document.getElementById('ansb-compare').style.display = 'none'; return }
   var html = '<table class="compare-table"><thead><tr>'
-  html += '<th>Item</th><th style="text-align:right">Sets to</th><th style="text-align:right">Current → After</th>'
+  html += '<th>Item</th><th style="text-align:right">+Amount</th><th style="text-align:right">Current → After</th>'
   html += '</tr></thead><tbody>'
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i]
@@ -3223,19 +3255,25 @@ function searchCars(query) {
     return
   }
 
+  var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
+  var curPack = _packs.find(function(p){ return p.id === packId })
+  var maxCars = curPack && curPack.cars && curPack.cars.count ? curPack.cars.count : 0
+  var atCap = maxCars > 0 && _selectedCars.length >= maxCars
   var selectedCrdbs = new Set(_selectedCars.map(function(c){ return c.crdb }))
   var starIcon = { Gold: '⭐', Purple: '💜', Legends: '🌟' }
   var html = '<div class="car-result-list">'
   for (var j = 0; j < matches.length; j++) {
     var car = matches[j].car, idx = matches[j].idx
-    var added = selectedCrdbs.has(car.crdb)
+    var added = !_allowDuplicates && selectedCrdbs.has(car.crdb)
     var si = starIcon[car.starType] || ''
     html += '<div class="car-result-item">'
     html += '<span class="car-tier-badge">T' + car.tier + '</span>'
     if (si) html += '<span style="font-size:11px">' + si + '</span>'
     html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(car.name) + '</span>'
     if (car.colors && car.colors.length > 1) html += '<span style="font-size:10px;color:var(--muted);flex-shrink:0">' + car.colors.length + ' clrs</span>'
-    if (added) {
+    if (atCap) {
+      html += '<span class="car-result-added" style="color:var(--muted)">Full</span>'
+    } else if (added) {
       html += '<span class="car-result-added">Added</span>'
     } else {
       html += '<button class="car-result-add" onclick="addCarToSelection(' + idx + ')">+ Add</button>'
@@ -3249,15 +3287,21 @@ function searchCars(query) {
 function addCarToSelection(carIdx) {
   var car = _csr2CarsDb[carIdx]
   if (!car) return
-  // If already fully added (all colors selected for single-color car) skip
+  // Check max cap
+  var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
+  var curPack = _packs.find(function(p){ return p.id === packId })
+  var maxCars = curPack && curPack.cars && curPack.cars.count ? curPack.cars.count : 0
+  if (maxCars > 0 && _selectedCars.length >= maxCars) {
+    showNotice('ansb-notice', 'info', 'Maximum of ' + maxCars + ' cars reached.')
+    return
+  }
   if (car.colors && car.colors.length === 1) {
-    if (_selectedCars.find(function(c){ return c.crdb === car.crdb && c.colorName === car.colors[0].name })) return
+    if (!_allowDuplicates && _selectedCars.find(function(c){ return c.crdb === car.crdb && c.colorName === car.colors[0].name })) return
     addCarWithColor(car, car.colors[0])
   } else if (car.colors && car.colors.length > 1) {
     openColorPicker(carIdx)
   } else {
-    // No color info (shouldn't happen with real DB)
-    if (_selectedCars.find(function(c){ return c.crdb === car.crdb })) return
+    if (!_allowDuplicates && _selectedCars.find(function(c){ return c.crdb === car.crdb })) return
     _selectedCars.push({ crdb: car.crdb, name: car.name, tier: car.tier, colorName: '', photoUrl: '', stockTxtUrl: '', maxedTxtUrl: null })
     renderSelectedCars()
     searchCars(document.getElementById('ansb-car-search').value)
@@ -3328,7 +3372,7 @@ function openColorPicker(carIdx) {
   var colors = car.colors || []
   for (var i = 0; i < colors.length; i++) {
     var col = colors[i]
-    var alreadySelected = selectedKeys.has(car.crdb + '|' + col.name)
+    var alreadySelected = !_allowDuplicates && selectedKeys.has(car.crdb + '|' + col.name)
     html += '<div class="color-swatch' + (alreadySelected ? ' loading' : '') + '" onclick="selectColorByIdx(' + carIdx + ',' + i + ')" title="' + escH(col.name) + '">'
     html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
     html += '<div class="color-swatch-name">' + escH(col.name) + (alreadySelected ? ' ✓' : '') + '</div>'
@@ -3343,7 +3387,7 @@ function selectColorByIdx(carIdx, colorIdx) {
   if (!car || !car.colors) return
   var color = car.colors[colorIdx]
   if (!color) return
-  if (_selectedCars.find(function(c){ return c.crdb === car.crdb && c.colorName === color.name })) {
+  if (!_allowDuplicates && _selectedCars.find(function(c){ return c.crdb === car.crdb && c.colorName === color.name })) {
     showNotice('cp2-notice', 'info', 'This color is already in your selection.')
     return
   }
@@ -3356,20 +3400,23 @@ function renderSelectedCars() {
   var badge = document.getElementById('ansb-car-count-badge')
   var noteEl = document.getElementById('ansb-cars-remaining-note')
   var n = _selectedCars.length
-  if (count) count.textContent = n + ' car' + (n === 1 ? '' : 's') + ' selected'
-  if (badge) badge.textContent = '(' + n + ' selected)'
-  if (!list) return
+  if (!list) { if (count) count.textContent = '0 cars selected'; if (badge) badge.textContent = '(0 selected)'; return }
   if (!n) {
+    if (count) count.textContent = '0 cars selected'
+    if (badge) badge.textContent = '(0 selected)'
     list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:20px">No cars selected.<br>Search and add cars on the left.</div>'
     if (noteEl) noteEl.style.display = 'none'
     return
   }
   var html = ''
+  var eligibleCount = 0
   for (var i = 0; i < _selectedCars.length; i++) {
     var car = _selectedCars[i]
+    var isOwned = !_allowDuplicates && _ownedCrdbs.size > 0 && _ownedCrdbs.has(car.crdb)
+    if (!isOwned) eligibleCount++
     var crdbEsc = escH(car.crdb || '')
     var colEsc = escH(car.colorName || '')
-    html += '<div class="selected-car-item">'
+    html += '<div class="selected-car-item" style="position:relative">'
     if (car.photoUrl) {
       html += '<img class="selected-car-photo" src="' + escH(car.photoUrl) + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
     } else {
@@ -3378,19 +3425,23 @@ function renderSelectedCars() {
     html += '<div class="selected-car-info">'
     html += '<div class="scar-name">' + escH(car.name) + '</div>'
     if (car.colorName) html += '<div class="scar-color">' + escH(car.colorName) + '</div>'
+    if (isOwned) html += '<div style="font-size:10px;color:var(--red)">Won\\'t be added (already owned)</div>'
     html += '</div>'
     html += '<button class="selected-car-remove" data-crdb="' + crdbEsc + '" data-col="' + colEsc + '" onclick="removeCarFromSelection(this.dataset.crdb,this.dataset.col)" title="Remove">&times;</button>'
     html += '</div>'
   }
   list.innerHTML = html
+  var displayCount = (!_allowDuplicates && _ownedCrdbs.size > 0) ? eligibleCount : n
+  if (count) count.textContent = displayCount + ' car' + (displayCount === 1 ? '' : 's') + ' selected' + (displayCount < n ? ' (' + n + ' chosen, ' + (n - displayCount) + ' skipped)' : '')
+  if (badge) badge.textContent = '(' + displayCount + ' selected)'
   if (noteEl) {
     var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
     var pack = _packs.find(function(p){ return p.id === packId })
     var total = pack && pack.cars && pack.cars.count ? pack.cars.count : 0
     if (total > 0) {
-      var remaining = Math.max(0, total - n)
+      var remaining = Math.max(0, total - displayCount)
       noteEl.style.display = ''
-      noteEl.textContent = n + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled with cars you don\\'t own yet.' : 'All slots filled.')
+      noteEl.textContent = displayCount + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled with cars you don\\'t own yet.' : 'All slots filled.')
     } else {
       noteEl.style.display = 'none'
     }
@@ -3401,7 +3452,7 @@ async function applyNsb() {
   if (!_nsbData.ansb) return
   var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
   showLoading('Applying pack...')
-  var payload = { nsbBase64: _nsbData.ansb.base64, packId: packId }
+  var payload = { nsbBase64: _nsbData.ansb.base64, packId: packId, allowDuplicates: _allowDuplicates }
   if (_selectedCars.length > 0) payload.selectedCars = _selectedCars
   var res = await fetch('/csr2/apply-nsb', {
     method: 'POST',
@@ -3411,11 +3462,13 @@ async function applyNsb() {
   hideLoading()
   if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
   var fname = _nsbData.ansb.name || 'PlayerProfile'
-  downloadNsb(res.resultBase64, fname)
-  var desc = 'The modified save file has been downloaded.'
-  if (res.note) desc += '\\n\\n' + res.note
-  showApplyResult(true, 'Pack Applied!', desc)
-  if (_csr2OutputFolder) { saveNsbToFolder(res.resultBase64, fname) }
+  if (_csr2OutputFolder) {
+    await saveNsbToFolder(res.resultBase64, fname)
+    showApplyResult(true, 'Pack Applied!', res.note || '', true)
+  } else {
+    downloadNsb(res.resultBase64, fname)
+    showApplyResult(true, 'Pack Applied!', 'The modified save file has been downloaded.' + (res.note ? '\\n\\n' + res.note : ''), false)
+  }
 }
 
 async function applyManualEdit() {
@@ -3441,15 +3494,29 @@ async function applyManualEdit() {
   hideLoading()
   if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
   var fname = _nsbData.ensb.name || 'PlayerProfile'
-  downloadNsb(res.resultBase64, fname)
-  showApplyResult(true, 'Edits Applied!', 'The modified save file has been downloaded.')
-  if (_csr2OutputFolder) { saveNsbToFolder(res.resultBase64, fname) }
+  if (_csr2OutputFolder) {
+    await saveNsbToFolder(res.resultBase64, fname)
+    showApplyResult(true, 'Edits Applied!', '', true)
+  } else {
+    downloadNsb(res.resultBase64, fname)
+    showApplyResult(true, 'Edits Applied!', 'The modified save file has been downloaded.', false)
+  }
 }
 
-function showApplyResult(ok, title, desc) {
+function showApplyResult(ok, title, desc, folderMode) {
   document.getElementById('apply-result-icon').textContent = ok ? '✅' : '❌'
   document.getElementById('apply-result-title').textContent = title
-  document.getElementById('apply-result-desc').textContent = desc
+  var descEl = document.getElementById('apply-result-desc')
+  if (desc) { descEl.textContent = desc; descEl.style.display = '' } else { descEl.style.display = 'none' }
+  var actions = document.getElementById('apply-result-actions')
+  if (folderMode) {
+    actions.innerHTML =
+      '<button class="btn btn-secondary" onclick="openOutputFolder()">📂 Go to location</button>' +
+      '<button class="btn btn-secondary" onclick="hideModal(\\'apply-result-modal\\')">Edit</button>' +
+      '<button class="btn btn-primary" onclick="hideModal(\\'apply-result-modal\\');hideModal(\\'apply-nsb-modal\\')">Complete</button>'
+  } else {
+    actions.innerHTML = '<button class="btn btn-primary" onclick="hideModal(\\'apply-result-modal\\');hideModal(\\'apply-nsb-modal\\')">Done</button>'
+  }
   showModal('apply-result-modal')
 }
 
@@ -3524,8 +3591,13 @@ async function applyUnbanFromManual() {
   hideLoading()
   if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
   var fname = _nsbData.ensb.name || 'PlayerProfile'
-  downloadNsb(res.resultBase64, fname)
-  showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.')
+  if (_csr2OutputFolder) {
+    await saveNsbToFolder(res.resultBase64, fname)
+    showApplyResult(true, 'Unban Applied!', 'The account has been unbanned.', true)
+  } else {
+    downloadNsb(res.resultBase64, fname)
+    showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.', false)
+  }
 }
 
 function updateEnsbAfter() {
@@ -3930,6 +4002,15 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // CSR2 open output folder in Explorer
+  if (req.method === 'POST' && pathname === '/csr2/open-folder') {
+    const cfg = loadConfig()
+    const folder = cfg.csr2OutputFolder
+    if (!folder) return json(res, 400, { error: 'No output folder configured' })
+    exec('explorer "' + folder + '"', function() {})
+    return json(res, 200, { ok: true })
+  }
+
   // CSR2 edit-nsb (manual add to existing values)
   if (req.method === 'POST' && pathname === '/csr2/edit-nsb') {
     const body = await readBody(req)
@@ -3982,7 +4063,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const buf = Buffer.from(body.nsbBase64, 'base64')
       const data = csr2ReadSave(buf)
-      const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null)
+      const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false)
       const out = csr2WriteSave(data)
       return json(res, 200, { resultBase64: out.toString('base64'), note: note || null })
     } catch (e) {
