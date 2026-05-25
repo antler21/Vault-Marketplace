@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.30'
+const VERSION = '0.6.31'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -19,6 +19,7 @@ const PACKS_FILE     = path.join(DATA_DIR, 'csr2-packs.json')
 const CSR2_CARS_FILE = path.join(DATA_DIR, 'csr2-cars.json')
 const CSR2_SHA_FILE  = path.join(DATA_DIR, 'csr2-cars-sha.json')
 const INT32_MAX = 2147483647
+const applyJobs = new Map()
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -1031,7 +1032,7 @@ function csr2ReadSaveStats(buf) {
   }
 }
 
-async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates) {
+async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
   const c = pack.currencies || {}
 
   // Apply currencies — ADD to existing balance, clamp to INT32_MAX
@@ -1106,23 +1107,52 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates) {
         }
       }
 
-      // Fetch car JSONs in parallel batches, then assign unids sequentially
-      const BATCH = 10
-      const fetched = []
-      for (let i = 0; i < toAdd.length; i += BATCH) {
-        const batch = toAdd.slice(i, i + BATCH)
-        const results = await Promise.all(batch.map(async (car) => {
-          try {
-            const txtUrl = maxed ? (car.maxedTxtUrl || car.stockTxtUrl) : car.stockTxtUrl
-            if (!txtUrl) throw new Error('no txtUrl')
-            const txt = await fetchRawGithub(txtUrl)
-            return { ok: true, carJson: JSON.parse(txt), crdb: car.crdb }
-          } catch (e) {
-            log('[cars-add] Failed ' + (car.crdb || '?') + ': ' + e.message)
-            return { ok: false, crdb: car.crdb }
-          }
-        }))
-        fetched.push(...results)
+      // Fetch car JSONs — batches of 5, 300ms between batches, retry failed up to 3 rounds with 3s gap
+      const BATCH = 5
+      const BATCH_DELAY = 300
+      const MAX_RETRIES = 3
+      const RETRY_DELAY = 3000
+
+      function setProgress(msg) {
+        const job = applyJobs.get(jobId)
+        if (job) job.progress = msg
+      }
+
+      async function fetchBatch(cars) {
+        const results = []
+        for (let i = 0; i < cars.length; i += BATCH) {
+          const batch = cars.slice(i, i + BATCH)
+          const batchResults = await Promise.all(batch.map(async (car) => {
+            try {
+              const txtUrl = maxed ? (car.maxedTxtUrl || car.stockTxtUrl) : car.stockTxtUrl
+              if (!txtUrl) throw new Error('no txtUrl')
+              const txt = await fetchRawGithub(txtUrl)
+              return { ok: true, carJson: JSON.parse(txt), crdb: car.crdb }
+            } catch (e) {
+              return { ok: false, crdb: car.crdb, car }
+            }
+          }))
+          results.push(...batchResults)
+          if (i + BATCH < cars.length) await new Promise(r => setTimeout(r, BATCH_DELAY))
+        }
+        return results
+      }
+
+      setProgress('Fetching car data... 0 / ' + toAdd.length)
+      let fetched = await fetchBatch(toAdd)
+      let done = fetched.filter(r => r.ok).length
+
+      for (let round = 1; round <= MAX_RETRIES; round++) {
+        const failed = fetched.filter(r => !r.ok).map(r => r.car).filter(Boolean)
+        if (failed.length === 0) break
+        setProgress('Retrying ' + failed.length + ' failed... (' + round + '/' + MAX_RETRIES + ')')
+        await new Promise(r => setTimeout(r, RETRY_DELAY))
+        const retried = await fetchBatch(failed)
+        // merge retried results back
+        const retriedMap = new Map(retried.map(r => [r.crdb, r]))
+        fetched = fetched.map(r => (!r.ok && retriedMap.has(r.crdb)) ? retriedMap.get(r.crdb) : r)
+        done = fetched.filter(r => r.ok).length
+        setProgress('Fetched ' + done + ' / ' + toAdd.length)
       }
 
       let added = 0
@@ -3555,11 +3585,13 @@ async function applyNsb() {
   showLoading('Applying pack...')
   var payload = { nsbBase64: _nsbData.ansb.base64, packId: packId, allowDuplicates: _allowDuplicates }
   if (_selectedCars.length > 0) payload.selectedCars = _selectedCars
-  var res = await fetch('/csr2/apply-nsb', {
+  var startRes = await fetch('/csr2/apply-nsb', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (startRes.error) { hideLoading(); showNotice('ansb-notice', 'error', startRes.error); return }
+  var res = await pollApplyJob(startRes.jobId)
   hideLoading()
   if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
   var fname = _nsbData.ansb.name || 'PlayerProfile'
@@ -3571,6 +3603,17 @@ async function applyNsb() {
   } else {
     downloadNsb(res.resultBase64, fname)
     showApplyResult(true, 'Pack Applied!', 'The modified save file has been downloaded.' + (res.note ? '\\n\\n' + res.note : ''), false, 'ansb')
+  }
+}
+
+async function pollApplyJob(jobId) {
+  while (true) {
+    await new Promise(function(r){ setTimeout(r, 500) })
+    var poll = await fetch('/csr2/apply-progress?jobId=' + encodeURIComponent(jobId))
+      .then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+    if (poll.error) return poll
+    if (poll.done) return poll
+    document.getElementById('loading-msg').textContent = poll.progress || 'Applying pack...'
   }
 }
 
@@ -4163,23 +4206,40 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // CSR2 apply-nsb
+  // CSR2 apply-nsb — starts async job, returns jobId immediately
   if (req.method === 'POST' && pathname === '/csr2/apply-nsb') {
     const body = await readBody(req)
     if (!body.nsbBase64 || !body.packId) return json(res, 400, { error: 'Missing nsbBase64 or packId' })
     const packs = loadPacks()
     const pack = packs.find(p => p.id === body.packId)
     if (!pack) return json(res, 404, { error: 'Pack not found' })
-    try {
-      const buf = Buffer.from(body.nsbBase64, 'base64')
-      const data = csr2ReadSave(buf)
-      const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false)
-      const out = csr2WriteSave(data)
-      return json(res, 200, { resultBase64: out.toString('base64'), note: note || null })
-    } catch (e) {
-      log('[csr2/apply-nsb] Error: ' + e.message)
-      return json(res, 500, { error: e.message })
-    }
+    const jobId = uid()
+    applyJobs.set(jobId, { progress: 'Starting...', done: false, result: null })
+    ;(async () => {
+      try {
+        const buf = Buffer.from(body.nsbBase64, 'base64')
+        const data = csr2ReadSave(buf)
+        const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false, jobId)
+        const out = csr2WriteSave(data)
+        applyJobs.get(jobId).done = true
+        applyJobs.get(jobId).result = { resultBase64: out.toString('base64'), note: note || null }
+      } catch (e) {
+        log('[csr2/apply-nsb] Error: ' + e.message)
+        applyJobs.get(jobId).done = true
+        applyJobs.get(jobId).result = { error: e.message }
+      }
+      setTimeout(() => applyJobs.delete(jobId), 5 * 60 * 1000)
+    })()
+    return json(res, 200, { jobId })
+  }
+
+  // CSR2 apply-nsb progress polling
+  if (req.method === 'GET' && pathname === '/csr2/apply-progress') {
+    const jobId = new URL(req.url, 'http://localhost').searchParams.get('jobId')
+    const job = applyJobs.get(jobId)
+    if (!job) return json(res, 404, { error: 'Job not found' })
+    if (job.done) return json(res, 200, { done: true, ...job.result })
+    return json(res, 200, { done: false, progress: job.progress })
   }
 
   // CSR2 unban
