@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.32'
+const VERSION = '0.6.33'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1065,6 +1065,11 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
       if (typeof data.ncui !== 'number' || data.ncui < data.caow.length) data.ncui = data.caow.length
 
       const ownedCrdbs = new Set(data.caow.map(c => c.crdb).filter(Boolean))
+      const allColors = !!(carConfig.allColors)
+      // For all-colors mode: dedup by crdb|paid so each color variant is independent
+      const ownedPairs = allColors
+        ? new Set(data.caow.map(c => (c.crdb && c.paid != null) ? c.crdb + '|' + c.paid : null).filter(Boolean))
+        : null
       const maxed = carConfig.condition === 'maxed'
 
       function shuffle(arr) {
@@ -1081,10 +1086,25 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
         return { crdb: car.crdb, name: car.name, stockTxtUrl: col.stockTxtUrl || '', maxedTxtUrl: col.maxedTxtUrl || null }
       }
 
+      // Expand all color variants of a car into separate entries
+      function dbCarAllColors(car) {
+        return (car.colors || []).map(col => ({
+          crdb: car.crdb,
+          name: car.name + (col.name ? ' – ' + col.name : ''),
+          stockTxtUrl: col.stockTxtUrl || '',
+          maxedTxtUrl: col.maxedTxtUrl || null,
+        }))
+      }
+
       let toAdd = []
       if (carMode === 'all') {
         const db = loadCsr2Cars()
-        toAdd = db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).map(dbCarFlat)
+        if (allColors) {
+          // Include every color variant; post-filter by crdb|paid after fetch
+          toAdd = db.filter(car => car.crdb).flatMap(dbCarAllColors)
+        } else {
+          toAdd = db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).map(dbCarFlat)
+        }
       } else if (carMode === 'random') {
         const db = loadCsr2Cars()
         const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).map(dbCarFlat))
@@ -1158,11 +1178,18 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
 
       let added = 0
       for (const r of fetched) {
-        if (r.ok && (allowDuplicates || !ownedCrdbs.has(r.crdb))) {
+        if (!r.ok) continue
+        const alreadyOwned = allColors
+          ? ownedPairs.has(r.carJson.crdb + '|' + (r.carJson.paid != null ? r.carJson.paid : ''))
+          : ownedCrdbs.has(r.crdb)
+        if (allowDuplicates || !alreadyOwned) {
           r.carJson.unid = data.ncui
           data.ncui++
           data.caow.push(r.carJson)
-          if (!allowDuplicates) ownedCrdbs.add(r.crdb)
+          if (!allowDuplicates) {
+            if (allColors) ownedPairs.add(r.carJson.crdb + '|' + (r.carJson.paid != null ? r.carJson.paid : ''))
+            else ownedCrdbs.add(r.crdb)
+          }
           added++
         }
       }
@@ -1674,13 +1701,19 @@ select{cursor:pointer}
           <div class="field" id="cp-car-count-row"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
           <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
         </div>
-        <div class="field" style="margin-bottom:0">
+        <div class="field">
           <label>Selection Mode</label>
           <select id="cp-car-mode" onchange="onCarModeChange()">
             <option value="random">Random (auto-picked, no duplicates)</option>
             <option value="customizable">Customizable (buyer picks)</option>
             <option value="all">All available (everything not owned)</option>
           </select>
+        </div>
+        <div id="cp-all-colors-row" style="display:none;margin-bottom:0">
+          <label class="allow-dup-row" style="cursor:pointer">
+            <input type="checkbox" id="cp-all-colors">
+            <span>Include all color variants per car</span>
+          </label>
         </div>
       </div>
     </div>
@@ -2831,7 +2864,7 @@ function buildPackMeta(p) {
   if (fusion.length) rows.push('<div class="pack-meta-row">' + fusion.join('') + '</div>')
   if (p.cars && p.cars.carMode) {
     var carsLabel = p.cars.carMode === 'all'
-      ? 'All available cars' + (p.cars.condition === 'maxed' ? ' · Maxed' : '')
+      ? 'All available cars' + (p.cars.allColors ? ' · All colors' : '') + (p.cars.condition === 'maxed' ? ' · Maxed' : '')
       : fmtN(p.cars.count) + ' cars · ' + p.cars.carMode + (p.cars.condition === 'maxed' ? ' · Maxed' : '')
     rows.push('<div class="pack-meta-row"><span>' + escH(carsLabel) + '</span></div>')
   }
@@ -2867,6 +2900,8 @@ function onCarModeChange() {
   var mode = document.getElementById('cp-car-mode').value
   var countRow = document.getElementById('cp-car-count-row')
   if (countRow) countRow.style.display = mode === 'all' ? 'none' : ''
+  var allColorsRow = document.getElementById('cp-all-colors-row')
+  if (allColorsRow) allColorsRow.style.display = mode === 'all' ? '' : 'none'
 }
 
 function openCreatePack() {
@@ -2888,6 +2923,7 @@ function openCreatePack() {
   document.getElementById('cp-car-count').value = ''
   document.getElementById('cp-car-condition').value = 'stock'
   document.getElementById('cp-car-mode').value = 'random'
+  document.getElementById('cp-all-colors').checked = false
   onCarModeChange()
   document.getElementById('cp-ver-toggle').checked = false
   document.getElementById('cp-ver-section').style.display = 'none'
@@ -2919,6 +2955,7 @@ function openEditPack(packId) {
   document.getElementById('cp-car-count').value = carsOn ? (pack.cars.count || '') : ''
   document.getElementById('cp-car-condition').value = carsOn ? (pack.cars.condition || 'stock') : 'stock'
   document.getElementById('cp-car-mode').value = carsOn ? (pack.cars.carMode || 'random') : 'random'
+  document.getElementById('cp-all-colors').checked = !!(carsOn && pack.cars.allColors)
   onCarModeChange()
   var verOn = !!(pack.version)
   document.getElementById('cp-ver-toggle').checked = verOn
@@ -2953,10 +2990,12 @@ async function savePack() {
   if (fred)    currencies.fusionRed = fred
   if (fyellow) currencies.fusionYellow = fyellow
   var carsOn = document.getElementById('cp-cars-toggle').checked
+  var cpCarMode = document.getElementById('cp-car-mode').value
   var cars = carsOn ? {
     count: parseInt(document.getElementById('cp-car-count').value) || 0,
     condition: document.getElementById('cp-car-condition').value,
-    carMode: document.getElementById('cp-car-mode').value,
+    carMode: cpCarMode,
+    allColors: cpCarMode === 'all' ? document.getElementById('cp-all-colors').checked : false,
   } : null
   var version = document.getElementById('cp-ver-toggle').checked ? (document.getElementById('cp-version').value.trim() || null) : null
   var pack = { name, currencies, cars, version: version || undefined }
