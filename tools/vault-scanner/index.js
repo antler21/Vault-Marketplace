@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.31'
+const VERSION = '0.6.32'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1107,9 +1107,9 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
         }
       }
 
-      // Fetch car JSONs — batches of 5, 300ms between batches, retry failed up to 3 rounds with 3s gap
-      const BATCH = 5
-      const BATCH_DELAY = 300
+      // Fetch car JSONs — batches of 10, no inter-batch delay on first pass,
+      // retry failed up to 3 rounds with 3s gap between rounds
+      const BATCH = 10
       const MAX_RETRIES = 3
       const RETRY_DELAY = 3000
 
@@ -1118,8 +1118,9 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
         if (job) job.progress = msg
       }
 
-      async function fetchBatch(cars) {
+      async function fetchBatch(cars, offset, total) {
         const results = []
+        let soFar = offset
         for (let i = 0; i < cars.length; i += BATCH) {
           const batch = cars.slice(i, i + BATCH)
           const batchResults = await Promise.all(batch.map(async (car) => {
@@ -1133,13 +1134,14 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
             }
           }))
           results.push(...batchResults)
-          if (i + BATCH < cars.length) await new Promise(r => setTimeout(r, BATCH_DELAY))
+          soFar += batchResults.filter(r => r.ok).length
+          setProgress('Fetching car data... ' + soFar + ' / ' + total)
         }
         return results
       }
 
       setProgress('Fetching car data... 0 / ' + toAdd.length)
-      let fetched = await fetchBatch(toAdd)
+      let fetched = await fetchBatch(toAdd, 0, toAdd.length)
       let done = fetched.filter(r => r.ok).length
 
       for (let round = 1; round <= MAX_RETRIES; round++) {
@@ -1147,8 +1149,7 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
         if (failed.length === 0) break
         setProgress('Retrying ' + failed.length + ' failed... (' + round + '/' + MAX_RETRIES + ')')
         await new Promise(r => setTimeout(r, RETRY_DELAY))
-        const retried = await fetchBatch(failed)
-        // merge retried results back
+        const retried = await fetchBatch(failed, done, toAdd.length)
         const retriedMap = new Map(retried.map(r => [r.crdb, r]))
         fetched = fetched.map(r => (!r.ok && retriedMap.has(r.crdb)) ? retriedMap.get(r.crdb) : r)
         done = fetched.filter(r => r.ok).length
