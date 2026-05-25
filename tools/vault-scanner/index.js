@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.29'
+const VERSION = '0.6.30'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1074,16 +1074,22 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates) {
         return arr
       }
 
+      // DB cars store URLs inside colors[] — flatten to first color for server-side picks
+      function dbCarFlat(car) {
+        const col = (car.colors && car.colors[0]) || {}
+        return { crdb: car.crdb, name: car.name, stockTxtUrl: col.stockTxtUrl || '', maxedTxtUrl: col.maxedTxtUrl || null }
+      }
+
       let toAdd = []
       if (carMode === 'all') {
         const db = loadCsr2Cars()
-        toAdd = db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb))
+        toAdd = db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).map(dbCarFlat)
       } else if (carMode === 'random') {
         const db = loadCsr2Cars()
-        const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)))
+        const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).map(dbCarFlat))
         toAdd = available.slice(0, carConfig.count)
       } else {
-        // customizable
+        // customizable — selectedCars come from client with correct stockTxtUrl per chosen color
         if (allowDuplicates) {
           toAdd = selectedCars.filter(car => car.crdb).slice(0, carConfig.count)
         } else {
@@ -1092,7 +1098,7 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates) {
             // backfill duplicate slots with random cars from DB
             const db = loadCsr2Cars()
             const selectedSet = new Set(unique.map(c => c.crdb))
-            const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb) && !selectedSet.has(car.crdb)))
+            const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb) && !selectedSet.has(car.crdb)).map(dbCarFlat))
             toAdd = [...unique, ...available.slice(0, carConfig.count - unique.length)]
           } else {
             toAdd = unique.slice(0, carConfig.count)
@@ -1136,7 +1142,9 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates) {
       const expected = carMode === 'all' ? toAdd.length : (carConfig.count || toAdd.length)
       const remaining = expected - added
       if (remaining > 0) {
-        note = added + ' car(s) added. ' + remaining + ' slot(s) could not be fetched from GitHub.'
+        note = added + ' car(s) added. ' + remaining + ' could not be fetched from GitHub.'
+      } else if (added > 0) {
+        note = added + ' car(s) added.'
       }
     }
   }
