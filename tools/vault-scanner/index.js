@@ -3326,7 +3326,7 @@ function openColorPicker(carIdx) {
     var col = colors[i]
     var alreadySelected = selectedKeys.has(car.crdb + '|' + col.name)
     html += '<div class="color-swatch' + (alreadySelected ? ' loading' : '') + '" onclick="selectColorByIdx(' + carIdx + ',' + i + ')" title="' + escH(col.name) + '">'
-    html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\'none\'" loading="lazy">'
+    html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
     html += '<div class="color-swatch-name">' + escH(col.name) + (alreadySelected ? ' ✓' : '') + '</div>'
     html += '</div>'
   }
@@ -3367,7 +3367,7 @@ function renderSelectedCars() {
     var colEsc = escH(car.colorName || '')
     html += '<div class="selected-car-item">'
     if (car.photoUrl) {
-      html += '<img class="selected-car-photo" src="' + escH(car.photoUrl) + '" onerror="this.style.display=\'none\'" loading="lazy">'
+      html += '<img class="selected-car-photo" src="' + escH(car.photoUrl) + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
     } else {
       html += '<span class="car-tier-badge" style="width:44px;height:30px;display:flex;align-items:center;justify-content:center">T' + car.tier + '</span>'
     }
@@ -3386,7 +3386,7 @@ function renderSelectedCars() {
     if (total > 0) {
       var remaining = Math.max(0, total - n)
       noteEl.style.display = ''
-      noteEl.textContent = n + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled with cars you don\'t own yet.' : 'All slots filled.')
+      noteEl.textContent = n + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled with cars you don\\'t own yet.' : 'All slots filled.')
     } else {
       noteEl.style.display = 'none'
     }
