@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.24'
+const VERSION = '0.6.25'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -3432,7 +3432,7 @@ function renderSelectedCars() {
     if (car.colorName) html += '<div class="scar-color">' + escH(car.colorName) + '</div>'
     html += '</div>'
     html += '<button class="selected-car-remove" data-crdb="' + crdbEsc + '" data-col="' + colEsc + '" onclick="removeCarFromSelection(this.dataset.crdb,this.dataset.col)" title="Remove">&times;</button>'
-    if (isOwned) html += '<div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none"><span style="font-size:11px;color:#fff;font-weight:600">Duplicate car</span><span style="font-size:10px;color:rgba(255,255,255,.7)">Enable Allow Duplicates</span></div>'
+    if (isOwned) html += '<div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none"><span style="font-size:11px;color:#ef4444;font-weight:600">Duplicate car</span><span style="font-size:10px;color:rgba(239,68,68,.8)">Enable Allow Duplicates</span></div>'
     html += '</div>'
   }
   list.innerHTML = html
@@ -3470,11 +3470,11 @@ async function applyNsb() {
   var ansbInput = document.getElementById('ansb-file')
   if (ansbInput) ansbInput.value = ''
   if (_csr2OutputFolder) {
-    await saveNsbToFolder(res.resultBase64, fname)
-    showApplyResult(true, 'Pack Applied!', res.note || '', true)
+    var saved = await saveNsbToFolder(res.resultBase64, fname, { title: 'Pack Applied!', desc: res.note || '', folderMode: true, whichNsb: 'ansb' })
+    if (!saved.conflict) showApplyResult(true, 'Pack Applied!', res.note || '', true, 'ansb')
   } else {
     downloadNsb(res.resultBase64, fname)
-    showApplyResult(true, 'Pack Applied!', 'The modified save file has been downloaded.' + (res.note ? '\\n\\n' + res.note : ''), false)
+    showApplyResult(true, 'Pack Applied!', 'The modified save file has been downloaded.' + (res.note ? '\\n\\n' + res.note : ''), false, 'ansb')
   }
 }
 
@@ -3504,27 +3504,29 @@ async function applyManualEdit() {
   var ensbInput = document.getElementById('ensb-file')
   if (ensbInput) ensbInput.value = ''
   if (_csr2OutputFolder) {
-    await saveNsbToFolder(res.resultBase64, fname)
-    showApplyResult(true, 'Edits Applied!', '', true)
+    var savedE = await saveNsbToFolder(res.resultBase64, fname, { title: 'Edits Applied!', desc: '', folderMode: true, whichNsb: 'ensb' })
+    if (!savedE.conflict) showApplyResult(true, 'Edits Applied!', '', true, 'ensb')
   } else {
     downloadNsb(res.resultBase64, fname)
-    showApplyResult(true, 'Edits Applied!', 'The modified save file has been downloaded.', false)
+    showApplyResult(true, 'Edits Applied!', 'The modified save file has been downloaded.', false, 'ensb')
   }
 }
 
-function showApplyResult(ok, title, desc, folderMode) {
+function showApplyResult(ok, title, desc, folderMode, whichNsb) {
   document.getElementById('apply-result-icon').textContent = ok ? '✅' : '❌'
   document.getElementById('apply-result-title').textContent = title
   var descEl = document.getElementById('apply-result-desc')
   if (desc) { descEl.textContent = desc; descEl.style.display = '' } else { descEl.style.display = 'none' }
   var actions = document.getElementById('apply-result-actions')
+  var w = whichNsb || 'ansb'
+  var clearAndClose = 'clearNsbFile(\\'' + w + '\\');hideModal(\\'apply-result-modal\\');hideModal(\\'apply-nsb-modal\\')'
   if (folderMode) {
     actions.innerHTML =
       '<button class="btn btn-secondary" onclick="openOutputFolder()">📂 Go to location</button>' +
       '<button class="btn btn-secondary" onclick="hideModal(\\'apply-result-modal\\')">Edit</button>' +
-      '<button class="btn btn-primary" onclick="hideModal(\\'apply-result-modal\\');hideModal(\\'apply-nsb-modal\\')">Complete</button>'
+      '<button class="btn btn-primary" onclick="' + clearAndClose + '">Complete</button>'
   } else {
-    actions.innerHTML = '<button class="btn btn-primary" onclick="hideModal(\\'apply-result-modal\\');hideModal(\\'apply-nsb-modal\\')">Done</button>'
+    actions.innerHTML = '<button class="btn btn-primary" onclick="' + clearAndClose + '">Done</button>'
   }
   showModal('apply-result-modal')
 }
@@ -3539,17 +3541,19 @@ function downloadNsb(b64, filename) {
   URL.revokeObjectURL(a.href)
 }
 
-async function saveNsbToFolder(b64, filename) {
+async function saveNsbToFolder(b64, filename, applyCtx) {
   var res = await fetch('/csr2/save-nsb', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ base64: b64, filename: filename })
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (res.conflict) {
-    _pendingSavePack = { b64: b64, filename: filename }
+    _pendingSavePack = Object.assign({ b64: b64, filename: filename }, applyCtx || {})
     document.getElementById('nsb-conflict-name').textContent = res.existingFile || 'existing file'
     showModal('nsb-conflict-modal')
+    return { conflict: true }
   }
+  return { ok: true }
 }
 
 async function confirmSaveToFolder() {
@@ -3562,6 +3566,7 @@ async function confirmSaveToFolder() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ base64: p.b64, filename: p.filename, forceOverwrite: true })
   }).catch(function(){})
+  if (p.title) showApplyResult(true, p.title, p.desc || '', p.folderMode, p.whichNsb)
 }
 
 function openCsr2Settings() {
@@ -3601,11 +3606,11 @@ async function applyUnbanFromManual() {
   if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
   var fname = _nsbData.ensb.name || 'PlayerProfile'
   if (_csr2OutputFolder) {
-    await saveNsbToFolder(res.resultBase64, fname)
-    showApplyResult(true, 'Unban Applied!', 'The account has been unbanned.', true)
+    var savedU = await saveNsbToFolder(res.resultBase64, fname, { title: 'Unban Applied!', desc: 'The account has been unbanned.', folderMode: true, whichNsb: 'ensb' })
+    if (!savedU.conflict) showApplyResult(true, 'Unban Applied!', 'The account has been unbanned.', true, 'ensb')
   } else {
     downloadNsb(res.resultBase64, fname)
-    showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.', false)
+    showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.', false, 'ensb')
   }
 }
 
