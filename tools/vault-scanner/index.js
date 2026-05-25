@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.26'
+const VERSION = '0.6.27'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1666,7 +1666,7 @@ select{cursor:pointer}
 </div>
 
 <!-- NSB Output Folder Conflict Modal -->
-<div class="modal-bg" id="nsb-conflict-modal">
+<div class="modal-bg" id="nsb-conflict-modal" style="z-index:150">
   <div class="modal" style="max-width:420px">
     <div class="modal-title">⚠️ File Already Exists</div>
     <p class="confirm-desc">The output folder already contains an NSB file (<strong id="nsb-conflict-name"></strong>). Continuing will delete the existing file before saving the new one.</p>
