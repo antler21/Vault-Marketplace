@@ -4012,7 +4012,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/csr2/cars-check') {
     try {
       const stored = loadCsr2Sha()
-      const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/main')
+      const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/Everything')
       const remoteSha = commit.sha || ''
       return json(res, 200, {
         hasUpdate: remoteSha !== (stored.sha || ''),
@@ -4029,15 +4029,18 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/csr2/cars-update') {
     try {
       log('[csr2/cars-update] Fetching latest commit SHA...')
-      const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/main')
+      const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/Everything')
       const sha = commit.sha || ''
 
       log('[csr2/cars-update] Fetching file tree...')
-      const treeData = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/main?recursive=1')
+      const treeData = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/Everything?recursive=1')
       const tree = treeData.tree || []
+      log('[csr2/cars-update] Tree: ' + tree.length + ' items, truncated=' + treeData.truncated)
+      const samplePaths = tree.slice(0, 10).map(x => x.path).join(' | ')
+      if (samplePaths) log('[csr2/cars-update] Sample paths: ' + samplePaths)
 
       const enc = (s) => encodeURIComponent(s)
-      const rawBase = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/main/'
+      const rawBase = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/'
       const rawUrl = (parts) => rawBase + parts.map(enc).join('/')
 
       // Group Stock .txt files by brand+model+starType
