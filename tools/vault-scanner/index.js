@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.25'
+const VERSION = '0.6.26'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -2722,6 +2722,7 @@ function renderPacks() {
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-overlay">'
     html += '<button class="ov-btn ov-import" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)">Apply Pack</button>'
+    html += '<button class="ov-btn ov-preview" data-pid="' + p.id + '" onclick="openEditPack(this.dataset.pid)">Edit Pack</button>'
     html += '<button class="ov-btn ov-remove" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">Delete</button>'
     html += '</div></div>'
   }
@@ -2804,6 +2805,37 @@ function openCreatePack() {
   document.getElementById('cp-ver-toggle').checked = false
   document.getElementById('cp-ver-section').style.display = 'none'
   document.getElementById('cp-version').value = ''
+  hideNotice('cp-notice')
+  showModal('create-pack-modal')
+}
+
+function openEditPack(packId) {
+  var pack = _packs.find(function(p){ return p.id === packId })
+  if (!pack) return
+  _editingPackId = packId
+  document.getElementById('cp-title-label').textContent = 'Edit Pack'
+  var c = pack.currencies || {}
+  document.getElementById('cp-name').value = pack.name || ''
+  document.getElementById('cp-cash').value = c.cash || ''
+  document.getElementById('cp-gold').value = c.gold || ''
+  document.getElementById('cp-bkeys').value = c.bronzeKeys || ''
+  document.getElementById('cp-skeys').value = c.silverKeys || ''
+  document.getElementById('cp-gkeys').value = c.goldKeys || ''
+  document.getElementById('cp-fuel').value = c.fuel || ''
+  document.getElementById('cp-fgreen').value = c.fusionGreen || ''
+  document.getElementById('cp-fblue').value = c.fusionBlue || ''
+  document.getElementById('cp-fred').value = c.fusionRed || ''
+  document.getElementById('cp-fyellow').value = c.fusionYellow || ''
+  var carsOn = !!(pack.cars && pack.cars.count)
+  document.getElementById('cp-cars-toggle').checked = carsOn
+  document.getElementById('cp-cars-section').style.display = carsOn ? '' : 'none'
+  document.getElementById('cp-car-count').value = carsOn ? (pack.cars.count || '') : ''
+  document.getElementById('cp-car-condition').value = carsOn ? (pack.cars.condition || 'stock') : 'stock'
+  document.getElementById('cp-car-mode').value = carsOn ? (pack.cars.carMode || 'random') : 'random'
+  var verOn = !!(pack.version)
+  document.getElementById('cp-ver-toggle').checked = verOn
+  document.getElementById('cp-ver-section').style.display = verOn ? '' : 'none'
+  document.getElementById('cp-version').value = pack.version || ''
   hideNotice('cp-notice')
   showModal('create-pack-modal')
 }
