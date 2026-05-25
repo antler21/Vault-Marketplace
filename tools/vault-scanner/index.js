@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.22'
+const VERSION = '0.6.23'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1580,7 +1580,7 @@ select{cursor:pointer}
       </div>
     </div>
     <div class="pack-sect">
-      <div class="pack-sect-hdr">⚗️ Fusion Tokens</div>
+      <div class="pack-sect-hdr">⚗️ Elite Tokens</div>
       <div class="curr-grid">
         <div class="field"><label><span class="token-dot" style="background:#4caf50"></span>Green</label><div class="field-wrap"><input type="number" id="cp-fgreen" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
         <div class="field"><label><span class="token-dot" style="background:#2196F3"></span>Blue</label><div class="field-wrap"><input type="number" id="cp-fblue" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
@@ -3003,7 +3003,7 @@ function renderPackInfoInModal(pack) {
   if (c.fusionRed)    fusion.push('<span class="token-dot" style="background:#e05252"></span><span>' + fmtN(c.fusionRed) + ' Red</span>')
   if (c.fusionYellow) fusion.push('<span class="token-dot" style="background:#FFC107"></span><span>' + fmtN(c.fusionYellow) + ' Yellow</span>')
   if (fusion.length) {
-    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">Fusion:</span>' + fusion.join('') + '</div>'
+    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">Elite:</span>' + fusion.join('') + '</div>'
   }
 
   if (pack.cars && pack.cars.count) {
