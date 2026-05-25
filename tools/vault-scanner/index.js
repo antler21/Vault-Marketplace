@@ -3409,7 +3409,7 @@ async function applyNsb() {
   var fname = _nsbData.ansb.name || 'PlayerProfile'
   downloadNsb(res.resultBase64, fname)
   var desc = 'The modified save file has been downloaded.'
-  if (res.note) desc += '\n\n' + res.note
+  if (res.note) desc += '\\n\\n' + res.note
   showApplyResult(true, 'Pack Applied!', desc)
   if (_csr2OutputFolder) { saveNsbToFolder(res.resultBase64, fname) }
 }
