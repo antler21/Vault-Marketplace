@@ -102,12 +102,14 @@ All preview links use `https://lolprev.site/preview/lol/{id}` — never `window.
 
 ## Version Bump Checklist (when updating scanner tool)
 
+**CRITICAL: All 6 steps are required. Do NOT skip steps 5–6 or the webapp will show the wrong version.**
+
 1. Bump `VERSION` in `tools/vault-scanner/index.js`
-2. Update `--output` name in `tools/vault-scanner/package.json`
+2. Update `--output` name in `tools/vault-scanner/package.json` to match new version
 3. `npm run build` inside `tools/vault-scanner/`
-4. Copy exe to `public/`
-5. Update `href` + `download` attr in `Accounts.js` (search `aio-tool-v`)
-6. Update `EXPECTED_SCANNER_VERSION` in `Accounts.js`
+4. Copy exe to `public/aio-tool-vX.X.XX.exe` (versioned filename, not a generic name)
+5. **Update `EXPECTED_SCANNER_VERSION` in `Accounts.js` (line ~27)**
+6. **Update hardcoded `href` + `download` attr + label in `Accounts.js` (search `aio-tool-v`)**
 
 ---
 
