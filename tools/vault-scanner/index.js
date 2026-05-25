@@ -3030,7 +3030,7 @@ function renderCarFilterBar() {
   var t = _carFilter.tier
   tierBar.innerHTML = ['All',1,2,3,4,5].map(function(v){
     var active = (v === 'All' && !t) || v === t
-    return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setTierFilter(\'' + v + '\')">' + (v === 'All' ? 'All' : 'T'+v) + '</span>'
+    return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setTierFilter(\\'' + v + '\\')">' + (v === 'All' ? 'All' : 'T'+v) + '</span>'
   }).join('')
   if (starBar) {
     var s = _carFilter.starType
@@ -3038,7 +3038,7 @@ function renderCarFilterBar() {
       {v:'All', l:'⭐ All Stars'}, {v:'Gold', l:'⭐ Gold'}, {v:'Purple', l:'💜 Purple'}, {v:'Legends', l:'🌟 Legends'},
     ].map(function(x){
       var active = (x.v === 'All' && !s) || x.v === s
-      return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setStarFilter(\'' + x.v + '\')">' + x.l + '</span>'
+      return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setStarFilter(\\'' + x.v + '\\')">' + x.l + '</span>'
     }).join('')
   }
   if (brandBar) {
@@ -3050,7 +3050,7 @@ function renderCarFilterBar() {
     brands.sort()
     brandBar.innerHTML = ['All'].concat(brands).map(function(v){
       var active = (v === 'All' && !b) || v === b
-      return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setBrandFilter(\'' + escH(v) + '\')">' + escH(v === 'All' ? 'All Brands' : v) + '</span>'
+      return '<span class="car-filter-chip' + (active?' active':'') + '" onclick="setBrandFilter(\\'' + escH(v) + '\\')">' + escH(v === 'All' ? 'All Brands' : v) + '</span>'
     }).join('')
   }
 }
