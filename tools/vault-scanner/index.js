@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.27'
+const VERSION = '0.6.29'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1053,54 +1053,91 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates) {
 
   let note = null
   const carConfig = pack.cars
-  if (carConfig && carConfig.count > 0 && Array.isArray(selectedCars) && selectedCars.length > 0) {
-    if (!Array.isArray(data.caow)) data.caow = []
-    if (typeof data.ncui !== 'number' || data.ncui < data.caow.length) {
-      data.ncui = data.caow.length
-    }
+  if (carConfig) {
+    const carMode = carConfig.carMode || 'customizable'
+    const isCustom = carMode === 'customizable'
+    const hasSelection = isCustom && Array.isArray(selectedCars) && selectedCars.length > 0
+    const needsCars = carMode === 'all' || (carMode === 'random' && carConfig.count > 0) || hasSelection
 
-    const ownedCrdbs = new Set(data.caow.map(c => c.crdb).filter(Boolean))
-    const maxed = carConfig.condition === 'maxed'
-    const toAdd = allowDuplicates
-      ? selectedCars.filter(car => car.crdb).slice(0, carConfig.count)
-      : selectedCars.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).slice(0, carConfig.count)
+    if (needsCars) {
+      if (!Array.isArray(data.caow)) data.caow = []
+      if (typeof data.ncui !== 'number' || data.ncui < data.caow.length) data.ncui = data.caow.length
 
-    // Fetch car JSONs in parallel batches, then assign unids sequentially
-    const BATCH = 10
-    const fetched = []
-    for (let i = 0; i < toAdd.length; i += BATCH) {
-      const batch = toAdd.slice(i, i + BATCH)
-      const results = await Promise.all(batch.map(async (car) => {
-        try {
-          const txtUrl = maxed ? (car.maxedTxtUrl || car.stockTxtUrl) : car.stockTxtUrl
-          if (!txtUrl) throw new Error('no txtUrl')
-          const txt = await fetchRawGithub(txtUrl)
-          return { ok: true, carJson: JSON.parse(txt), crdb: car.crdb }
-        } catch (e) {
-          log('[cars-add] Failed ' + (car.crdb || '?') + ': ' + e.message)
-          return { ok: false, crdb: car.crdb }
+      const ownedCrdbs = new Set(data.caow.map(c => c.crdb).filter(Boolean))
+      const maxed = carConfig.condition === 'maxed'
+
+      function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]]
         }
-      }))
-      fetched.push(...results)
-    }
-
-    let added = 0
-    for (const r of fetched) {
-      if (r.ok && (allowDuplicates || !ownedCrdbs.has(r.crdb))) {
-        r.carJson.unid = data.ncui
-        data.ncui++
-        data.caow.push(r.carJson)
-        if (!allowDuplicates) ownedCrdbs.add(r.crdb)
-        added++
+        return arr
       }
-    }
 
-    // Rebuild garage position index — must always be [0..ncui-1, -1]
-    data.cgpi = [...Array(data.ncui).keys(), -1]
+      let toAdd = []
+      if (carMode === 'all') {
+        const db = loadCsr2Cars()
+        toAdd = db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb))
+      } else if (carMode === 'random') {
+        const db = loadCsr2Cars()
+        const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)))
+        toAdd = available.slice(0, carConfig.count)
+      } else {
+        // customizable
+        if (allowDuplicates) {
+          toAdd = selectedCars.filter(car => car.crdb).slice(0, carConfig.count)
+        } else {
+          const unique = selectedCars.filter(car => car.crdb && !ownedCrdbs.has(car.crdb))
+          if (unique.length < carConfig.count) {
+            // backfill duplicate slots with random cars from DB
+            const db = loadCsr2Cars()
+            const selectedSet = new Set(unique.map(c => c.crdb))
+            const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb) && !selectedSet.has(car.crdb)))
+            toAdd = [...unique, ...available.slice(0, carConfig.count - unique.length)]
+          } else {
+            toAdd = unique.slice(0, carConfig.count)
+          }
+        }
+      }
 
-    const remaining = carConfig.count - added
-    if (remaining > 0) {
-      note = added + ' car(s) added. ' + remaining + ' slot(s) could not be fetched from GitHub.'
+      // Fetch car JSONs in parallel batches, then assign unids sequentially
+      const BATCH = 10
+      const fetched = []
+      for (let i = 0; i < toAdd.length; i += BATCH) {
+        const batch = toAdd.slice(i, i + BATCH)
+        const results = await Promise.all(batch.map(async (car) => {
+          try {
+            const txtUrl = maxed ? (car.maxedTxtUrl || car.stockTxtUrl) : car.stockTxtUrl
+            if (!txtUrl) throw new Error('no txtUrl')
+            const txt = await fetchRawGithub(txtUrl)
+            return { ok: true, carJson: JSON.parse(txt), crdb: car.crdb }
+          } catch (e) {
+            log('[cars-add] Failed ' + (car.crdb || '?') + ': ' + e.message)
+            return { ok: false, crdb: car.crdb }
+          }
+        }))
+        fetched.push(...results)
+      }
+
+      let added = 0
+      for (const r of fetched) {
+        if (r.ok && (allowDuplicates || !ownedCrdbs.has(r.crdb))) {
+          r.carJson.unid = data.ncui
+          data.ncui++
+          data.caow.push(r.carJson)
+          if (!allowDuplicates) ownedCrdbs.add(r.crdb)
+          added++
+        }
+      }
+
+      // Rebuild garage position index — must always be [0..ncui-1, -1]
+      data.cgpi = [...Array(data.ncui).keys(), -1]
+
+      const expected = carMode === 'all' ? toAdd.length : (carConfig.count || toAdd.length)
+      const remaining = expected - added
+      if (remaining > 0) {
+        note = added + ' car(s) added. ' + remaining + ' slot(s) could not be fetched from GitHub.'
+      }
     }
   }
 
@@ -1595,12 +1632,12 @@ select{cursor:pointer}
       </div>
       <div id="cp-cars-section" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
         <div class="curr-grid" style="margin-bottom:10px">
-          <div class="field"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
+          <div class="field" id="cp-car-count-row"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
           <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
         </div>
         <div class="field" style="margin-bottom:0">
           <label>Selection Mode</label>
-          <select id="cp-car-mode">
+          <select id="cp-car-mode" onchange="onCarModeChange()">
             <option value="random">Random (auto-picked, no duplicates)</option>
             <option value="customizable">Customizable (buyer picks)</option>
             <option value="all">All available (everything not owned)</option>
@@ -2754,7 +2791,10 @@ function buildPackMeta(p) {
   if (c.fusionYellow) fusion.push('<span class="token-dot" style="background:#FFC107"></span>' + fmtN(c.fusionYellow))
   if (fusion.length) rows.push('<div class="pack-meta-row">' + fusion.join('') + '</div>')
   if (p.cars && p.cars.carMode) {
-    rows.push('<div class="pack-meta-row"><span>' + escH(fmtN(p.cars.count) + ' cars · ' + p.cars.carMode + (p.cars.condition === 'maxed' ? ' · Maxed' : '')) + '</span></div>')
+    var carsLabel = p.cars.carMode === 'all'
+      ? 'All available cars' + (p.cars.condition === 'maxed' ? ' · Maxed' : '')
+      : fmtN(p.cars.count) + ' cars · ' + p.cars.carMode + (p.cars.condition === 'maxed' ? ' · Maxed' : '')
+    rows.push('<div class="pack-meta-row"><span>' + escH(carsLabel) + '</span></div>')
   }
   return rows.length ? rows : ['<div class="pack-meta-row"><span>No modifiers</span></div>']
 }
@@ -2781,6 +2821,13 @@ async function confirmDeletePack() {
 function toggleCarsSection() {
   var on = document.getElementById('cp-cars-toggle').checked
   document.getElementById('cp-cars-section').style.display = on ? '' : 'none'
+  if (on) onCarModeChange()
+}
+
+function onCarModeChange() {
+  var mode = document.getElementById('cp-car-mode').value
+  var countRow = document.getElementById('cp-car-count-row')
+  if (countRow) countRow.style.display = mode === 'all' ? 'none' : ''
 }
 
 function openCreatePack() {
@@ -2802,6 +2849,7 @@ function openCreatePack() {
   document.getElementById('cp-car-count').value = ''
   document.getElementById('cp-car-condition').value = 'stock'
   document.getElementById('cp-car-mode').value = 'random'
+  onCarModeChange()
   document.getElementById('cp-ver-toggle').checked = false
   document.getElementById('cp-ver-section').style.display = 'none'
   document.getElementById('cp-version').value = ''
@@ -2826,12 +2874,13 @@ function openEditPack(packId) {
   document.getElementById('cp-fblue').value = c.fusionBlue || ''
   document.getElementById('cp-fred').value = c.fusionRed || ''
   document.getElementById('cp-fyellow').value = c.fusionYellow || ''
-  var carsOn = !!(pack.cars && pack.cars.count)
+  var carsOn = !!(pack.cars && (pack.cars.count || pack.cars.carMode === 'all'))
   document.getElementById('cp-cars-toggle').checked = carsOn
   document.getElementById('cp-cars-section').style.display = carsOn ? '' : 'none'
   document.getElementById('cp-car-count').value = carsOn ? (pack.cars.count || '') : ''
   document.getElementById('cp-car-condition').value = carsOn ? (pack.cars.condition || 'stock') : 'stock'
   document.getElementById('cp-car-mode').value = carsOn ? (pack.cars.carMode || 'random') : 'random'
+  onCarModeChange()
   var verOn = !!(pack.version)
   document.getElementById('cp-ver-toggle').checked = verOn
   document.getElementById('cp-ver-section').style.display = verOn ? '' : 'none'
@@ -2956,6 +3005,8 @@ function openEditNsb(packId) {
   _ownedCrdbs = new Set()
   _allowDuplicates = false
   document.getElementById('ansb-file-name').style.display = 'none'
+  var ansbLabelEl = document.getElementById('ansb-drop').querySelector('.file-drop-label')
+  if (ansbLabelEl) ansbLabelEl.style.display = ''
   document.getElementById('ansb-compare').style.display = 'none'
   document.getElementById('ansb-apply-btn').disabled = true
   document.getElementById('ansb-drop').classList.remove('over')
@@ -2989,6 +3040,8 @@ function openEditNsbManual() {
   _nsbData.ensb = null
   _ensbCurrent = {}
   document.getElementById('ensb-file-name').style.display = 'none'
+  var ensbLabelEl = document.getElementById('ensb-drop').querySelector('.file-drop-label')
+  if (ensbLabelEl) ensbLabelEl.style.display = ''
   document.getElementById('ensb-form').style.display = 'none'
   document.getElementById('ensb-apply-btn').disabled = true
   document.getElementById('ensb-unban-btn').disabled = true
@@ -3038,8 +3091,11 @@ function renderPackInfoInModal(pack) {
     html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">Elite:</span>' + fusion.join('') + '</div>'
   }
 
-  if (pack.cars && pack.cars.count) {
-    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">🚗 ' + fmtN(pack.cars.count) + ' cars &middot; ' + escH(pack.cars.carMode || 'random') + (pack.cars.condition === 'maxed' ? ' &middot; maxed' : '') + '</div>'
+  if (pack.cars && (pack.cars.count || pack.cars.carMode === 'all')) {
+    var modalCarsLabel = pack.cars.carMode === 'all'
+      ? 'All available cars' + (pack.cars.condition === 'maxed' ? ' &middot; maxed' : '')
+      : fmtN(pack.cars.count) + ' cars &middot; ' + escH(pack.cars.carMode || 'random') + (pack.cars.condition === 'maxed' ? ' &middot; maxed' : '')
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">🚗 ' + modalCarsLabel + '</div>'
   }
 
   box.innerHTML = html
