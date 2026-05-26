@@ -1379,10 +1379,12 @@ select{cursor:pointer}
 #loading-overlay.on{display:flex}
 .big-spinner{width:40px;height:40px;border:3px solid rgba(126,101,81,.25);border-top-color:var(--accent-hi);border-radius:50%;animation:spin .8s linear infinite}
 #loading-msg{font-size:14px;color:var(--text)}
-.file-drop{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.file-drop{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s,padding .15s}
 .file-drop:hover,.file-drop.over{border-color:var(--accent);background:rgba(126,101,81,.08)}
+.file-drop.has-file{padding:10px 14px;border-style:solid;border-color:var(--accent);background:rgba(126,101,81,.07);cursor:default;text-align:left}
 .file-drop-label{font-size:13px;color:var(--muted)}
 .file-drop-name{font-size:12px;color:var(--accent);margin-top:6px;font-weight:500}
+.file-drop.has-file .file-drop-name{margin-top:0;color:var(--text)}
 .preview-box{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;line-height:1.7}
 .preview-row{display:flex;justify-content:space-between;align-items:baseline}
 .preview-key{color:var(--muted)}
@@ -3280,11 +3282,12 @@ function readNsbFile(file, which) {
     var base64 = bufToBase64(e.target.result)
     _nsbData[which] = { base64: base64, name: file.name }
     var nameEl = document.getElementById(which + '-file-name')
-    nameEl.innerHTML = '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(file.name) + '</span><button onclick="event.stopPropagation();clearNsbFile(\\'' + which + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Clear">×</button>'
+    nameEl.innerHTML = '<svg width="13" height="15" viewBox="0 0 13 15" fill="none" style="flex-shrink:0;margin-right:8px;opacity:.85" xmlns="http://www.w3.org/2000/svg"><path d="M2 1h6l3 3v10H2V1z" fill="rgba(126,101,81,.25)" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 1v3h3" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="7" x2="9" y2="7" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/><line x1="4" y1="9.5" x2="8" y2="9.5" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">' + escH(file.name) + '</span><button onclick="event.stopPropagation();clearNsbFile(\\'' + which + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 10px;flex-shrink:0;display:flex;align-items:center" title="Remove">×</button>'
     nameEl.style.display = 'flex'
     nameEl.style.alignItems = 'center'
     var labelEl = document.getElementById(which + '-drop').querySelector('.file-drop-label')
     if (labelEl) labelEl.style.display = 'none'
+    document.getElementById(which + '-drop').classList.add('has-file')
     if (which === 'ansb') {
       loadNsbComparison()
       document.getElementById('ansb-apply-btn').disabled = false
@@ -3306,7 +3309,9 @@ function clearNsbFile(which) {
   var nameEl = document.getElementById(which + '-file-name')
   nameEl.innerHTML = ''
   nameEl.style.display = 'none'
-  var labelEl = document.getElementById(which + '-drop').querySelector('.file-drop-label')
+  var dropEl = document.getElementById(which + '-drop')
+  dropEl.classList.remove('has-file')
+  var labelEl = dropEl.querySelector('.file-drop-label')
   if (labelEl) labelEl.style.display = ''
   var fileInput = document.getElementById(which + '-file')
   if (fileInput) fileInput.value = ''
