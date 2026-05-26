@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.6.33'
+const VERSION = '0.7.0'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1443,6 +1443,18 @@ select{cursor:pointer}
 ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 .pack-sect{background:var(--surf2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px}
 .pack-sect-hdr{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.cp-modal{display:flex;flex-direction:column;max-height:88vh;overflow:hidden;padding:0!important}
+.cp-tab-bar{display:flex;align-items:flex-end;justify-content:space-between;padding:14px 16px 0;flex-shrink:0;gap:8px}
+.cp-tabs{display:flex;gap:1px;flex-wrap:wrap;flex:1}
+.cp-tab{background:none;border:none;border-bottom:2px solid transparent;padding:7px 13px 8px;border-radius:6px 6px 0 0;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.3px;transition:color .12s,background .12s;white-space:nowrap}
+.cp-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(126,101,81,.09)}
+.cp-tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,.04)}
+.cp-hdr-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px 8px;border-radius:4px;line-height:1;flex-shrink:0;margin-bottom:3px}
+.cp-hdr-close:hover{color:var(--text);background:rgba(255,255,255,.07)}
+.cp-divider{height:1px;background:var(--border);flex-shrink:0;margin:0}
+.cp-body{padding:20px;overflow-y:auto;flex:1;min-height:280px}
+.cp-toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+.cp-toggle-row{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;background:var(--surf2);padding:10px 12px;border-radius:8px;border:1px solid var(--border)}
 .car-filter-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
 .car-filter-chip{background:var(--surf2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;white-space:nowrap;color:var(--muted)}
 .car-filter-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -1667,15 +1679,56 @@ select{cursor:pointer}
 
 <!-- Create Pack Modal -->
 <div class="modal-bg" id="create-pack-modal">
-  <div class="modal" style="max-width:520px">
-    <div class="modal-title" id="cp-title-label">Create Pack</div>
-    <div class="field" style="margin-bottom:14px">
-      <label>Pack Name</label>
-      <input type="text" id="cp-name" placeholder="e.g. Starter Pack">
+  <div class="modal cp-modal" style="max-width:620px">
+    <div class="cp-tab-bar">
+      <div class="cp-tabs">
+        <button class="cp-tab active" id="cp-tab-general" onclick="cpSwitchTab('general')">General</button>
+        <button class="cp-tab" id="cp-tab-currencies" onclick="cpSwitchTab('currencies')" style="display:none">💰 Currencies</button>
+        <button class="cp-tab" id="cp-tab-cars" onclick="cpSwitchTab('cars')" style="display:none">🚗 Cars</button>
+        <button class="cp-tab" id="cp-tab-legends" onclick="cpSwitchTab('legends')" style="display:none">⭐ Legends</button>
+        <button class="cp-tab" id="cp-tab-fusions" onclick="cpSwitchTab('fusions')" style="display:none">⚗️ Fusions</button>
+        <button class="cp-tab" id="cp-tab-stage6" onclick="cpSwitchTab('stage6')" style="display:none">Stage 6</button>
+      </div>
+      <button class="cp-hdr-close" onclick="confirmClosePack()" title="Close">✕</button>
     </div>
-    <div class="pack-sect">
-      <div class="pack-sect-hdr">💰 Currencies</div>
-      <div class="curr-grid">
+    <div class="cp-divider"></div>
+
+    <div class="cp-body" id="cp-content-general">
+      <div class="field" style="margin-bottom:16px">
+        <label>Pack Title</label>
+        <input type="text" id="cp-name" placeholder="e.g. Starter Pack">
+      </div>
+      <div class="section-title" style="margin-bottom:10px">Pack Contents</div>
+      <div class="cp-toggle-grid">
+        <div class="cp-toggle-row">
+          <label class="toggle"><input type="checkbox" id="cp-toggle-currencies" onchange="cpOnToggle('currencies',this.checked)"><span class="tslider"></span></label>
+          <span>💰 Currencies</span>
+        </div>
+        <div class="cp-toggle-row">
+          <label class="toggle"><input type="checkbox" id="cp-toggle-cars" onchange="cpOnToggle('cars',this.checked)"><span class="tslider"></span></label>
+          <span>🚗 Cars</span>
+        </div>
+        <div class="cp-toggle-row">
+          <label class="toggle"><input type="checkbox" id="cp-toggle-legends" onchange="cpOnToggle('legends',this.checked)"><span class="tslider"></span></label>
+          <span>⭐ Legend Tokens</span>
+        </div>
+        <div class="cp-toggle-row">
+          <label class="toggle"><input type="checkbox" id="cp-toggle-fusions" onchange="cpOnToggle('fusions',this.checked)"><span class="tslider"></span></label>
+          <span>⚗️ Fusions</span>
+        </div>
+        <div class="cp-toggle-row">
+          <label class="toggle"><input type="checkbox" id="cp-toggle-stage6" onchange="cpOnToggle('stage6',this.checked)"><span class="tslider"></span></label>
+          <span>6️⃣ Stage 6</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cp-body" id="cp-content-currencies" style="display:none">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="cpClearCurrencies()">Clear All</button>
+      </div>
+      <div class="section-title">Currencies</div>
+      <div class="curr-grid" style="margin-bottom:16px">
         <div class="field"><label>💵 Cash</label><div class="field-wrap"><input type="number" id="cp-cash" placeholder="0" min="0"><span class="field-unit">$</span></div></div>
         <div class="field"><label>🪙 Gold</label><div class="field-wrap"><input type="number" id="cp-gold" placeholder="0" min="0"><span class="field-unit">G</span></div></div>
         <div class="field"><label>🔑 Bronze Keys</label><div class="field-wrap"><input type="number" id="cp-bkeys" placeholder="0" min="0"><span class="field-unit">Bk</span></div></div>
@@ -1683,9 +1736,7 @@ select{cursor:pointer}
         <div class="field"><label>✨ Gold Keys</label><div class="field-wrap"><input type="number" id="cp-gkeys" placeholder="0" min="0"><span class="field-unit">Gk</span></div></div>
         <div class="field"><label>⛽ Fuel</label><div class="field-wrap"><input type="number" id="cp-fuel" placeholder="0" min="0"><span class="field-unit">F</span></div></div>
       </div>
-    </div>
-    <div class="pack-sect">
-      <div class="pack-sect-hdr">⚗️ Elite Tokens</div>
+      <div class="section-title">Elite Tokens</div>
       <div class="curr-grid">
         <div class="field"><label><span class="token-dot" style="background:#4caf50"></span>Green</label><div class="field-wrap"><input type="number" id="cp-fgreen" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
         <div class="field"><label><span class="token-dot" style="background:#2196F3"></span>Blue</label><div class="field-wrap"><input type="number" id="cp-fblue" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
@@ -1693,49 +1744,70 @@ select{cursor:pointer}
         <div class="field"><label><span class="token-dot" style="background:#FFC107"></span>Yellow</label><div class="field-wrap"><input type="number" id="cp-fyellow" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
       </div>
     </div>
-    <div class="pack-sect" style="padding:12px 16px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <label class="toggle"><input type="checkbox" id="cp-cars-toggle" onchange="toggleCarsSection()"><span class="tslider"></span></label>
-        <span style="font-size:13px;font-weight:500">🚗 Add Cars</span>
+
+    <div class="cp-body" id="cp-content-cars" style="display:none">
+      <div class="field" style="margin-bottom:14px">
+        <label>Selection Mode</label>
+        <select id="cp-car-mode" onchange="onCarModeChange()">
+          <option value="random">Random (auto-picked)</option>
+          <option value="customizable">Customizable (buyer picks)</option>
+          <option value="all">All available</option>
+        </select>
       </div>
-      <div id="cp-cars-section" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
-        <div class="curr-grid" style="margin-bottom:10px">
-          <div class="field" id="cp-car-count-row"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
-          <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
-        </div>
-        <div class="field">
-          <label>Selection Mode</label>
-          <select id="cp-car-mode" onchange="onCarModeChange()">
-            <option value="random">Random (auto-picked, no duplicates)</option>
-            <option value="customizable">Customizable (buyer picks)</option>
-            <option value="all">All available (everything not owned)</option>
-          </select>
-        </div>
-        <div id="cp-all-colors-row" style="display:none;margin-bottom:0">
-          <label class="allow-dup-row" style="cursor:pointer">
-            <input type="checkbox" id="cp-all-colors">
-            <span>Include all color variants per car</span>
-          </label>
-        </div>
+      <div class="curr-grid" id="cp-car-count-row" style="margin-bottom:10px">
+        <div class="field"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
+        <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
+      </div>
+      <div id="cp-all-colors-row" style="display:none">
+        <label class="allow-dup-row" style="cursor:pointer">
+          <input type="checkbox" id="cp-all-colors">
+          <span>Include all color variants per car</span>
+        </label>
       </div>
     </div>
-    <div class="pack-sect" style="padding:12px 16px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <label class="toggle"><input type="checkbox" id="cp-ver-toggle" onchange="toggleVersionSection()"><span class="tslider"></span></label>
-        <span style="font-size:13px;font-weight:500">🔖 Version Override</span>
-      </div>
-      <div id="cp-ver-section" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
-        <div class="field" style="margin-bottom:0">
-          <label>Game Version</label>
-          <input type="text" id="cp-version" placeholder="e.g. 6.3.0">
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:6px">Sets prvr &amp; adpvr in the save file</div>
-      </div>
+
+    <div class="cp-body" id="cp-content-legends" style="display:none">
+      <div style="color:var(--muted);font-size:13px;text-align:center;padding:48px 0">⭐ Legend Tokens — coming soon</div>
     </div>
-    <div id="cp-notice" style="display:none"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="hideModal('create-pack-modal')">Cancel</button>
+
+    <div class="cp-body" id="cp-content-fusions" style="display:none">
+      <div style="color:var(--muted);font-size:13px;text-align:center;padding:48px 0">⚗️ Fusions — coming soon</div>
+    </div>
+
+    <div class="cp-body" id="cp-content-stage6" style="display:none">
+      <div style="color:var(--muted);font-size:13px;text-align:center;padding:48px 0">6️⃣ Stage 6 — coming soon</div>
+    </div>
+
+    <div id="cp-notice" style="display:none;margin:0 20px"></div>
+    <div class="cp-divider"></div>
+    <div class="modal-actions" style="padding:14px 16px;margin:0">
+      <button class="btn btn-secondary" onclick="confirmClosePack()">Close</button>
       <button class="btn btn-primary" onclick="savePack()" id="cp-save-btn">Save Pack</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Close Pack Modal -->
+<div class="modal-bg" id="confirm-close-pack-modal" style="z-index:200">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Discard Pack?</div>
+    <p class="confirm-desc">All entered values will be cleared and nothing will be saved.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('confirm-close-pack-modal')">Keep Editing</button>
+      <button class="btn btn-danger" onclick="forceClosePack()">Discard & Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pack Saved Modal -->
+<div class="modal-bg" id="pack-saved-modal" style="z-index:200">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title">Pack Saved ✓</div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:10px" id="cp-saved-name"></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Pack contents:</div>
+    <div id="cp-saved-summary" style="font-size:13px;line-height:1.8;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px"></div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-primary" onclick="hideModal('pack-saved-modal')">Done</button>
     </div>
   </div>
 </div>
@@ -2892,10 +2964,57 @@ async function confirmDeletePack() {
 
 // ─── Create Pack Modal ────────────────────────────────────────────────────────
 
-function toggleCarsSection() {
-  var on = document.getElementById('cp-cars-toggle').checked
-  document.getElementById('cp-cars-section').style.display = on ? '' : 'none'
-  if (on) onCarModeChange()
+var _cpCurrentTab = 'general'
+
+function cpSwitchTab(tab) {
+  _cpCurrentTab = tab
+  var tabs = ['general', 'currencies', 'cars', 'legends', 'fusions', 'stage6']
+  for (var i = 0; i < tabs.length; i++) {
+    var btn = document.getElementById('cp-tab-' + tabs[i])
+    var body = document.getElementById('cp-content-' + tabs[i])
+    if (btn) btn.classList.toggle('active', tabs[i] === tab)
+    if (body) body.style.display = tabs[i] === tab ? '' : 'none'
+  }
+}
+
+function cpOnToggle(tab, on) {
+  var btn = document.getElementById('cp-tab-' + tab)
+  if (btn) btn.style.display = on ? '' : 'none'
+  if (!on && _cpCurrentTab === tab) cpSwitchTab('general')
+}
+
+function cpClearCurrencies() {
+  var fields = ['cp-cash','cp-gold','cp-bkeys','cp-skeys','cp-gkeys','cp-fuel','cp-fgreen','cp-fblue','cp-fred','cp-fyellow']
+  for (var i = 0; i < fields.length; i++) document.getElementById(fields[i]).value = ''
+}
+
+function confirmClosePack() {
+  showModal('confirm-close-pack-modal')
+}
+
+function forceClosePack() {
+  hideModal('confirm-close-pack-modal')
+  resetCpModal()
+  hideModal('create-pack-modal')
+}
+
+function resetCpModal() {
+  _editingPackId = null
+  document.getElementById('cp-name').value = ''
+  cpClearCurrencies()
+  document.getElementById('cp-car-count').value = ''
+  document.getElementById('cp-car-condition').value = 'stock'
+  document.getElementById('cp-car-mode').value = 'random'
+  document.getElementById('cp-all-colors').checked = false
+  onCarModeChange()
+  var sections = ['currencies', 'cars', 'legends', 'fusions', 'stage6']
+  for (var i = 0; i < sections.length; i++) {
+    var toggle = document.getElementById('cp-toggle-' + sections[i])
+    if (toggle) toggle.checked = false
+    cpOnToggle(sections[i], false)
+  }
+  hideNotice('cp-notice')
+  cpSwitchTab('general')
 }
 
 function onCarModeChange() {
@@ -2907,63 +3026,42 @@ function onCarModeChange() {
 }
 
 function openCreatePack() {
-  _editingPackId = null
-  document.getElementById('cp-title-label').textContent = 'Create Pack'
-  document.getElementById('cp-name').value = ''
-  document.getElementById('cp-cash').value = ''
-  document.getElementById('cp-gold').value = ''
-  document.getElementById('cp-bkeys').value = ''
-  document.getElementById('cp-skeys').value = ''
-  document.getElementById('cp-gkeys').value = ''
-  document.getElementById('cp-fuel').value = ''
-  document.getElementById('cp-fgreen').value = ''
-  document.getElementById('cp-fblue').value = ''
-  document.getElementById('cp-fred').value = ''
-  document.getElementById('cp-fyellow').value = ''
-  document.getElementById('cp-cars-toggle').checked = false
-  document.getElementById('cp-cars-section').style.display = 'none'
-  document.getElementById('cp-car-count').value = ''
-  document.getElementById('cp-car-condition').value = 'stock'
-  document.getElementById('cp-car-mode').value = 'random'
-  document.getElementById('cp-all-colors').checked = false
-  onCarModeChange()
-  document.getElementById('cp-ver-toggle').checked = false
-  document.getElementById('cp-ver-section').style.display = 'none'
-  document.getElementById('cp-version').value = ''
-  hideNotice('cp-notice')
+  resetCpModal()
   showModal('create-pack-modal')
 }
 
 function openEditPack(packId) {
   var pack = _packs.find(function(p){ return p.id === packId })
   if (!pack) return
+  resetCpModal()
   _editingPackId = packId
-  document.getElementById('cp-title-label').textContent = 'Edit Pack'
-  var c = pack.currencies || {}
   document.getElementById('cp-name').value = pack.name || ''
-  document.getElementById('cp-cash').value = c.cash || ''
-  document.getElementById('cp-gold').value = c.gold || ''
-  document.getElementById('cp-bkeys').value = c.bronzeKeys || ''
-  document.getElementById('cp-skeys').value = c.silverKeys || ''
-  document.getElementById('cp-gkeys').value = c.goldKeys || ''
-  document.getElementById('cp-fuel').value = c.fuel || ''
-  document.getElementById('cp-fgreen').value = c.fusionGreen || ''
-  document.getElementById('cp-fblue').value = c.fusionBlue || ''
-  document.getElementById('cp-fred').value = c.fusionRed || ''
-  document.getElementById('cp-fyellow').value = c.fusionYellow || ''
+  var c = pack.currencies || {}
+  var hasCurr = !!(c.cash || c.gold || c.bronzeKeys || c.silverKeys || c.goldKeys || c.fuel || c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow)
+  if (hasCurr) {
+    document.getElementById('cp-toggle-currencies').checked = true
+    cpOnToggle('currencies', true)
+    document.getElementById('cp-cash').value = c.cash || ''
+    document.getElementById('cp-gold').value = c.gold || ''
+    document.getElementById('cp-bkeys').value = c.bronzeKeys || ''
+    document.getElementById('cp-skeys').value = c.silverKeys || ''
+    document.getElementById('cp-gkeys').value = c.goldKeys || ''
+    document.getElementById('cp-fuel').value = c.fuel || ''
+    document.getElementById('cp-fgreen').value = c.fusionGreen || ''
+    document.getElementById('cp-fblue').value = c.fusionBlue || ''
+    document.getElementById('cp-fred').value = c.fusionRed || ''
+    document.getElementById('cp-fyellow').value = c.fusionYellow || ''
+  }
   var carsOn = !!(pack.cars && (pack.cars.count || pack.cars.carMode === 'all'))
-  document.getElementById('cp-cars-toggle').checked = carsOn
-  document.getElementById('cp-cars-section').style.display = carsOn ? '' : 'none'
-  document.getElementById('cp-car-count').value = carsOn ? (pack.cars.count || '') : ''
-  document.getElementById('cp-car-condition').value = carsOn ? (pack.cars.condition || 'stock') : 'stock'
-  document.getElementById('cp-car-mode').value = carsOn ? (pack.cars.carMode || 'random') : 'random'
-  document.getElementById('cp-all-colors').checked = !!(carsOn && pack.cars.allColors)
-  onCarModeChange()
-  var verOn = !!(pack.version)
-  document.getElementById('cp-ver-toggle').checked = verOn
-  document.getElementById('cp-ver-section').style.display = verOn ? '' : 'none'
-  document.getElementById('cp-version').value = pack.version || ''
-  hideNotice('cp-notice')
+  if (carsOn) {
+    document.getElementById('cp-toggle-cars').checked = true
+    cpOnToggle('cars', true)
+    document.getElementById('cp-car-count').value = pack.cars.count || ''
+    document.getElementById('cp-car-condition').value = pack.cars.condition || 'stock'
+    document.getElementById('cp-car-mode').value = pack.cars.carMode || 'random'
+    document.getElementById('cp-all-colors').checked = !!(pack.cars.allColors)
+    onCarModeChange()
+  }
   showModal('create-pack-modal')
 }
 
@@ -2971,27 +3069,29 @@ async function savePack() {
   var name = document.getElementById('cp-name').value.trim()
   if (!name) { showNotice('cp-notice', 'error', 'Enter a pack name.'); return }
   var currencies = {}
-  var cash = parseInt(document.getElementById('cp-cash').value) || 0
-  var gold = parseInt(document.getElementById('cp-gold').value) || 0
-  var bkeys = parseInt(document.getElementById('cp-bkeys').value) || 0
-  var skeys = parseInt(document.getElementById('cp-skeys').value) || 0
-  var gkeys = parseInt(document.getElementById('cp-gkeys').value) || 0
-  var fuel    = parseInt(document.getElementById('cp-fuel').value)    || 0
-  var fgreen  = parseInt(document.getElementById('cp-fgreen').value)  || 0
-  var fblue   = parseInt(document.getElementById('cp-fblue').value)   || 0
-  var fred    = parseInt(document.getElementById('cp-fred').value)    || 0
-  var fyellow = parseInt(document.getElementById('cp-fyellow').value) || 0
-  if (cash)    currencies.cash = cash
-  if (gold)    currencies.gold = gold
-  if (bkeys)   currencies.bronzeKeys = bkeys
-  if (skeys)   currencies.silverKeys = skeys
-  if (gkeys)   currencies.goldKeys = gkeys
-  if (fuel)    currencies.fuel = fuel
-  if (fgreen)  currencies.fusionGreen = fgreen
-  if (fblue)   currencies.fusionBlue = fblue
-  if (fred)    currencies.fusionRed = fred
-  if (fyellow) currencies.fusionYellow = fyellow
-  var carsOn = document.getElementById('cp-cars-toggle').checked
+  if (document.getElementById('cp-toggle-currencies').checked) {
+    var cash = parseInt(document.getElementById('cp-cash').value) || 0
+    var gold = parseInt(document.getElementById('cp-gold').value) || 0
+    var bkeys = parseInt(document.getElementById('cp-bkeys').value) || 0
+    var skeys = parseInt(document.getElementById('cp-skeys').value) || 0
+    var gkeys = parseInt(document.getElementById('cp-gkeys').value) || 0
+    var fuel = parseInt(document.getElementById('cp-fuel').value) || 0
+    var fgreen = parseInt(document.getElementById('cp-fgreen').value) || 0
+    var fblue = parseInt(document.getElementById('cp-fblue').value) || 0
+    var fred = parseInt(document.getElementById('cp-fred').value) || 0
+    var fyellow = parseInt(document.getElementById('cp-fyellow').value) || 0
+    if (cash) currencies.cash = cash
+    if (gold) currencies.gold = gold
+    if (bkeys) currencies.bronzeKeys = bkeys
+    if (skeys) currencies.silverKeys = skeys
+    if (gkeys) currencies.goldKeys = gkeys
+    if (fuel) currencies.fuel = fuel
+    if (fgreen) currencies.fusionGreen = fgreen
+    if (fblue) currencies.fusionBlue = fblue
+    if (fred) currencies.fusionRed = fred
+    if (fyellow) currencies.fusionYellow = fyellow
+  }
+  var carsOn = document.getElementById('cp-toggle-cars').checked
   var cpCarMode = document.getElementById('cp-car-mode').value
   var cars = carsOn ? {
     count: parseInt(document.getElementById('cp-car-count').value) || 0,
@@ -2999,13 +3099,26 @@ async function savePack() {
     carMode: cpCarMode,
     allColors: cpCarMode === 'all' ? document.getElementById('cp-all-colors').checked : false,
   } : null
-  var version = document.getElementById('cp-ver-toggle').checked ? (document.getElementById('cp-version').value.trim() || null) : null
-  var pack = { name, currencies, cars, version: version || undefined }
+  var pack = { name, currencies, cars }
   var url = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
   var method = _editingPackId ? 'PATCH' : 'POST'
   var res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pack) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (res.error) { showNotice('cp-notice', 'error', res.error); return }
+  var summaryLines = []
+  if (Object.keys(currencies).length > 0) {
+    summaryLines.push('💰 ' + Object.keys(currencies).map(function(k){ return currencies[k] + ' ' + k }).join(', '))
+  }
+  if (cars) {
+    var carsDesc = cars.carMode === 'all' ? 'All available cars (' + cars.condition + ')' : cars.count + ' cars — ' + cars.carMode + ', ' + cars.condition
+    summaryLines.push('🚗 ' + carsDesc)
+  }
+  document.getElementById('cp-saved-name').textContent = name
+  document.getElementById('cp-saved-summary').innerHTML = summaryLines.length > 0
+    ? summaryLines.map(function(l){ return '<div style="padding:3px 0">' + escH(l) + '</div>' }).join('')
+    : '<div style="color:var(--muted)">No contents configured</div>'
   hideModal('create-pack-modal')
+  showModal('pack-saved-modal')
+  resetCpModal()
   await reloadPacks()
   renderPacks()
 }
@@ -3819,10 +3932,6 @@ function updateEnsbAfter() {
   }
 }
 
-function toggleVersionSection() {
-  var on = document.getElementById('cp-ver-toggle').checked
-  document.getElementById('cp-ver-section').style.display = on ? '' : 'none'
-}
 
 // ─── Unban Modal ──────────────────────────────────────────────────────────────
 
