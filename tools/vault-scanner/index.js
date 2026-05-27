@@ -16,6 +16,7 @@ const DATA_DIR = path.join(process.env.APPDATA || os.homedir(), 'aio-tool')
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json')
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 const PACKS_FILE     = path.join(DATA_DIR, 'csr2-packs.json')
+const CAR_PACKS_FILE = path.join(DATA_DIR, 'csr2-car-packs.json')
 const CSR2_CARS_FILE = path.join(DATA_DIR, 'csr2-cars.json')
 const CSR2_SHA_FILE  = path.join(DATA_DIR, 'csr2-cars-sha.json')
 const INT32_MAX = 2147483647
@@ -38,8 +39,10 @@ function loadAccounts() { return loadJson(ACCOUNTS_FILE, []) }
 function saveAccounts(a) { saveJson(ACCOUNTS_FILE, a) }
 function loadConfig() { const c = loadJson(CONFIG_FILE, {}); if (!c.webappUrl) c.webappUrl = 'https://antlervaults.store'; return c }
 function saveConfig(c) { saveJson(CONFIG_FILE, c) }
-function loadPacks()    { return loadJson(PACKS_FILE, []) }
-function savePacks(p)  { saveJson(PACKS_FILE, p) }
+function loadPacks()     { return loadJson(PACKS_FILE, []) }
+function savePacks(p)   { saveJson(PACKS_FILE, p) }
+function loadCarPacks() { return loadJson(CAR_PACKS_FILE, []) }
+function saveCarPacks(p){ saveJson(CAR_PACKS_FILE, p) }
 function loadCsr2Cars() { return loadJson(CSR2_CARS_FILE, []) }
 function saveCsr2Cars(d) { saveJson(CSR2_CARS_FILE, d) }
 function loadCsr2Sha() { return loadJson(CSR2_SHA_FILE, {}) }
@@ -1455,6 +1458,27 @@ select{cursor:pointer}
 .cp-body{padding:20px;overflow-y:auto;flex:1;min-height:280px}
 .cp-toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
 .cp-toggle-row{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;background:var(--surf2);padding:10px 12px;border-radius:8px;border:1px solid var(--border)}
+.cp-or-sep{display:flex;align-items:center;gap:10px;margin:14px 0;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px}
+.cp-or-sep::before,.cp-or-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+.cp-pack-card{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .15s,background .15s;position:relative;user-select:none}
+.cp-pack-card:hover{border-color:var(--accent-hi)}
+.cp-pack-card.selected{border-color:var(--accent);background:rgba(126,101,81,.12);box-shadow:0 0 0 1px var(--accent)}
+.cp-pack-card-name{font-size:13px;font-weight:600;padding-right:52px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp-pack-card-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.cp-pack-card-btns{position:absolute;top:8px;right:8px;display:flex;gap:3px}
+.cp-pack-card-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:3px 5px;border-radius:4px;font-size:13px;line-height:1}
+.cp-pack-card-btn:hover{color:var(--text);background:rgba(255,255,255,.08)}
+.cpp-modal{display:flex;flex-direction:column;max-height:90vh;overflow:hidden;padding:0!important}
+.cpp-body{display:flex;flex:1;overflow:hidden;min-height:0}
+.cpp-left{flex:1;display:flex;flex-direction:column;padding:16px;border-right:1px solid var(--border);overflow:hidden}
+.cpp-right{width:260px;display:flex;flex-direction:column;padding:16px;gap:10px}
+.cpp-right-cars{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0}
+.cpp-car-item{display:flex;align-items:center;gap:8px;background:var(--surf2);border-radius:6px;padding:6px 8px;font-size:12px}
+.cpp-car-item-info{flex:1;min-width:0}
+.cpp-car-item-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.cpp-car-item-color{color:var(--muted);font-size:11px}
+.cpp-remove-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 4px;border-radius:3px;font-size:14px;line-height:1;flex-shrink:0}
+.cpp-remove-btn:hover{color:var(--red)}
 .car-filter-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
 .car-filter-chip{background:var(--surf2);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;white-space:nowrap;color:var(--muted)}
 .car-filter-chip.active{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -1679,14 +1703,14 @@ select{cursor:pointer}
 
 <!-- Create Pack Modal -->
 <div class="modal-bg" id="create-pack-modal">
-  <div class="modal cp-modal" style="max-width:620px">
+  <div class="modal cp-modal" style="max-width:700px">
     <div class="cp-tab-bar">
       <div class="cp-tabs">
         <button class="cp-tab active" id="cp-tab-general" onclick="cpSwitchTab('general')">General</button>
-        <button class="cp-tab" id="cp-tab-currencies" onclick="cpSwitchTab('currencies')" style="display:none">💰 Currencies</button>
-        <button class="cp-tab" id="cp-tab-cars" onclick="cpSwitchTab('cars')" style="display:none">🚗 Cars</button>
-        <button class="cp-tab" id="cp-tab-legends" onclick="cpSwitchTab('legends')" style="display:none">⭐ Legends</button>
-        <button class="cp-tab" id="cp-tab-fusions" onclick="cpSwitchTab('fusions')" style="display:none">⚗️ Fusions</button>
+        <button class="cp-tab" id="cp-tab-currencies" onclick="cpSwitchTab('currencies')" style="display:none">Currencies</button>
+        <button class="cp-tab" id="cp-tab-cars" onclick="cpSwitchTab('cars')" style="display:none">Cars</button>
+        <button class="cp-tab" id="cp-tab-legends" onclick="cpSwitchTab('legends')" style="display:none">Legends</button>
+        <button class="cp-tab" id="cp-tab-fusions" onclick="cpSwitchTab('fusions')" style="display:none">Fusions</button>
         <button class="cp-tab" id="cp-tab-stage6" onclick="cpSwitchTab('stage6')" style="display:none">Stage 6</button>
       </div>
       <button class="cp-hdr-close" onclick="confirmClosePack()" title="Close">✕</button>
@@ -1746,23 +1770,67 @@ select{cursor:pointer}
     </div>
 
     <div class="cp-body" id="cp-content-cars" style="display:none">
-      <div class="field" style="margin-bottom:14px">
+      <div class="field" style="margin-bottom:16px">
         <label>Selection Mode</label>
         <select id="cp-car-mode" onchange="onCarModeChange()">
-          <option value="random">Random (auto-picked)</option>
+          <option value="random">Random</option>
           <option value="customizable">Customizable (buyer picks)</option>
           <option value="all">All available</option>
         </select>
       </div>
-      <div class="curr-grid" id="cp-car-count-row" style="margin-bottom:10px">
-        <div class="field"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
-        <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
+
+      <!-- Random section -->
+      <div id="cp-random-section">
+        <div class="section-title" style="margin-bottom:8px">Random Cars</div>
+        <div class="curr-grid" style="margin-bottom:12px">
+          <div class="field"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
+          <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
+        </div>
+        <label class="allow-dup-row" style="cursor:pointer;margin-bottom:0">
+          <input type="checkbox" id="cp-partial-toggle" onchange="onPartialToggle()">
+          <span style="font-weight:500">Allow Partial Selection</span>
+        </label>
+        <div id="cp-partial-section" style="display:none;margin-top:12px">
+          <div class="cp-or-sep">OR</div>
+          <div class="section-title" style="margin-bottom:8px">Partial Selection</div>
+          <div class="curr-grid">
+            <div class="field"><label>Count</label><input type="number" id="cp-partial-count" placeholder="e.g. 20" min="1"></div>
+            <div class="field"><label>Condition</label><select id="cp-partial-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
+          </div>
+        </div>
       </div>
-      <div id="cp-all-colors-row" style="display:none">
-        <label class="allow-dup-row" style="cursor:pointer">
+
+      <!-- Customizable section -->
+      <div id="cp-customizable-section" style="display:none">
+        <div class="section-title" style="margin-bottom:8px">Customizable Cars</div>
+        <div class="curr-grid">
+          <div class="field"><label>Count</label><input type="number" id="cp-custom-count" placeholder="e.g. 100" min="1"></div>
+          <div class="field"><label>Condition</label><select id="cp-custom-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
+        </div>
+      </div>
+
+      <!-- All section -->
+      <div id="cp-all-section" style="display:none">
+        <div class="section-title" style="margin-bottom:8px">All Available Cars</div>
+        <div class="field" style="margin-bottom:10px">
+          <label>Condition</label>
+          <select id="cp-all-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select>
+        </div>
+        <label class="allow-dup-row" style="cursor:pointer;margin-bottom:0">
           <input type="checkbox" id="cp-all-colors">
           <span>Include all color variants per car</span>
         </label>
+      </div>
+
+      <!-- Car Packs (shown for random+partial or customizable) -->
+      <div id="cp-car-packs-section" style="display:none;margin-top:16px">
+        <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <span class="section-title" style="margin:0">Car Packs <span id="cp-car-packs-hint" style="color:var(--muted);font-weight:400;text-transform:none;font-size:10px;letter-spacing:0">— click to include</span></span>
+          <button class="btn btn-secondary btn-sm" onclick="openCreateCarPack()">+ Create</button>
+        </div>
+        <div id="cp-car-packs-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto"></div>
+        <div id="cp-car-packs-empty" style="font-size:12px;color:var(--muted);text-align:center;padding:16px 0;display:none">No car packs yet. Create one above.</div>
       </div>
     </div>
 
@@ -1808,6 +1876,57 @@ select{cursor:pointer}
     <div id="cp-saved-summary" style="font-size:13px;line-height:1.8;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px"></div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn btn-primary" onclick="hideModal('pack-saved-modal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Car Pack Modal -->
+<div class="modal-bg" id="create-car-pack-modal" style="z-index:150">
+  <div class="modal cpp-modal" style="max-width:860px;width:95vw">
+    <div class="cp-tab-bar" style="padding-bottom:12px">
+      <div>
+        <div style="font-size:15px;font-weight:600" id="cpp-modal-title">Create Car Pack</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Select cars to include · all duplicates allowed</div>
+      </div>
+      <button class="cp-hdr-close" onclick="closeCreateCarPack()" title="Close">✕</button>
+    </div>
+    <div class="cp-divider"></div>
+    <div class="cpp-body">
+      <!-- Left: car search -->
+      <div class="cpp-left">
+        <label class="allow-dup-row" style="cursor:pointer;margin-bottom:10px">
+          <input type="checkbox" id="cpp-allow-dup" onchange="_cppAllowDupes=this.checked;searchCppCars(document.getElementById('cpp-car-search').value)">
+          <span>Allow Duplicates</span>
+        </label>
+        <div class="car-search-wrap" style="margin-bottom:8px">
+          <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
+          <input type="text" class="car-search-input" id="cpp-car-search" placeholder="Search by name or brand..." oninput="searchCppCars(this.value)">
+        </div>
+        <div id="cpp-car-results" style="flex:1;overflow-y:auto"></div>
+      </div>
+      <!-- Right: pack being built -->
+      <div class="cpp-right">
+        <div class="field" style="margin-bottom:0">
+          <label>Pack Name</label>
+          <input type="text" id="cpp-pack-name" placeholder="e.g. Rosso Imperiale">
+        </div>
+        <div style="font-size:12px;color:var(--muted)" id="cpp-count-label">0 cars</div>
+        <div class="cpp-right-cars" id="cpp-selected-list">
+          <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:20px">No cars yet.<br>Search and add on the left.</div>
+        </div>
+        <div id="cpp-notice" style="display:none"></div>
+        <button class="btn btn-primary" onclick="saveCarPack()" style="width:100%;margin-top:auto">Save Car Pack</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- View Car Pack Modal -->
+<div class="modal-bg" id="view-car-pack-modal" style="z-index:200">
+  <div class="modal" style="max-width:420px">
+    <div id="view-car-pack-body"></div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="btn btn-primary" onclick="hideModal('view-car-pack-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -2044,6 +2163,7 @@ select{cursor:pointer}
 var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection = null
 var _packs = [], _nsbData = { ansb: null, unban: null, ensb: null }, _selectedCars = []
 var _editingPackId = null, _deletingPackId = null
+var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _selMode = false, _selected = new Set()
@@ -3000,12 +3120,19 @@ function forceClosePack() {
 
 function resetCpModal() {
   _editingPackId = null
+  _selectedCarPackIds = new Set()
   document.getElementById('cp-name').value = ''
   cpClearCurrencies()
-  document.getElementById('cp-car-count').value = ''
-  document.getElementById('cp-car-condition').value = 'stock'
-  document.getElementById('cp-car-mode').value = 'random'
+  // reset all car fields
+  var carFields = ['cp-car-count','cp-car-condition','cp-car-mode','cp-custom-count','cp-custom-condition','cp-all-condition','cp-partial-count','cp-partial-condition']
+  for (var i = 0; i < carFields.length; i++) {
+    var el = document.getElementById(carFields[i])
+    if (!el) continue
+    if (el.tagName === 'SELECT') el.value = el.options[0].value
+    else el.value = ''
+  }
   document.getElementById('cp-all-colors').checked = false
+  document.getElementById('cp-partial-toggle').checked = false
   onCarModeChange()
   var sections = ['currencies', 'cars', 'legends', 'fusions', 'stage6']
   for (var i = 0; i < sections.length; i++) {
@@ -3019,14 +3146,30 @@ function resetCpModal() {
 
 function onCarModeChange() {
   var mode = document.getElementById('cp-car-mode').value
-  var countRow = document.getElementById('cp-car-count-row')
-  if (countRow) countRow.style.display = mode === 'all' ? 'none' : ''
-  var allColorsRow = document.getElementById('cp-all-colors-row')
-  if (allColorsRow) allColorsRow.style.display = mode === 'all' ? '' : 'none'
+  var sections = { random: 'cp-random-section', customizable: 'cp-customizable-section', all: 'cp-all-section' }
+  for (var key in sections) {
+    var el = document.getElementById(sections[key])
+    if (el) el.style.display = key === mode ? '' : 'none'
+  }
+  var packsSection = document.getElementById('cp-car-packs-section')
+  if (packsSection) {
+    var showPacks = mode === 'customizable' || (mode === 'random' && document.getElementById('cp-partial-toggle').checked)
+    packsSection.style.display = showPacks ? '' : 'none'
+  }
 }
 
-function openCreatePack() {
+function onPartialToggle() {
+  var on = document.getElementById('cp-partial-toggle').checked
+  var partialSection = document.getElementById('cp-partial-section')
+  if (partialSection) partialSection.style.display = on ? '' : 'none'
+  var packsSection = document.getElementById('cp-car-packs-section')
+  if (packsSection) packsSection.style.display = on ? '' : 'none'
+}
+
+async function openCreatePack() {
   resetCpModal()
+  await reloadCarPacks()
+  renderCarPackCards()
   showModal('create-pack-modal')
 }
 
@@ -3052,16 +3195,38 @@ function openEditPack(packId) {
     document.getElementById('cp-fred').value = c.fusionRed || ''
     document.getElementById('cp-fyellow').value = c.fusionYellow || ''
   }
-  var carsOn = !!(pack.cars && (pack.cars.count || pack.cars.carMode === 'all'))
+  var carsOn = !!(pack.cars)
   if (carsOn) {
     document.getElementById('cp-toggle-cars').checked = true
     cpOnToggle('cars', true)
-    document.getElementById('cp-car-count').value = pack.cars.count || ''
-    document.getElementById('cp-car-condition').value = pack.cars.condition || 'stock'
-    document.getElementById('cp-car-mode').value = pack.cars.carMode || 'random'
-    document.getElementById('cp-all-colors').checked = !!(pack.cars.allColors)
+    var cm = pack.cars.carMode || 'random'
+    document.getElementById('cp-car-mode').value = cm
+    if (cm === 'random') {
+      document.getElementById('cp-car-count').value = pack.cars.count || ''
+      document.getElementById('cp-car-condition').value = pack.cars.condition || 'stock'
+      var hasPartial = !!(pack.cars.partial)
+      document.getElementById('cp-partial-toggle').checked = hasPartial
+      if (hasPartial) {
+        document.getElementById('cp-partial-count').value = pack.cars.partial.count || ''
+        document.getElementById('cp-partial-condition').value = pack.cars.partial.condition || 'stock'
+      }
+      if (pack.cars.selectedCarPacks) {
+        _selectedCarPackIds = new Set(pack.cars.selectedCarPacks)
+      }
+    } else if (cm === 'customizable') {
+      document.getElementById('cp-custom-count').value = pack.cars.count || ''
+      document.getElementById('cp-custom-condition').value = pack.cars.condition || 'stock'
+      if (pack.cars.selectedCarPacks) {
+        _selectedCarPackIds = new Set(pack.cars.selectedCarPacks)
+      }
+    } else {
+      document.getElementById('cp-all-condition').value = pack.cars.condition || 'stock'
+      document.getElementById('cp-all-colors').checked = !!(pack.cars.allColors)
+    }
     onCarModeChange()
   }
+  await reloadCarPacks()
+  renderCarPackCards()
   showModal('create-pack-modal')
 }
 
@@ -3093,12 +3258,36 @@ async function savePack() {
   }
   var carsOn = document.getElementById('cp-toggle-cars').checked
   var cpCarMode = document.getElementById('cp-car-mode').value
-  var cars = carsOn ? {
-    count: parseInt(document.getElementById('cp-car-count').value) || 0,
-    condition: document.getElementById('cp-car-condition').value,
-    carMode: cpCarMode,
-    allColors: cpCarMode === 'all' ? document.getElementById('cp-all-colors').checked : false,
-  } : null
+  var cars = null
+  if (carsOn) {
+    var selPackIds = Array.from(_selectedCarPackIds)
+    if (cpCarMode === 'random') {
+      var partialOn = document.getElementById('cp-partial-toggle').checked
+      cars = {
+        carMode: 'random',
+        count: parseInt(document.getElementById('cp-car-count').value) || 0,
+        condition: document.getElementById('cp-car-condition').value,
+        partial: partialOn ? {
+          count: parseInt(document.getElementById('cp-partial-count').value) || 0,
+          condition: document.getElementById('cp-partial-condition').value
+        } : null,
+        selectedCarPacks: partialOn ? selPackIds : []
+      }
+    } else if (cpCarMode === 'customizable') {
+      cars = {
+        carMode: 'customizable',
+        count: parseInt(document.getElementById('cp-custom-count').value) || 0,
+        condition: document.getElementById('cp-custom-condition').value,
+        selectedCarPacks: selPackIds
+      }
+    } else {
+      cars = {
+        carMode: 'all',
+        condition: document.getElementById('cp-all-condition').value,
+        allColors: document.getElementById('cp-all-colors').checked
+      }
+    }
+  }
   var pack = { name, currencies, cars }
   var url = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
   var method = _editingPackId ? 'PATCH' : 'POST'
@@ -3121,6 +3310,243 @@ async function savePack() {
   resetCpModal()
   await reloadPacks()
   renderPacks()
+}
+
+// ─── Car Packs ────────────────────────────────────────────────────────────────
+
+async function reloadCarPacks() {
+  _carPacks = await apiFetch('/csr2/car-packs', [])
+}
+
+function renderCarPackCards() {
+  var list = document.getElementById('cp-car-packs-list')
+  var empty = document.getElementById('cp-car-packs-empty')
+  if (!list) return
+  if (!_carPacks.length) {
+    list.innerHTML = ''
+    if (empty) empty.style.display = ''
+    return
+  }
+  if (empty) empty.style.display = 'none'
+  var html = ''
+  for (var i = 0; i < _carPacks.length; i++) {
+    var p = _carPacks[i]
+    var sel = _selectedCarPackIds.has(p.id)
+    var carCount = Array.isArray(p.cars) ? p.cars.length : 0
+    html += '<div class="cp-pack-card' + (sel ? ' selected' : '') + '" onclick="toggleCarPackSelection(\'' + p.id + '\')" data-id="' + p.id + '">'
+    html += '<div class="cp-pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div>'
+    html += '<div class="cp-pack-card-meta">' + carCount + ' car' + (carCount !== 1 ? 's' : '') + '</div>'
+    html += '<div class="cp-pack-card-btns">'
+    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openViewCarPack(\'' + p.id + '\')" title="View">👁</button>'
+    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openEditCarPack(\'' + p.id + '\')" title="Edit">✏️</button>'
+    html += '</div>'
+    html += '</div>'
+  }
+  list.innerHTML = html
+}
+
+function toggleCarPackSelection(id) {
+  if (_selectedCarPackIds.has(id)) {
+    _selectedCarPackIds.delete(id)
+  } else {
+    _selectedCarPackIds.add(id)
+  }
+  renderCarPackCards()
+}
+
+function openCreateCarPack() {
+  _carPackEditId = null
+  _carPackCars = []
+  _cppAllowDupes = false
+  document.getElementById('cpp-pack-name').value = ''
+  document.getElementById('cpp-allow-dup').checked = false
+  document.getElementById('cpp-car-search').value = ''
+  document.getElementById('cpp-modal-title').textContent = 'Create Car Pack'
+  hideNotice('cpp-notice')
+  renderCppSelectedCars()
+  searchCppCars('')
+  showModal('create-car-pack-modal')
+}
+
+function openEditCarPack(id) {
+  var pack = _carPacks.find(function(p){ return p.id === id })
+  if (!pack) return
+  _carPackEditId = id
+  _carPackCars = (pack.cars || []).slice()
+  _cppAllowDupes = false
+  document.getElementById('cpp-pack-name').value = pack.name || ''
+  document.getElementById('cpp-allow-dup').checked = false
+  document.getElementById('cpp-car-search').value = ''
+  document.getElementById('cpp-modal-title').textContent = 'Edit Car Pack'
+  hideNotice('cpp-notice')
+  renderCppSelectedCars()
+  searchCppCars('')
+  showModal('create-car-pack-modal')
+}
+
+function openViewCarPack(id) {
+  var pack = _carPacks.find(function(p){ return p.id === id })
+  if (!pack) return
+  var cars = pack.cars || []
+  var html = '<div style="font-size:14px;font-weight:600;margin-bottom:12px">' + escH(pack.name || 'Unnamed') + ' — ' + cars.length + ' car' + (cars.length !== 1 ? 's' : '') + '</div>'
+  if (!cars.length) {
+    html += '<div style="color:var(--muted);font-size:13px">No cars in this pack.</div>'
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto">'
+    for (var i = 0; i < cars.length; i++) {
+      var c = cars[i]
+      html += '<div class="cpp-car-item">'
+      if (c.photoUrl) html += '<img src="' + escH(c.photoUrl) + '" style="width:44px;height:30px;object-fit:cover;border-radius:4px" onerror="this.style.display=\'none\'" loading="lazy">'
+      html += '<div class="cpp-car-item-info"><div class="cpp-car-item-name">' + escH(c.name || c.crdb) + '</div>'
+      if (c.colorName) html += '<div class="cpp-car-item-color">' + escH(c.colorName) + '</div>'
+      html += '</div></div>'
+    }
+    html += '</div>'
+  }
+  document.getElementById('view-car-pack-body').innerHTML = html
+  showModal('view-car-pack-modal')
+}
+
+function closeCreateCarPack() {
+  hideModal('create-car-pack-modal')
+  _carPackCars = []
+  _carPackEditId = null
+}
+
+async function saveCarPack() {
+  var name = document.getElementById('cpp-pack-name').value.trim()
+  if (!name) { showNotice('cpp-notice', 'error', 'Enter a pack name.'); return }
+  var pack = { name: name, cars: _carPackCars }
+  var url = _carPackEditId ? '/csr2/car-packs/' + _carPackEditId : '/csr2/car-packs'
+  var method = _carPackEditId ? 'PATCH' : 'POST'
+  var res = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pack) })
+    .then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('cpp-notice', 'error', res.error); return }
+  closeCreateCarPack()
+  await reloadCarPacks()
+  renderCarPackCards()
+}
+
+function searchCppCars(query) {
+  var results = document.getElementById('cpp-car-results')
+  if (!results) return
+  var q = query.trim().toLowerCase()
+  var selectedKeys = new Set(_carPackCars.map(function(c){ return c.crdb + '|' + (c.colorName || '') }))
+  var matches = []
+  for (var i = 0; i < _csr2CarsDb.length; i++) {
+    var car = _csr2CarsDb[i]
+    if (!car.crdb) continue
+    if (q && car.name.toLowerCase().indexOf(q) === -1 && (car.brand || '').toLowerCase().indexOf(q) === -1) continue
+    matches.push({ car: car, idx: i })
+    if (matches.length >= 60) break
+  }
+  if (!matches.length) { results.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:10px 0">No results</div>'; return }
+  var starIcon = { Gold: '⭐', Purple: '💜', Legends: '🌟' }
+  var html = '<div class="car-result-list">'
+  for (var j = 0; j < matches.length; j++) {
+    var car = matches[j].car
+    var idx = matches[j].idx
+    var alreadyAdded = !_cppAllowDupes && car.colors && car.colors.length === 1 && selectedKeys.has(car.crdb + '|' + car.colors[0].name)
+    var col0 = (car.colors && car.colors[0]) || {}
+    var thumb = col0.photoUrl || ''
+    html += '<div class="car-result-item' + (alreadyAdded ? ' added' : '') + '" onclick="addCarToCarPack(' + idx + ')">'
+    if (thumb) html += '<img class="car-result-thumb" src="' + escH(thumb) + '" onerror="this.style.display=\'none\'" loading="lazy">'
+    else html += '<span class="car-tier-badge">T' + car.tier + '</span>'
+    html += '<div class="car-result-info"><div class="car-result-name">' + escH(car.name) + '</div>'
+    html += '<div class="car-result-meta">' + (starIcon[car.starType] || '') + ' T' + car.tier + (car.brand ? ' · ' + escH(car.brand) : '') + (alreadyAdded ? ' · Added ✓' : '') + '</div></div>'
+    html += '</div>'
+  }
+  html += '</div>'
+  results.innerHTML = html
+}
+
+function addCarToCarPack(carIdx) {
+  var car = _csr2CarsDb[carIdx]
+  if (!car) return
+  if (car.colors && car.colors.length === 1) {
+    var col = car.colors[0]
+    if (!_cppAllowDupes && _carPackCars.find(function(c){ return c.crdb === car.crdb && c.colorName === col.name })) return
+    _carPackCars.push({ crdb: car.crdb, name: car.name, tier: car.tier, colorName: col.name, photoUrl: col.photoUrl || '', stockTxtUrl: col.stockTxtUrl || '', maxedTxtUrl: col.maxedTxtUrl || null })
+    renderCppSelectedCars()
+    searchCppCars(document.getElementById('cpp-car-search').value)
+  } else if (car.colors && car.colors.length > 1) {
+    openCppColorPicker(carIdx)
+  } else {
+    if (!_cppAllowDupes && _carPackCars.find(function(c){ return c.crdb === car.crdb })) return
+    _carPackCars.push({ crdb: car.crdb, name: car.name, tier: car.tier, colorName: '', photoUrl: '', stockTxtUrl: '', maxedTxtUrl: null })
+    renderCppSelectedCars()
+    searchCppCars(document.getElementById('cpp-car-search').value)
+  }
+}
+
+function openCppColorPicker(carIdx) {
+  var car = _csr2CarsDb[carIdx]
+  if (!car) return
+  var selectedKeys = new Set(_carPackCars.map(function(c){ return c.crdb + '|' + c.colorName }))
+  var html = ''
+  var colors = car.colors || []
+  for (var i = 0; i < colors.length; i++) {
+    var col = colors[i]
+    var already = !_cppAllowDupes && selectedKeys.has(car.crdb + '|' + col.name)
+    html += '<div class="color-swatch' + (already ? ' loading' : '') + '" onclick="selectCppColor(' + carIdx + ',' + i + ')" title="' + escH(col.name) + '">'
+    html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\'none\'" loading="lazy">'
+    html += '<div class="color-swatch-name">' + escH(col.name) + (already ? ' ✓' : '') + '</div>'
+    html += '</div>'
+  }
+  document.getElementById('cp2-car-name').textContent = car.name
+  document.getElementById('cp2-colors-grid').innerHTML = html
+  hideNotice('cp2-notice')
+  document.getElementById('cp2-car-name').dataset.cppMode = '1'
+  document.getElementById('cp2-car-name').dataset.cppIdx = carIdx
+  showModal('color-picker-modal')
+}
+
+function selectCppColor(carIdx, colorIdx) {
+  var car = _csr2CarsDb[carIdx]
+  if (!car || !car.colors) return
+  var color = car.colors[colorIdx]
+  if (!color) return
+  if (!_cppAllowDupes && _carPackCars.find(function(c){ return c.crdb === car.crdb && c.colorName === color.name })) {
+    showNotice('cp2-notice', 'info', 'This color is already in the pack.')
+    return
+  }
+  _carPackCars.push({ crdb: car.crdb, name: car.name, tier: car.tier, colorName: color.name, photoUrl: color.photoUrl || '', stockTxtUrl: color.stockTxtUrl || '', maxedTxtUrl: color.maxedTxtUrl || null })
+  hideModal('color-picker-modal')
+  renderCppSelectedCars()
+  searchCppCars(document.getElementById('cpp-car-search').value)
+}
+
+function removeCarFromCarPack(crdb, colorName) {
+  _carPackCars = _carPackCars.filter(function(c){ return !(c.crdb === crdb && c.colorName === colorName) })
+  renderCppSelectedCars()
+  searchCppCars(document.getElementById('cpp-car-search').value)
+}
+
+function renderCppSelectedCars() {
+  var list = document.getElementById('cpp-selected-list')
+  var countLabel = document.getElementById('cpp-count-label')
+  if (!list) return
+  var n = _carPackCars.length
+  if (countLabel) countLabel.textContent = n + ' car' + (n !== 1 ? 's' : '')
+  if (!n) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:20px">No cars yet.<br>Search and add on the left.</div>'
+    return
+  }
+  var html = ''
+  for (var i = 0; i < _carPackCars.length; i++) {
+    var car = _carPackCars[i]
+    var crdbEsc = escH(car.crdb || '')
+    var colEsc = escH(car.colorName || '')
+    html += '<div class="cpp-car-item">'
+    if (car.photoUrl) html += '<img src="' + escH(car.photoUrl) + '" style="width:44px;height:30px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display=\'none\'" loading="lazy">'
+    else html += '<span class="car-tier-badge" style="width:44px;height:30px;display:flex;align-items:center;justify-content:center;flex-shrink:0">T' + car.tier + '</span>'
+    html += '<div class="cpp-car-item-info"><div class="cpp-car-item-name">' + escH(car.name) + '</div>'
+    if (car.colorName) html += '<div class="cpp-car-item-color">' + escH(car.colorName) + '</div>'
+    html += '</div>'
+    html += '<button class="cpp-remove-btn" onclick="removeCarFromCarPack(\'' + crdbEsc + '\',\'' + colEsc + '\')" title="Remove">×</button>'
+    html += '</div>'
+  }
+  list.innerHTML = html
 }
 
 // ─── Apply NSB Modal + Car DB ──────────────────────────────────────────────────
@@ -4273,6 +4699,37 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'DELETE') {
       const packs = loadPacks()
       savePacks(packs.filter(p => p.id !== id))
+      return json(res, 200, { ok: true })
+    }
+  }
+
+  // CSR2 car packs CRUD
+  if (req.method === 'GET' && pathname === '/csr2/car-packs') {
+    return json(res, 200, loadCarPacks())
+  }
+  if (req.method === 'POST' && pathname === '/csr2/car-packs') {
+    const body = await readBody(req)
+    const packs = loadCarPacks()
+    body.id = uid()
+    body.createdAt = new Date().toISOString()
+    packs.push(body)
+    saveCarPacks(packs)
+    return json(res, 200, body)
+  }
+  const carPackM = pathname.match(/^\/csr2\/car-packs\/(.+)$/)
+  if (carPackM) {
+    const id = carPackM[1]
+    if (req.method === 'PATCH') {
+      const body = await readBody(req)
+      const packs = loadCarPacks()
+      const idx = packs.findIndex(p => p.id === id)
+      if (idx === -1) return json(res, 404, { error: 'Car pack not found' })
+      packs[idx] = { ...packs[idx], ...body }
+      saveCarPacks(packs)
+      return json(res, 200, packs[idx])
+    }
+    if (req.method === 'DELETE') {
+      saveCarPacks(loadCarPacks().filter(p => p.id !== id))
       return json(res, 200, { ok: true })
     }
   }
