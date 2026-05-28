@@ -23,6 +23,8 @@ const CSR2_FUSIONS_FILE = path.join(DATA_DIR, 'csr2-fusions.json')
 const CSR2_FUSIONS_SHA  = path.join(DATA_DIR, 'csr2-fusions-sha.json')
 const CSR2_STAGE6_FILE  = path.join(DATA_DIR, 'csr2-stage6.json')
 const CSR2_STAGE6_SHA   = path.join(DATA_DIR, 'csr2-stage6-sha.json')
+const CSR2_BRANDS_FILE  = path.join(DATA_DIR, 'csr2-brands.json')
+const CSR2_BRANDS_SHA   = path.join(DATA_DIR, 'csr2-brands-sha.json')
 const INT32_MAX = 2147483647
 const applyJobs = new Map()
 
@@ -88,6 +90,10 @@ function loadStage6Data() { return loadJson(CSR2_STAGE6_FILE, {}) }
 function saveStage6Data(d) { saveJson(CSR2_STAGE6_FILE, d) }
 function loadStage6Sha() { return loadJson(CSR2_STAGE6_SHA, {}) }
 function saveStage6Sha(d) { saveJson(CSR2_STAGE6_SHA, d) }
+function loadBrandData() { return loadJson(CSR2_BRANDS_FILE, []) }
+function saveBrandData(d) { saveJson(CSR2_BRANDS_FILE, d) }
+function loadBrandsSha() { return loadJson(CSR2_BRANDS_SHA, {}) }
+function saveBrandsSha(d) { saveJson(CSR2_BRANDS_SHA, d) }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
 // ─── Riot Client API ─────────────────────────────────────────────────────────
@@ -1277,6 +1283,29 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, o
         ? fusionData.map(entry => typeof entry === 'number' ? amt : entry)
         : fusionData
     }
+  } else if (applyFusions && pack.fusions && pack.fusions.mode === 'customizable') {
+    const fusionData = loadFusionData()
+    if (Array.isArray(fusionData) && fusionData.length > 0 && Array.isArray(opts.selectedBrands) && opts.selectedBrands.length > 0) {
+      const selectedSet = new Set(opts.selectedBrands)
+      const filtered = []
+      let i = 0
+      while (i < fusionData.length) {
+        const entry = fusionData[i]
+        if (typeof entry === 'object' && entry !== null) {
+          const next = fusionData[i + 1]
+          const brandId = entry.upma || ''
+          const isSelected = selectedSet.has(brandId)
+          if (isSelected) {
+            filtered.push(entry)
+            if (typeof next === 'number') filtered.push(next)
+          }
+          i += (typeof next === 'number') ? 2 : 1
+        } else {
+          i++
+        }
+      }
+      if (filtered.length > 0) data.caup = filtered
+    }
   }
 
   // Legends (crpe = legend restoration token amounts)
@@ -2316,9 +2345,23 @@ select{cursor:pointer}
       </div>
       <div id="ap-legends-selected" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto"></div>
     </div>
-    <!-- Fusions & Stage 6 tab (placeholder — shown when customizable mode is added) -->
+    <!-- Fusions & Stage 6 tab -->
     <div class="ap-body" id="ap-panel-fusions-s6" style="display:none">
-      <div style="font-size:13px;color:var(--muted)">Customizable fusions and Stage 6 are not configured for this pack.</div>
+      <!-- Customizable fusions brand picker -->
+      <div id="ap-fusions-section" style="display:none">
+        <div id="ap-fusions-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+        <div class="car-search-wrap" style="margin-bottom:8px">
+          <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
+          <input type="text" class="car-search-input" id="ap-brands-search" placeholder="Search brands..." oninput="searchBrands(this.value)">
+        </div>
+        <div id="ap-brands-list" style="max-height:180px;overflow-y:auto;margin-bottom:10px"></div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
+          <span>Selected Brands</span><span id="ap-brands-sel-count">0 / 0</span>
+        </div>
+        <div id="ap-brands-selected" style="display:flex;flex-wrap:wrap;gap:6px;max-height:90px;overflow-y:auto"></div>
+      </div>
+      <!-- Fallback message when pack has no customizable fusions/s6 -->
+      <div id="ap-fusions-placeholder" style="font-size:13px;color:var(--muted)">This pack does not have customizable fusions or Stage 6.</div>
     </div>
     <!-- Footer -->
     <div class="ap-footer">
@@ -2475,6 +2518,7 @@ var _scanAbort = false, _multiAbort = false, _multiRunId = 0
 var _previewAcct = null, _importAcct = null, _afterImportId = null
 var _csr2CarsDb = [], _ownedCrdbs = new Set(), _allowDuplicates = false
 var _colorPickerCar = null, _colorPickerCarIdx = -1, _selectingColor = false
+var _selectedBrands = [], _brandsList = []
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -3510,11 +3554,14 @@ function onLegendsToggle(which) {
   if (which === 'all') {
     var list = document.getElementById('cp-legends-all-list')
     if (list && !list.innerHTML) {
+      var tierMap = buildLegendTierMap()
       var html = ''
       for (var i = 0; i < LEGEND_CARS.length; i++) {
         var lc = LEGEND_CARS[i]
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 6px;border-radius:5px;' + (i % 2 === 0 ? 'background:rgba(255,255,255,.04)' : '') + '">'
-        html += '<span style="font-size:12px">' + escH(lc.name) + '</span>'
+        var tier = tierMap[lc.crdb]
+        html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:5px;' + (i % 2 === 0 ? 'background:rgba(255,255,255,.04)' : '') + '">'
+        if (tier) html += '<span style="font-size:10px;font-weight:700;color:var(--accent);background:rgba(255,165,0,.15);border-radius:4px;padding:1px 5px;flex-shrink:0">T' + tier + '</span>'
+        html += '<span style="font-size:12px;flex:1">' + escH(lc.name) + '</span>'
         html += '<span style="font-size:11px;color:var(--muted)">' + lc.amount.toLocaleString() + ' tokens</span>'
         html += '</div>'
       }
@@ -4236,6 +4283,8 @@ function openEditNsb(packId) {
   _currencyOverride = {}
   _partialSelectionEnabled = false
   _selectedLegends = []
+  _selectedBrands = []
+  _brandsList = []
   _nsbCurrentData = null
   _applyPackRef = null
   _currencyEditMode = false
@@ -4410,6 +4459,25 @@ function _renderApplyTabs(pack) {
     renderSelectedLegends(pack)
     searchLegends('')
   }
+
+  // Fusions & S6 tab — show for customizable fusions
+  var showFusionsTab = !!(pack.fusions && pack.fusions.mode === 'customizable')
+  var fusBtn = document.getElementById('ap-tab-fusions-s6')
+  if (fusBtn) fusBtn.style.display = showFusionsTab ? '' : 'none'
+  var fusSect = document.getElementById('ap-fusions-section')
+  var fusPlaceholder = document.getElementById('ap-fusions-placeholder')
+  if (showFusionsTab) {
+    if (fusSect) fusSect.style.display = ''
+    if (fusPlaceholder) fusPlaceholder.style.display = 'none'
+    _selectedBrands = []
+    var fusHdr = document.getElementById('ap-fusions-header')
+    if (fusHdr) fusHdr.textContent = 'Select up to ' + (pack.fusions.brandAmount || 1) + ' brand(s) to include fusions for.'
+    renderSelectedBrands(pack)
+    loadAndSearchBrands('')
+  } else {
+    if (fusSect) fusSect.style.display = 'none'
+    if (fusPlaceholder) fusPlaceholder.style.display = ''
+  }
 }
 
 // ─── Currencies Tab ───────────────────────────────────────────────────────────
@@ -4558,6 +4626,14 @@ function togglePartialSelection(enabled) {
 
 // ─── Legends Tab ──────────────────────────────────────────────────────────────
 
+function buildLegendTierMap() {
+  var m = {}
+  for (var i = 0; i < _csr2CarsDb.length; i++) {
+    if (_csr2CarsDb[i].crdb) m[_csr2CarsDb[i].crdb] = _csr2CarsDb[i].tier
+  }
+  return m
+}
+
 function searchLegends(query) {
   var listEl = document.getElementById('ap-legends-list')
   if (!listEl) return
@@ -4565,6 +4641,7 @@ function searchLegends(query) {
   var maxCount = pack && pack.legends ? (pack.legends.count || 0) : 0
   var q = query ? query.toLowerCase() : ''
   var selCrdbs = new Set(_selectedLegends.map(function(l){ return l.crdb }))
+  var tierMap = buildLegendTierMap()
   var html = '<div class="car-result-list">'
   var shown = 0
   for (var i = 0; i < LEGEND_CARS.length; i++) {
@@ -4572,7 +4649,9 @@ function searchLegends(query) {
     if (q && lc.name.toLowerCase().indexOf(q) === -1) continue
     var added = selCrdbs.has(lc.crdb)
     var atCap = _selectedLegends.length >= maxCount
+    var tier = tierMap[lc.crdb]
     html += '<div class="car-result-item">'
+    if (tier) html += '<span style="font-size:10px;font-weight:700;color:var(--accent);background:rgba(255,165,0,.15);border-radius:4px;padding:1px 5px;margin-right:6px;flex-shrink:0">T' + tier + '</span>'
     html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(lc.name) + '</span>'
     html += '<span style="font-size:11px;color:var(--muted);margin-right:8px">' + fmtN(lc.amount) + ' tk</span>'
     if (added) {
@@ -4619,12 +4698,102 @@ function renderSelectedLegends(pack) {
     selEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No legends selected yet. Search and add above.</div>'
     return
   }
+  var tierMap = buildLegendTierMap()
   selEl.innerHTML = _selectedLegends.map(function(lc) {
+    var tier = tierMap[lc.crdb]
     return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surf2);border-radius:6px;font-size:12px">' +
+      (tier ? '<span style="font-size:10px;font-weight:700;color:var(--accent);background:rgba(255,165,0,.15);border-radius:4px;padding:1px 5px;flex-shrink:0">T' + tier + '</span>' : '') +
       '<span style="flex:1">' + escH(lc.name) + '</span>' +
       '<span style="color:var(--muted)">' + fmtN(lc.amount) + ' tk</span>' +
       '<button onclick="removeLegend(\\'' + lc.crdb + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 2px">×</button>' +
       '</div>'
+  }).join('')
+}
+
+// ─── Brands Tab (Fusions & S6) ────────────────────────────────────────────────
+
+async function loadAndSearchBrands(query) {
+  if (!_brandsList.length) {
+    try {
+      var res = await apiFetch('/csr2/brands', null)
+      _brandsList = Array.isArray(res.data) ? res.data : []
+    } catch (e) { _brandsList = [] }
+  }
+  searchBrands(query)
+}
+
+function searchBrands(query) {
+  var listEl = document.getElementById('ap-brands-list')
+  if (!listEl) return
+  if (!_brandsList.length) {
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px">No brand data. Go to Tools → CSR2 → Fusions Data to fetch brands.</div>'
+    return
+  }
+  var pack = _applyPackRef
+  var maxCount = pack && pack.fusions ? (pack.fusions.brandAmount || 1) : 1
+  var q = query ? query.toLowerCase() : ''
+  var selIds = new Set(_selectedBrands.map(function(b){ return b.id }))
+  var html = '<div class="car-result-list">'
+  var shown = 0
+  for (var i = 0; i < _brandsList.length; i++) {
+    var b = _brandsList[i]
+    var displayName = b.name || b.id || ''
+    if (q && displayName.toLowerCase().indexOf(q) === -1) continue
+    var added = selIds.has(b.id)
+    var atCap = _selectedBrands.length >= maxCount
+    html += '<div class="car-result-item">'
+    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(displayName) + '</span>'
+    if (b.id && b.id !== b.name) html += '<span style="font-size:10px;color:var(--muted);margin-right:8px">' + escH(b.id) + '</span>'
+    if (added) {
+      html += '<span class="car-result-added">Added</span>'
+    } else if (atCap) {
+      html += '<span class="car-result-added" style="color:var(--muted)">Full</span>'
+    } else {
+      html += '<button class="car-result-add" onclick="addBrand(\\'' + b.id + '\\')">+ Add</button>'
+    }
+    html += '</div>'
+    shown++
+  }
+  if (!shown) html += '<div class="car-result-item" style="color:var(--muted)">No brands found</div>'
+  html += '</div>'
+  listEl.innerHTML = html
+}
+
+function addBrand(id) {
+  var b = _brandsList.find(function(x){ return x.id === id })
+  if (!b) return
+  var pack = _applyPackRef
+  var maxCount = pack && pack.fusions ? (pack.fusions.brandAmount || 1) : 1
+  if (_selectedBrands.length >= maxCount) return
+  if (_selectedBrands.find(function(x){ return x.id === id })) return
+  _selectedBrands.push(b)
+  renderSelectedBrands(pack)
+  searchBrands(document.getElementById('ap-brands-search').value)
+}
+
+function removeBrand(id) {
+  _selectedBrands = _selectedBrands.filter(function(b){ return b.id !== id })
+  var pack = _applyPackRef
+  renderSelectedBrands(pack)
+  searchBrands(document.getElementById('ap-brands-search').value)
+}
+
+function renderSelectedBrands(pack) {
+  var selEl = document.getElementById('ap-brands-selected')
+  var countEl = document.getElementById('ap-brands-sel-count')
+  var maxCount = pack && pack.fusions ? (pack.fusions.brandAmount || 1) : 1
+  if (countEl) countEl.textContent = _selectedBrands.length + ' / ' + maxCount
+  if (!selEl) return
+  if (!_selectedBrands.length) {
+    selEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No brands selected yet. Search and add above.</div>'
+    return
+  }
+  selEl.innerHTML = _selectedBrands.map(function(b) {
+    var displayName = b.name || b.id || ''
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:16px;font-size:12px">' +
+      escH(displayName) +
+      '<button onclick="removeBrand(\\'' + b.id + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 0 0 2px">×</button>' +
+      '</span>'
   }).join('')
 }
 
@@ -5042,7 +5211,8 @@ async function applyNsb() {
     allowDuplicates: _allowDuplicates,
     usePartialSelection: _partialSelectionEnabled,
     currencyOverride: Object.keys(_currencyOverride).length > 0 ? _currencyOverride : undefined,
-    selectedLegends: _selectedLegends.length > 0 ? _selectedLegends.map(function(l){ return l.crdb }) : undefined
+    selectedLegends: _selectedLegends.length > 0 ? _selectedLegends.map(function(l){ return l.crdb }) : undefined,
+    selectedBrands: _selectedBrands.length > 0 ? _selectedBrands.map(function(b){ return b.id }) : undefined
   }
   if (_selectedCars.length > 0 && (_partialSelectionEnabled || (_applyPackRef && _applyPackRef.cars && _applyPackRef.cars.carMode === 'customizable'))) {
     payload.selectedCars = _selectedCars
@@ -5715,6 +5885,7 @@ const server = http.createServer(async (req, res) => {
           currencyOverride: body.currencyOverride || {},
           usePartialSelection: body.usePartialSelection || false,
           selectedLegends: body.selectedLegends || null,
+          selectedBrands: body.selectedBrands || null,
         }
         const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false, jobId, opts)
         const out = csr2WriteSave(data)
@@ -5970,6 +6141,43 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/fusions-update] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // ─── Brand IDs data ──────────────────────────────────────────────────────────
+
+  if (req.method === 'GET' && pathname === '/csr2/brands') {
+    const d = loadBrandData()
+    return json(res, 200, { count: d.length, data: d })
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/brands-update') {
+    try {
+      const BRANDS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/3.Fusions/%23AllBrandIDs.txt'
+      log('[csr2/brands-update] Fetching from ' + BRANDS_URL)
+      const txt = await fetchRawGithub(BRANDS_URL)
+      let raw
+      try { raw = JSON.parse(txt) } catch {
+        return json(res, 400, { error: 'Failed to parse brand IDs data as JSON' })
+      }
+      // Normalize to array of {id, name}
+      let brands = []
+      if (Array.isArray(raw)) {
+        if (raw.length && typeof raw[0] === 'string') brands = raw.map(id => ({ id, name: id }))
+        else if (raw.length && raw[0].id) brands = raw
+        else if (raw.length && raw[0].BrandID) brands = raw.map(x => ({ id: x.BrandID, name: x.BrandName || x.BrandID }))
+        else brands = raw
+      } else if (raw && typeof raw === 'object') {
+        brands = Object.keys(raw).map(k => ({ id: k, name: raw[k] || k }))
+      }
+      saveBrandData(brands)
+      const sha = crypto.createHash('sha1').update(txt).digest('hex')
+      saveBrandsSha({ sha, url: BRANDS_URL, fetchedAt: Date.now() })
+      log('[csr2/brands-update] Saved ' + brands.length + ' brands')
+      return json(res, 200, { ok: true, count: brands.length })
+    } catch (e) {
+      log('[csr2/brands-update] Error: ' + e.message)
       return json(res, 500, { error: e.message })
     }
   }
