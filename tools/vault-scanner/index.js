@@ -1257,29 +1257,25 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, o
     }
   }
 
-  // Stage 6 (cues = elite stage upgrades per car, keyed by car unid)
+  // Stage 6 — replaces cues entirely with the cached array (optionally replacing amounts)
   if (applyStage6 && pack.stage6 && pack.stage6.mode === 'all') {
     const stage6Data = loadStage6Data()
-    if (Object.keys(stage6Data).length > 0 && Array.isArray(data.caow)) {
-      if (!data.cues) data.cues = {}
-      for (const car of data.caow) {
-        if (car.crdb && car.unid !== undefined && stage6Data[car.crdb]) {
-          data.cues[car.unid] = stage6Data[car.crdb]
-        }
-      }
+    if (Array.isArray(stage6Data) && stage6Data.length > 0) {
+      const amt = pack.stage6.amount || null
+      data.cues = amt !== null
+        ? stage6Data.map(entry => typeof entry === 'number' ? amt : entry)
+        : stage6Data
     }
   }
 
-  // Fusions (caup = fusion parts per car, keyed by car unid)
+  // Fusions — replaces caup entirely with the cached array (optionally replacing amounts)
   if (applyFusions && pack.fusions && pack.fusions.mode === 'all') {
     const fusionData = loadFusionData()
-    if (Object.keys(fusionData).length > 0 && Array.isArray(data.caow)) {
-      if (!data.caup) data.caup = {}
-      for (const car of data.caow) {
-        if (car.crdb && car.unid !== undefined && fusionData[car.crdb]) {
-          data.caup[car.unid] = fusionData[car.crdb]
-        }
-      }
+    if (Array.isArray(fusionData) && fusionData.length > 0) {
+      const amt = pack.fusions.amount || null
+      data.caup = amt !== null
+        ? fusionData.map(entry => typeof entry === 'number' ? amt : entry)
+        : fusionData
     }
   }
 
@@ -1526,7 +1522,7 @@ select{cursor:pointer}
 .comp-arrow-sym{color:var(--border);margin:0 5px}
 .comp-after{color:#4caf50;font-weight:600}
 .car-search-wrap{position:relative;margin-bottom:2px}
-.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 34px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
+.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 40px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
 .car-search-input:focus{border-color:var(--accent)}
 .car-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 .car-result-list{border:1px solid var(--border);border-radius:8px;background:var(--surf2);overflow-y:auto;max-height:260px;margin-top:4px}
@@ -1811,6 +1807,7 @@ select{cursor:pointer}
         <button class="cp-tab" id="cp-tab-legends" onclick="cpSwitchTab('legends')" style="display:none">Legends</button>
         <button class="cp-tab" id="cp-tab-fusions" onclick="cpSwitchTab('fusions')" style="display:none">Fusions</button>
         <button class="cp-tab" id="cp-tab-stage6" onclick="cpSwitchTab('stage6')" style="display:none">Stage 6</button>
+        <button class="cp-tab" id="cp-tab-gifts" onclick="cpSwitchTab('gifts')" style="display:none">Gifts</button>
       </div>
       <button class="cp-hdr-close" onclick="confirmClosePack()" title="Close">✕</button>
     </div>
@@ -1843,7 +1840,15 @@ select{cursor:pointer}
           <label class="toggle"><input type="checkbox" id="cp-toggle-stage6" onchange="cpOnToggle('stage6',this.checked)"><span class="tslider"></span></label>
           <span>6️⃣ Stage 6</span>
         </div>
+        <div class="cp-toggle-row">
+          <label class="toggle"><input type="checkbox" id="cp-toggle-gifts" onchange="cpOnToggle('gifts',this.checked)"><span class="tslider"></span></label>
+          <span>🎁 Gifts</span>
+        </div>
       </div>
+    </div>
+
+    <div class="cp-body" id="cp-content-gifts" style="display:none">
+      <div style="color:var(--muted);font-size:13px">Gifts configuration coming soon.</div>
     </div>
 
     <div class="cp-body" id="cp-content-currencies" style="display:none">
@@ -1966,14 +1971,26 @@ select{cursor:pointer}
     </div>
 
     <div class="cp-body" id="cp-content-fusions" style="display:none">
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:16px">
-        <input type="checkbox" id="cp-fusions-all" onchange="onFusionsToggle(this.checked)" style="margin-top:2px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
-        <div>
-          <div style="font-weight:600;font-size:13px">Max All Fusions</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">Applies max fusion parts to all owned cars in the save</div>
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <label class="toggle-card" id="cp-fusions-all-card" onclick="onFusionsModeClick('all')" style="flex:1;cursor:pointer;padding:10px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px">
+          <input type="radio" name="cp-fusions-mode" id="cp-fusions-all" value="all" style="accent-color:var(--accent)">
+          <div><div style="font-weight:600;font-size:13px">Add All Fusions</div><div style="font-size:11px;color:var(--muted);margin-top:2px">All fusion parts for all cars</div></div>
+        </label>
+        <label class="toggle-card" id="cp-fusions-custom-card" onclick="onFusionsModeClick('customizable')" style="flex:1;cursor:pointer;padding:10px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px">
+          <input type="radio" name="cp-fusions-mode" id="cp-fusions-custom" value="customizable" style="accent-color:var(--accent)">
+          <div><div style="font-weight:600;font-size:13px">Customizable</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Buyer picks brand(s)</div></div>
+        </label>
+      </div>
+      <div id="cp-fusions-all-opts" style="display:none;margin-bottom:14px">
+        <div class="field"><label>Parts per fusion slot <span style="font-size:11px;color:var(--muted);font-weight:400">(max 300)</span></label><input type="number" id="cp-fusions-amount" placeholder="e.g. 100" min="1" max="300"></div>
+      </div>
+      <div id="cp-fusions-custom-opts" style="display:none;margin-bottom:14px">
+        <div class="curr-grid">
+          <div class="field"><label>Fusion Count <span style="font-size:11px;color:var(--muted);font-weight:400">(max 100)</span></label><input type="number" id="cp-fusions-count" placeholder="e.g. 50" min="1" max="100"></div>
+          <div class="field"><label>Brand Picks</label><input type="number" id="cp-fusions-brand-amount" placeholder="e.g. 3" min="1"></div>
         </div>
-      </label>
-      <div id="cp-fusions-data-row" style="display:none;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+      </div>
+      <div id="cp-fusions-data-row" style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Fusion Data</div>
@@ -1985,14 +2002,26 @@ select{cursor:pointer}
     </div>
 
     <div class="cp-body" id="cp-content-stage6" style="display:none">
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:16px">
-        <input type="checkbox" id="cp-stage6-all" onchange="onStage6Toggle(this.checked)" style="margin-top:2px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
-        <div>
-          <div style="font-weight:600;font-size:13px">Max Stage 6</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">Applies max Stage 6 upgrades to all owned cars in the save</div>
+      <div style="display:flex;gap:10px;margin-bottom:16px">
+        <label class="toggle-card" id="cp-stage6-all-card" onclick="onStage6ModeClick('all')" style="flex:1;cursor:pointer;padding:10px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px">
+          <input type="radio" name="cp-stage6-mode" id="cp-stage6-all" value="all" style="accent-color:var(--accent)">
+          <div><div style="font-weight:600;font-size:13px">Add All Stage 6</div><div style="font-size:11px;color:var(--muted);margin-top:2px">All Stage 6 upgrades for all cars</div></div>
+        </label>
+        <label class="toggle-card" id="cp-stage6-custom-card" onclick="onStage6ModeClick('customizable')" style="flex:1;cursor:pointer;padding:10px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px">
+          <input type="radio" name="cp-stage6-mode" id="cp-stage6-custom" value="customizable" style="accent-color:var(--accent)">
+          <div><div style="font-weight:600;font-size:13px">Customizable</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Buyer picks brand(s)</div></div>
+        </label>
+      </div>
+      <div id="cp-stage6-all-opts" style="display:none;margin-bottom:14px">
+        <div class="field"><label>Parts per Stage 6 slot <span style="font-size:11px;color:var(--muted);font-weight:400">(max 100)</span></label><input type="number" id="cp-stage6-amount" placeholder="e.g. 50" min="1" max="100"></div>
+      </div>
+      <div id="cp-stage6-custom-opts" style="display:none;margin-bottom:14px">
+        <div class="curr-grid">
+          <div class="field"><label>Stage 6 Count <span style="font-size:11px;color:var(--muted);font-weight:400">(max 50)</span></label><input type="number" id="cp-stage6-count" placeholder="e.g. 20" min="1" max="50"></div>
+          <div class="field"><label>Brand Picks</label><input type="number" id="cp-stage6-brand-amount" placeholder="e.g. 3" min="1"></div>
         </div>
-      </label>
-      <div id="cp-stage6-data-row" style="display:none;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+      </div>
+      <div id="cp-stage6-data-row" style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Stage 6 Data</div>
@@ -2350,11 +2379,8 @@ select{cursor:pointer}
 <div class="modal-bg" id="stage6-update-modal">
   <div class="modal" style="max-width:440px">
     <div class="modal-title">Stage 6 Data</div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">GitHub Raw URL for Stage 6 data file</label>
-      <input type="text" id="stage6-url-input" placeholder="https://raw.githubusercontent.com/..." style="width:100%">
-    </div>
-    <div id="stage6-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Paste the raw URL then click Fetch.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Source: CSR2-DataBase / ##AllStage6's.txt</div>
+    <div id="stage6-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load Stage 6 data.</div>
     <div class="cars-update-bar" style="display:none" id="stage6-update-bar"><div class="cars-update-bar-fill" id="stage6-update-bar-fill"></div></div>
     <div id="stage6-update-notice" style="display:none"></div>
     <div class="modal-actions">
@@ -2368,11 +2394,8 @@ select{cursor:pointer}
 <div class="modal-bg" id="fusions-update-modal">
   <div class="modal" style="max-width:440px">
     <div class="modal-title">Fusion Data</div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">GitHub Raw URL for AllFusions.txt</label>
-      <input type="text" id="fusions-url-input" placeholder="https://raw.githubusercontent.com/..." style="width:100%">
-    </div>
-    <div id="fusions-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Paste the raw URL then click Fetch.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Source: CSR2-DataBase / ##AllFusions.txt</div>
+    <div id="fusions-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load fusion data.</div>
     <div class="cars-update-bar" style="display:none" id="fusions-update-bar"><div class="cars-update-bar-fill" id="fusions-update-bar-fill"></div></div>
     <div id="fusions-update-notice" style="display:none"></div>
     <div class="modal-actions">
@@ -3368,7 +3391,7 @@ var _cpCurrentTab = 'general'
 
 function cpSwitchTab(tab) {
   _cpCurrentTab = tab
-  var tabs = ['general', 'currencies', 'cars', 'legends', 'fusions', 'stage6']
+  var tabs = ['general', 'currencies', 'cars', 'legends', 'fusions', 'stage6', 'gifts']
   for (var i = 0; i < tabs.length; i++) {
     var btn = document.getElementById('cp-tab-' + tabs[i])
     var body = document.getElementById('cp-content-' + tabs[i])
@@ -3435,11 +3458,21 @@ function resetCpModal() {
   document.getElementById('cp-legends-count').value = ''
   // reset fusions fields
   document.getElementById('cp-fusions-all').checked = false
-  document.getElementById('cp-fusions-data-row').style.display = 'none'
+  document.getElementById('cp-fusions-custom').checked = false
+  document.getElementById('cp-fusions-amount').value = ''
+  document.getElementById('cp-fusions-count').value = ''
+  document.getElementById('cp-fusions-brand-amount').value = ''
+  document.getElementById('cp-fusions-all-opts').style.display = 'none'
+  document.getElementById('cp-fusions-custom-opts').style.display = 'none'
   // reset stage6 fields
   document.getElementById('cp-stage6-all').checked = false
-  document.getElementById('cp-stage6-data-row').style.display = 'none'
-  var sections = ['currencies', 'cars', 'legends', 'fusions', 'stage6']
+  document.getElementById('cp-stage6-custom').checked = false
+  document.getElementById('cp-stage6-amount').value = ''
+  document.getElementById('cp-stage6-count').value = ''
+  document.getElementById('cp-stage6-brand-amount').value = ''
+  document.getElementById('cp-stage6-all-opts').style.display = 'none'
+  document.getElementById('cp-stage6-custom-opts').style.display = 'none'
+  var sections = ['currencies', 'cars', 'legends', 'fusions', 'stage6', 'gifts']
   for (var i = 0; i < sections.length; i++) {
     var toggle = document.getElementById('cp-toggle-' + sections[i])
     if (toggle) toggle.checked = false
@@ -3490,8 +3523,17 @@ function onLegendsToggle(which) {
   }
 }
 
+function onFusionsModeClick(mode) {
+  var allRad = document.getElementById('cp-fusions-all')
+  var custRad = document.getElementById('cp-fusions-custom')
+  if (allRad) allRad.checked = mode === 'all'
+  if (custRad) custRad.checked = mode === 'customizable'
+  document.getElementById('cp-fusions-all-opts').style.display = mode === 'all' ? '' : 'none'
+  document.getElementById('cp-fusions-custom-opts').style.display = mode === 'customizable' ? '' : 'none'
+  refreshFusionsDataStatus()
+}
+
 function onFusionsToggle(on) {
-  document.getElementById('cp-fusions-data-row').style.display = on ? '' : 'none'
   if (on) refreshFusionsDataStatus()
 }
 
@@ -3506,17 +3548,10 @@ async function refreshFusionsDataStatus() {
 }
 
 async function openFusionsUpdate() {
-  var stored = await apiFetch('/csr2/fusions', { count: 0, sha: null })
-  var urlInput = document.getElementById('fusions-url-input')
-  // pre-fill with last-used URL from SHA file if available
-  if (urlInput && !urlInput.value) {
-    try {
-      var sha = await fetch('/csr2/fusions-check').then(function(r){ return r.json() }).catch(function(){ return {} })
-    } catch {}
-  }
+  var stored = await apiFetch('/csr2/fusions', { count: 0 })
   document.getElementById('fusions-update-status').textContent = stored.count > 0
-    ? stored.count + ' entries currently cached. Paste a URL to update.'
-    : 'No fusion data cached yet. Paste the GitHub raw URL below.'
+    ? stored.count + ' entries currently cached. Click Fetch to refresh.'
+    : 'No fusion data cached yet. Click Fetch to load.'
   document.getElementById('fusions-update-status').style.color = 'var(--muted)'
   document.getElementById('fusions-update-bar').style.display = 'none'
   hideNotice('fusions-update-notice')
@@ -3526,11 +3561,6 @@ async function openFusionsUpdate() {
 }
 
 async function doFusionsUpdate() {
-  var url = document.getElementById('fusions-url-input').value.trim()
-  if (!url) { showNotice('fusions-update-notice', 'error', 'Enter a URL.'); return }
-  // save URL to config first
-  await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fusionsRawUrl: url }) }).catch(function(){})
   document.getElementById('fusions-update-go-btn').style.display = 'none'
   document.getElementById('fusions-update-bar').style.display = ''
   document.getElementById('fusions-update-bar-fill').style.width = '40%'
@@ -3554,8 +3584,17 @@ async function doFusionsUpdate() {
   }
 }
 
+function onStage6ModeClick(mode) {
+  var allRad = document.getElementById('cp-stage6-all')
+  var custRad = document.getElementById('cp-stage6-custom')
+  if (allRad) allRad.checked = mode === 'all'
+  if (custRad) custRad.checked = mode === 'customizable'
+  document.getElementById('cp-stage6-all-opts').style.display = mode === 'all' ? '' : 'none'
+  document.getElementById('cp-stage6-custom-opts').style.display = mode === 'customizable' ? '' : 'none'
+  refreshStage6DataStatus()
+}
+
 function onStage6Toggle(on) {
-  document.getElementById('cp-stage6-data-row').style.display = on ? '' : 'none'
   if (on) refreshStage6DataStatus()
 }
 
@@ -3572,8 +3611,8 @@ async function refreshStage6DataStatus() {
 async function openStage6Update() {
   var stored = await apiFetch('/csr2/stage6', { count: 0 })
   document.getElementById('stage6-update-status').textContent = stored.count > 0
-    ? stored.count + ' entries currently cached. Paste a URL to update.'
-    : 'No Stage 6 data cached yet. Paste the GitHub raw URL below.'
+    ? stored.count + ' entries currently cached. Click Fetch to refresh.'
+    : 'No Stage 6 data cached yet. Click Fetch to load.'
   document.getElementById('stage6-update-status').style.color = 'var(--muted)'
   document.getElementById('stage6-update-bar').style.display = 'none'
   hideNotice('stage6-update-notice')
@@ -3583,10 +3622,6 @@ async function openStage6Update() {
 }
 
 async function doStage6Update() {
-  var url = document.getElementById('stage6-url-input').value.trim()
-  if (!url) { showNotice('stage6-update-notice', 'error', 'Enter a URL.'); return }
-  await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stage6RawUrl: url }) }).catch(function(){})
   document.getElementById('stage6-update-go-btn').style.display = 'none'
   document.getElementById('stage6-update-bar').style.display = ''
   document.getElementById('stage6-update-bar-fill').style.width = '40%'
@@ -3687,19 +3722,27 @@ async function openEditPack(packId) {
   if (fusionsOn) {
     document.getElementById('cp-toggle-fusions').checked = true
     cpOnToggle('fusions', true)
+    onFusionsModeClick(pack.fusions.mode || 'all')
     if (pack.fusions.mode === 'all') {
-      document.getElementById('cp-fusions-all').checked = true
-      onFusionsToggle(true)
+      if (pack.fusions.amount) document.getElementById('cp-fusions-amount').value = pack.fusions.amount
+    } else if (pack.fusions.mode === 'customizable') {
+      if (pack.fusions.count) document.getElementById('cp-fusions-count').value = pack.fusions.count
+      if (pack.fusions.brandAmount) document.getElementById('cp-fusions-brand-amount').value = pack.fusions.brandAmount
     }
+    refreshFusionsDataStatus()
   }
   var stage6On = !!(pack.stage6)
   if (stage6On) {
     document.getElementById('cp-toggle-stage6').checked = true
     cpOnToggle('stage6', true)
+    onStage6ModeClick(pack.stage6.mode || 'all')
     if (pack.stage6.mode === 'all') {
-      document.getElementById('cp-stage6-all').checked = true
-      onStage6Toggle(true)
+      if (pack.stage6.amount) document.getElementById('cp-stage6-amount').value = pack.stage6.amount
+    } else if (pack.stage6.mode === 'customizable') {
+      if (pack.stage6.count) document.getElementById('cp-stage6-count').value = pack.stage6.count
+      if (pack.stage6.brandAmount) document.getElementById('cp-stage6-brand-amount').value = pack.stage6.brandAmount
     }
+    refreshStage6DataStatus()
   }
   await reloadCarPacks()
   renderCarPackCards()
@@ -3779,13 +3822,35 @@ async function savePack() {
   }
   var fusionsOn = document.getElementById('cp-toggle-fusions').checked
   var fusions = null
-  if (fusionsOn && document.getElementById('cp-fusions-all').checked) {
-    fusions = { mode: 'all' }
+  if (fusionsOn) {
+    var fusAllRad = document.getElementById('cp-fusions-all')
+    var fusCustRad = document.getElementById('cp-fusions-custom')
+    if (fusAllRad && fusAllRad.checked) {
+      var fusAmt = parseInt(document.getElementById('cp-fusions-amount').value) || null
+      fusions = { mode: 'all', amount: fusAmt }
+    } else if (fusCustRad && fusCustRad.checked) {
+      fusions = {
+        mode: 'customizable',
+        count: parseInt(document.getElementById('cp-fusions-count').value) || 0,
+        brandAmount: parseInt(document.getElementById('cp-fusions-brand-amount').value) || 1
+      }
+    }
   }
   var stage6On = document.getElementById('cp-toggle-stage6').checked
   var stage6 = null
-  if (stage6On && document.getElementById('cp-stage6-all').checked) {
-    stage6 = { mode: 'all' }
+  if (stage6On) {
+    var s6AllRad = document.getElementById('cp-stage6-all')
+    var s6CustRad = document.getElementById('cp-stage6-custom')
+    if (s6AllRad && s6AllRad.checked) {
+      var s6Amt = parseInt(document.getElementById('cp-stage6-amount').value) || null
+      stage6 = { mode: 'all', amount: s6Amt }
+    } else if (s6CustRad && s6CustRad.checked) {
+      stage6 = {
+        mode: 'customizable',
+        count: parseInt(document.getElementById('cp-stage6-count').value) || 0,
+        brandAmount: parseInt(document.getElementById('cp-stage6-brand-amount').value) || 1
+      }
+    }
   }
   var pack = { name, currencies, cars, legends, fusions, stage6 }
   var url = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
@@ -3825,8 +3890,18 @@ async function savePack() {
     var legendDesc = legends.mode === 'all' ? 'All 26 classic legend cars' : fmtN(legends.count) + ' classic cars (buyer picks)'
     summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">⭐ Legend Tokens</div><div style="font-size:13px">' + escH(legendDesc) + '</div></div>'
   }
-  if (fusions) summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">⚗️ Fusions</div><div style="font-size:13px">Max fusion parts for all owned cars</div></div>'
-  if (stage6) summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">6️⃣ Stage 6</div><div style="font-size:13px">Max Stage 6 upgrades for all owned cars</div></div>'
+  if (fusions) {
+    var fusDesc = fusions.mode === 'all'
+      ? 'All fusions' + (fusions.amount ? ' · ' + fmtN(fusions.amount) + ' per part' : ' · max')
+      : 'Customizable · ' + (fusions.count || 0) + ' parts · ' + (fusions.brandAmount || 1) + ' brand(s)'
+    summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">⚗️ Fusions</div><div style="font-size:13px">' + escH(fusDesc) + '</div></div>'
+  }
+  if (stage6) {
+    var s6Desc = stage6.mode === 'all'
+      ? 'All Stage 6' + (stage6.amount ? ' · ' + fmtN(stage6.amount) + ' per part' : ' · max')
+      : 'Customizable · ' + (stage6.count || 0) + ' parts · ' + (stage6.brandAmount || 1) + ' brand(s)'
+    summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">6️⃣ Stage 6</div><div style="font-size:13px">' + escH(s6Desc) + '</div></div>'
+  }
   document.getElementById('cp-saved-name').textContent = name
   document.getElementById('cp-saved-summary').innerHTML = summaryHtml || '<div style="color:var(--muted);font-size:13px">No contents configured</div>'
   hideModal('create-pack-modal')
@@ -4263,6 +4338,17 @@ function renderPackInfoInModal(pack) {
       : fmtN(pack.cars.count) + ' cars &middot; ' + escH(pack.cars.carMode || 'random') + (pack.cars.condition === 'maxed' ? ' &middot; maxed' : '')
     html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">🚗 ' + modalCarsLabel + '</div>'
   }
+  if (pack.legends && pack.legends.mode === 'all') {
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">⭐ All 26 legend restoration tokens</div>'
+  } else if (pack.legends && pack.legends.mode === 'customizable') {
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">⭐ ' + (pack.legends.count || 0) + ' legend tokens (buyer picks)</div>'
+  }
+  if (pack.fusions && pack.fusions.mode === 'all') {
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">⚗️ All fusions' + (pack.fusions.amount ? ' &middot; ' + fmtN(pack.fusions.amount) + ' per part' : '') + '</div>'
+  }
+  if (pack.stage6 && pack.stage6.mode === 'all') {
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">6️⃣ All Stage 6' + (pack.stage6.amount ? ' &middot; ' + fmtN(pack.stage6.amount) + ' per part' : '') + '</div>'
+  }
 
   box.innerHTML = html
   _renderApplyTabs(pack)
@@ -4295,7 +4381,8 @@ function _renderApplyTabs(pack) {
     var picker = document.getElementById('ap-cars-picker')
     var right = document.getElementById('ap-cars-right')
     if (carMode === 'random') {
-      if (hdr) hdr.innerHTML = 'This pack will add <strong style="color:var(--text)">' + fmtN(pack.cars.count) + ' random' + (pack.cars.condition === 'maxed' ? ' maxed' : '') + ' cars</strong>. Enable Partial Selection to hand-pick them instead.'
+      var partialCount = (pack.cars.partial && pack.cars.partial.count) ? pack.cars.partial.count : pack.cars.count
+      if (hdr) hdr.innerHTML = 'This pack will add <strong style="color:var(--text)">' + fmtN(pack.cars.count) + ' random' + (pack.cars.condition === 'maxed' ? ' maxed' : '') + ' cars</strong>. Enable Partial Selection to hand-pick up to <strong style="color:var(--text)">' + fmtN(partialCount) + '</strong> instead.'
       if (partialRow) partialRow.style.display = ''
       _partialSelectionEnabled = false
       var partialChk = document.getElementById('ap-partial-sel')
@@ -4923,8 +5010,14 @@ function renderSelectedCars() {
   }
   list.innerHTML = html
   var displayCount = (!_allowDuplicates && _ownedCrdbs.size > 0) ? eligibleCount : n
-  if (count) count.textContent = displayCount + ' car' + (displayCount === 1 ? '' : 's') + ' selected' + (displayCount < n ? ' (' + n + ' chosen, ' + (n - displayCount) + ' skipped)' : '')
-  if (badge) badge.textContent = '(' + displayCount + ' selected)'
+  var carLimit = _applyPackRef
+    ? (_partialSelectionEnabled && _applyPackRef.cars && _applyPackRef.cars.partial && _applyPackRef.cars.partial.count
+        ? _applyPackRef.cars.partial.count
+        : (_applyPackRef.cars ? _applyPackRef.cars.count : null))
+    : null
+  var limitStr = carLimit ? ' / ' + fmtN(carLimit) : ''
+  if (count) count.textContent = displayCount + limitStr + ' car' + (displayCount === 1 && !carLimit ? '' : 's') + ' selected' + (displayCount < n ? ' (' + n + ' chosen, ' + (n - displayCount) + ' skipped)' : '')
+  if (badge) badge.textContent = '(' + displayCount + limitStr + ' selected)'
   if (noteEl) {
     var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
     var pack = _packs.find(function(p){ return p.id === packId })
@@ -5788,7 +5881,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && pathname === '/csr2/stage6') {
     const d = loadStage6Data()
-    return json(res, 200, { count: Object.keys(d).length, data: d })
+    const count = Array.isArray(d) ? d.filter(e => typeof e === 'object').length : Object.keys(d).length
+    return json(res, 200, { count, data: d })
   }
 
   if (req.method === 'GET' && pathname === '/csr2/stage6-check') {
@@ -5812,29 +5906,17 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && pathname === '/csr2/stage6-update') {
     try {
-      const cfg = loadConfig()
-      const rawUrl = cfg.stage6RawUrl || ''
-      if (!rawUrl) return json(res, 400, { error: 'Stage 6 URL not configured. Set it in Settings.' })
-      log('[csr2/stage6-update] Fetching from ' + rawUrl)
-      const txt = await fetchRawGithub(rawUrl)
+      const STAGE6_URL = "https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/4.Stage6's/%23%23AllStage6's.txt"
+      log('[csr2/stage6-update] Fetching from ' + STAGE6_URL)
+      const txt = await fetchRawGithub(STAGE6_URL)
       let parsed
       try { parsed = JSON.parse(txt) } catch {
-        parsed = {}
-        for (const line of txt.split('\n')) {
-          const eq = line.indexOf('=')
-          if (eq < 1) continue
-          const k = line.slice(0, eq).trim()
-          const v = line.slice(eq + 1).trim()
-          try { parsed[k] = JSON.parse(v) } catch { parsed[k] = v }
-        }
-      }
-      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return json(res, 400, { error: 'Unexpected format — expected JSON object or key=value lines' })
+        return json(res, 400, { error: 'Failed to parse Stage 6 data as JSON' })
       }
       saveStage6Data(parsed)
       const sha = crypto.createHash('sha1').update(txt).digest('hex')
-      saveStage6Sha({ sha, url: rawUrl, fetchedAt: Date.now() })
-      const count = Object.keys(parsed).length
+      saveStage6Sha({ sha, url: STAGE6_URL, fetchedAt: Date.now() })
+      const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
       log('[csr2/stage6-update] Saved ' + count + ' entries')
       return json(res, 200, { ok: true, count })
     } catch (e) {
@@ -5847,7 +5929,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && pathname === '/csr2/fusions') {
     const d = loadFusionData()
-    return json(res, 200, { count: Object.keys(d).length, data: d })
+    const count = Array.isArray(d) ? d.filter(e => typeof e === 'object').length : Object.keys(d).length
+    return json(res, 200, { count, data: d })
   }
 
   if (req.method === 'GET' && pathname === '/csr2/fusions-check') {
@@ -5872,31 +5955,17 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'POST' && pathname === '/csr2/fusions-update') {
     try {
-      const cfg = loadConfig()
-      const rawUrl = cfg.fusionsRawUrl || ''
-      if (!rawUrl) return json(res, 400, { error: 'Fusions URL not configured. Set it in Settings.' })
-      log('[csr2/fusions-update] Fetching from ' + rawUrl)
-      const txt = await fetchRawGithub(rawUrl)
+      const FUSIONS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/3.Fusions/%23%23AllFusions.txt'
+      log('[csr2/fusions-update] Fetching from ' + FUSIONS_URL)
+      const txt = await fetchRawGithub(FUSIONS_URL)
       let parsed
       try { parsed = JSON.parse(txt) } catch {
-        // try line-based key=value format: crdb=json_or_value per line
-        parsed = {}
-        for (const line of txt.split('\n')) {
-          const eq = line.indexOf('=')
-          if (eq < 1) continue
-          const k = line.slice(0, eq).trim()
-          const v = line.slice(eq + 1).trim()
-          try { parsed[k] = JSON.parse(v) } catch { parsed[k] = v }
-        }
-      }
-      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return json(res, 400, { error: 'Unexpected format — expected JSON object or key=value lines' })
+        return json(res, 400, { error: 'Failed to parse fusions data as JSON' })
       }
       saveFusionData(parsed)
-      // store a simple sha from content hash
       const sha = crypto.createHash('sha1').update(txt).digest('hex')
-      saveFusionsSha({ sha, url: rawUrl, fetchedAt: Date.now() })
-      const count = Object.keys(parsed).length
+      saveFusionsSha({ sha, url: FUSIONS_URL, fetchedAt: Date.now() })
+      const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
       log('[csr2/fusions-update] Saved ' + count + ' entries')
       return json(res, 200, { ok: true, count })
     } catch (e) {
