@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.0'
+const VERSION = '0.7.1'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -17,10 +17,43 @@ const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json')
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 const PACKS_FILE     = path.join(DATA_DIR, 'csr2-packs.json')
 const CAR_PACKS_FILE = path.join(DATA_DIR, 'csr2-car-packs.json')
-const CSR2_CARS_FILE = path.join(DATA_DIR, 'csr2-cars.json')
-const CSR2_SHA_FILE  = path.join(DATA_DIR, 'csr2-cars-sha.json')
+const CSR2_CARS_FILE    = path.join(DATA_DIR, 'csr2-cars.json')
+const CSR2_SHA_FILE     = path.join(DATA_DIR, 'csr2-cars-sha.json')
+const CSR2_FUSIONS_FILE = path.join(DATA_DIR, 'csr2-fusions.json')
+const CSR2_FUSIONS_SHA  = path.join(DATA_DIR, 'csr2-fusions-sha.json')
+const CSR2_STAGE6_FILE  = path.join(DATA_DIR, 'csr2-stage6.json')
+const CSR2_STAGE6_SHA   = path.join(DATA_DIR, 'csr2-stage6-sha.json')
 const INT32_MAX = 2147483647
 const applyJobs = new Map()
+
+const LEGEND_CARS = [
+  { crdb: 'Ferrari_250GTOClassic_1962',            name: 'Ferrari 250 GTO',                amount: 14800 },
+  { crdb: 'AstonMartin_DB5Classic_1964',            name: 'Aston Martin DB5',               amount: 17400 },
+  { crdb: 'MercedesBenz_300SLClassic_1954',         name: 'Mercedes-Benz 300SL',            amount: 17400 },
+  { crdb: 'Shelby_Cobra427SCClassic_1965',          name: 'Shelby Cobra',                   amount: 25800 },
+  { crdb: 'Chevrolet_CorvetteZR1Classic_1970',      name: 'Chevy Corvette C3',              amount: 25800 },
+  { crdb: 'Pontiac_GTOTheJudgeClassic_1969',        name: 'Pontiac GTO',                    amount: 29600 },
+  { crdb: 'Honda_NSXRClassic_1992',                 name: 'Honda NSX-R',                    amount: 36000 },
+  { crdb: 'Plymouth_HemiCudaClassic_1971',          name: 'Plymouth Hemi Cuda',             amount: 38200 },
+  { crdb: 'Ford_GT40MkII_1966',                     name: 'Ford GT40',                      amount: 40400 },
+  { crdb: 'Lamborghini_CountachClassic_1988',       name: 'Lamborghini Countach',           amount: 40400 },
+  { crdb: 'Porsche_CarreraGTClassic_2003',          name: 'Porsche Carrera GT',             amount: 50000 },
+  { crdb: 'Lamborghini_MiuraSVLPClassic_1971',      name: 'Lamborghini Miura SVL',          amount: 50000 },
+  { crdb: 'Bugatti_EB110SSClassic_1992',            name: 'Bugatti EB110',                  amount: 50000 },
+  { crdb: 'Jaguar_XJ220Classic_1993',               name: 'Jaguar XJ220',                   amount: 53400 },
+  { crdb: 'Ford_MustangShelbyGT350LPClassic_1965',  name: 'Ford Mustang Shelby GT350LP',    amount: 56000 },
+  { crdb: 'Saleen_S7Classic_2004',                  name: 'Saleen S7',                      amount: 56400 },
+  { crdb: 'Plymouth_SuperbirdLPClassic_1970',       name: 'Plymouth Superbird LP',          amount: 65000 },
+  { crdb: 'Porsche_911CarreraRS27LPClassic_1973',   name: 'Porsche 911 Carrera RS27 LP',    amount: 65000 },
+  { crdb: 'Datsun_240ZLPClassic_1972',              name: 'Datsun 240Z LP',                 amount: 65000 },
+  { crdb: 'Dodge_ChallengerRTLPClassic_1970',       name: 'Dodge Challenger R/T Classic',   amount: 64000 },
+  { crdb: 'Chevrolet_CorvetteC1LPClassic_1958',     name: 'Chevrolet Corvette C1',          amount: 70000 },
+  { crdb: 'Chevrolet_NovaSSLPClassic_1970',         name: 'Chevy Nova SS Classic',          amount: 70000 },
+  { crdb: 'Ford_EscortMk1RS2000LPClassic_1973',     name: 'Ford Escort Mk1 RS2000 Classic', amount: 70000 },
+  { crdb: 'Dodge_ViperSR1LPClassic_1995',           name: 'Dodge Viper SR1 LP',             amount: 75000 },
+  { crdb: 'Ford_MustangSVTCobraRLPClassic_1993',    name: 'Ford Mustang SVT Cobra R',       amount: 75000 },
+  { crdb: 'Porsche_911Turbo930LPClassic_1977',      name: 'Porsche 911 Turbo (930)',        amount: 75000 },
+]
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -47,6 +80,14 @@ function loadCsr2Cars() { return loadJson(CSR2_CARS_FILE, []) }
 function saveCsr2Cars(d) { saveJson(CSR2_CARS_FILE, d) }
 function loadCsr2Sha() { return loadJson(CSR2_SHA_FILE, {}) }
 function saveCsr2Sha(d) { saveJson(CSR2_SHA_FILE, d) }
+function loadFusionData() { return loadJson(CSR2_FUSIONS_FILE, {}) }
+function saveFusionData(d) { saveJson(CSR2_FUSIONS_FILE, d) }
+function loadFusionsSha() { return loadJson(CSR2_FUSIONS_SHA, {}) }
+function saveFusionsSha(d) { saveJson(CSR2_FUSIONS_SHA, d) }
+function loadStage6Data() { return loadJson(CSR2_STAGE6_FILE, {}) }
+function saveStage6Data(d) { saveJson(CSR2_STAGE6_FILE, d) }
+function loadStage6Sha() { return loadJson(CSR2_STAGE6_SHA, {}) }
+function saveStage6Sha(d) { saveJson(CSR2_STAGE6_SHA, d) }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7) }
 
 // ─── Riot Client API ─────────────────────────────────────────────────────────
@@ -1035,8 +1076,14 @@ function csr2ReadSaveStats(buf) {
   }
 }
 
-async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
-  const c = pack.currencies || {}
+async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, opts) {
+  opts = opts || {}
+  const { applyLegends = true, applyFusions = true, applyStage6 = true, usePartialSelection = false } = opts
+  // Currency override: merge override values on top of pack values
+  const baseCurr = pack.currencies || {}
+  const c = (opts.currencyOverride && Object.keys(opts.currencyOverride).length > 0)
+    ? Object.assign({}, baseCurr, opts.currencyOverride)
+    : baseCurr
 
   // Apply currencies — ADD to existing balance, clamp to INT32_MAX
   if ('cash'       in c) data.caea = Math.min((data.caea || 0) + c.cash,       INT32_MAX)
@@ -1059,7 +1106,7 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
   const carConfig = pack.cars
   if (carConfig) {
     const carMode = carConfig.carMode || 'customizable'
-    const isCustom = carMode === 'customizable'
+    const isCustom = carMode === 'customizable' || (carMode === 'random' && usePartialSelection && Array.isArray(selectedCars) && selectedCars.length > 0)
     const hasSelection = isCustom && Array.isArray(selectedCars) && selectedCars.length > 0
     const needsCars = carMode === 'all' || (carMode === 'random' && carConfig.count > 0) || hasSelection
 
@@ -1108,12 +1155,12 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
         } else {
           toAdd = db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).map(dbCarFlat)
         }
-      } else if (carMode === 'random') {
+      } else if (carMode === 'random' && !isCustom) {
         const db = loadCsr2Cars()
         const available = shuffle(db.filter(car => car.crdb && !ownedCrdbs.has(car.crdb)).map(dbCarFlat))
         toAdd = available.slice(0, carConfig.count)
       } else {
-        // customizable — selectedCars come from client with correct stockTxtUrl per chosen color
+        // customizable (or random with partial selection) — selectedCars come from client
         if (allowDuplicates) {
           toAdd = selectedCars.filter(car => car.crdb).slice(0, carConfig.count)
         } else {
@@ -1206,6 +1253,57 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId) {
         note = added + ' car(s) added. ' + remaining + ' could not be fetched from GitHub.'
       } else if (added > 0) {
         note = added + ' car(s) added.'
+      }
+    }
+  }
+
+  // Stage 6 (cues = elite stage upgrades per car, keyed by car unid)
+  if (applyStage6 && pack.stage6 && pack.stage6.mode === 'all') {
+    const stage6Data = loadStage6Data()
+    if (Object.keys(stage6Data).length > 0 && Array.isArray(data.caow)) {
+      if (!data.cues) data.cues = {}
+      for (const car of data.caow) {
+        if (car.crdb && car.unid !== undefined && stage6Data[car.crdb]) {
+          data.cues[car.unid] = stage6Data[car.crdb]
+        }
+      }
+    }
+  }
+
+  // Fusions (caup = fusion parts per car, keyed by car unid)
+  if (applyFusions && pack.fusions && pack.fusions.mode === 'all') {
+    const fusionData = loadFusionData()
+    if (Object.keys(fusionData).length > 0 && Array.isArray(data.caow)) {
+      if (!data.caup) data.caup = {}
+      for (const car of data.caow) {
+        if (car.crdb && car.unid !== undefined && fusionData[car.crdb]) {
+          data.caup[car.unid] = fusionData[car.crdb]
+        }
+      }
+    }
+  }
+
+  // Legends (crpe = legend restoration token amounts)
+  if (applyLegends && pack.legends) {
+    if (!data.crpe) data.crpe = {}
+    if (pack.legends.mode === 'all') {
+      for (const lc of LEGEND_CARS) {
+        data.crpe[lc.crdb] = lc.amount
+      }
+    } else if (pack.legends.mode === 'customizable') {
+      if (Array.isArray(opts.selectedLegends) && opts.selectedLegends.length > 0) {
+        const count = Math.min(pack.legends.count || 0, opts.selectedLegends.length)
+        for (let i = 0; i < count; i++) {
+          const lc = LEGEND_CARS.find(l => l.crdb === opts.selectedLegends[i])
+          if (lc) data.crpe[lc.crdb] = lc.amount
+        }
+      } else {
+        // fallback: random selection
+        const shuffled = [...LEGEND_CARS].sort(() => Math.random() - 0.5)
+        const count = Math.min(pack.legends.count || 0, LEGEND_CARS.length)
+        for (let i = 0; i < count; i++) {
+          data.crpe[shuffled[i].crdb] = shuffled[i].amount
+        }
       }
     }
   }
@@ -1408,11 +1506,12 @@ select{cursor:pointer}
 .pack-card-meta{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .pack-meta-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .pack-meta-row .token-dot{margin-right:1px}
-.ansb-outer{padding:0;overflow:hidden;display:flex;width:auto;max-width:520px;transition:max-width .25s}
-.ansb-outer.has-cars{max-width:860px}
-.ansb-left-pane{flex:1;min-width:0;padding:24px;overflow-y:auto;max-height:85vh;box-sizing:border-box;display:flex;flex-direction:column;gap:14px}
-.ansb-right-pane{width:280px;border-left:1px solid var(--border);display:none;flex-direction:column;padding:20px;gap:10px;max-height:85vh;overflow-y:auto;box-sizing:border-box}
-.ansb-outer.has-cars .ansb-right-pane{display:flex}
+.ap-modal{display:flex;flex-direction:column;max-height:88vh;overflow:hidden;padding:0!important;width:860px;max-width:92vw}
+.ap-body{padding:20px;overflow-y:auto;flex:1;min-height:260px;display:flex;flex-direction:column;gap:14px}
+.ap-cars-body{padding:0;overflow:hidden;flex:1;display:flex;min-height:400px}
+.ap-cars-left{flex:1;min-width:0;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.ap-cars-right{width:260px;border-left:1px solid var(--border);display:flex;flex-direction:column;padding:16px;gap:10px;overflow-y:auto}
+.ap-footer{padding:10px 20px 16px;border-top:1px solid var(--border);flex-shrink:0}
 .pack-stat-grid{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0}
 .pack-stat-chip{background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;min-width:68px}
 .pack-stat-chip .psc-val{font-size:15px;font-weight:600;color:var(--text);display:block}
@@ -1448,7 +1547,7 @@ select{cursor:pointer}
 .pack-sect-hdr{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .cp-modal{display:flex;flex-direction:column;max-height:88vh;overflow:hidden;padding:0!important}
 .cp-tab-bar{display:flex;align-items:flex-end;justify-content:space-between;padding:14px 16px 0;flex-shrink:0;gap:8px}
-.cp-tabs{display:flex;gap:1px;flex-wrap:wrap;flex:1}
+.cp-tabs{display:flex;gap:1px;flex-wrap:nowrap;flex:1}
 .cp-tab{background:none;border:none;border-bottom:2px solid transparent;padding:7px 13px 8px;border-radius:6px 6px 0 0;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.3px;transition:color .12s,background .12s;white-space:nowrap}
 .cp-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(126,101,81,.09)}
 .cp-tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,.04)}
@@ -1703,7 +1802,7 @@ select{cursor:pointer}
 
 <!-- Create Pack Modal -->
 <div class="modal-bg" id="create-pack-modal">
-  <div class="modal cp-modal" style="max-width:700px">
+  <div class="modal cp-modal" style="width:max-content;max-width:92vw">
     <div class="cp-tab-bar">
       <div class="cp-tabs">
         <button class="cp-tab active" id="cp-tab-general" onclick="cpSwitchTab('general')">General</button>
@@ -1753,19 +1852,19 @@ select{cursor:pointer}
       </div>
       <div class="section-title">Currencies</div>
       <div class="curr-grid" style="margin-bottom:16px">
-        <div class="field"><label>💵 Cash</label><div class="field-wrap"><input type="number" id="cp-cash" placeholder="0" min="0"><span class="field-unit">$</span></div></div>
-        <div class="field"><label>🪙 Gold</label><div class="field-wrap"><input type="number" id="cp-gold" placeholder="0" min="0"><span class="field-unit">G</span></div></div>
-        <div class="field"><label>🔑 Bronze Keys</label><div class="field-wrap"><input type="number" id="cp-bkeys" placeholder="0" min="0"><span class="field-unit">Bk</span></div></div>
-        <div class="field"><label>🗝️ Silver Keys</label><div class="field-wrap"><input type="number" id="cp-skeys" placeholder="0" min="0"><span class="field-unit">Sk</span></div></div>
-        <div class="field"><label>✨ Gold Keys</label><div class="field-wrap"><input type="number" id="cp-gkeys" placeholder="0" min="0"><span class="field-unit">Gk</span></div></div>
-        <div class="field"><label>⛽ Fuel</label><div class="field-wrap"><input type="number" id="cp-fuel" placeholder="0" min="0"><span class="field-unit">F</span></div></div>
+        <div class="field"><label>💵 Cash</label><div class="field-wrap"><input type="text" id="cp-cash" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">$</span></div></div>
+        <div class="field"><label>🪙 Gold</label><div class="field-wrap"><input type="text" id="cp-gold" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">G</span></div></div>
+        <div class="field"><label>🔑 Bronze Keys</label><div class="field-wrap"><input type="text" id="cp-bkeys" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">Bk</span></div></div>
+        <div class="field"><label>🗝️ Silver Keys</label><div class="field-wrap"><input type="text" id="cp-skeys" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">Sk</span></div></div>
+        <div class="field"><label>✨ Gold Keys</label><div class="field-wrap"><input type="text" id="cp-gkeys" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">Gk</span></div></div>
+        <div class="field"><label>⛽ Fuel</label><div class="field-wrap"><input type="text" id="cp-fuel" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">F</span></div></div>
       </div>
       <div class="section-title">Elite Tokens</div>
       <div class="curr-grid">
-        <div class="field"><label><span class="token-dot" style="background:#4caf50"></span>Green</label><div class="field-wrap"><input type="number" id="cp-fgreen" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
-        <div class="field"><label><span class="token-dot" style="background:#2196F3"></span>Blue</label><div class="field-wrap"><input type="number" id="cp-fblue" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
-        <div class="field"><label><span class="token-dot" style="background:#e05252"></span>Red</label><div class="field-wrap"><input type="number" id="cp-fred" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
-        <div class="field"><label><span class="token-dot" style="background:#FFC107"></span>Yellow</label><div class="field-wrap"><input type="number" id="cp-fyellow" placeholder="0" min="0"><span class="field-unit">Tk</span></div></div>
+        <div class="field"><label><span class="token-dot" style="background:#4caf50"></span>Green</label><div class="field-wrap"><input type="text" id="cp-fgreen" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">Tk</span></div></div>
+        <div class="field"><label><span class="token-dot" style="background:#2196F3"></span>Blue</label><div class="field-wrap"><input type="text" id="cp-fblue" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">Tk</span></div></div>
+        <div class="field"><label><span class="token-dot" style="background:#e05252"></span>Red</label><div class="field-wrap"><input type="text" id="cp-fred" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">Tk</span></div></div>
+        <div class="field"><label><span class="token-dot" style="background:#FFC107"></span>Yellow</label><div class="field-wrap"><input type="text" id="cp-fyellow" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">Tk</span></div></div>
       </div>
     </div>
 
@@ -1835,15 +1934,73 @@ select{cursor:pointer}
     </div>
 
     <div class="cp-body" id="cp-content-legends" style="display:none">
-      <div style="color:var(--muted);font-size:13px;text-align:center;padding:48px 0">⭐ Legend Tokens — coming soon</div>
+      <div style="margin-bottom:16px">
+        <div class="section-title" style="margin-bottom:10px">Mode</div>
+        <div style="display:flex;gap:10px">
+          <label id="cp-legends-all-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;transition:border-color .15s">
+            <input type="radio" name="cp-legends-mode" id="cp-legends-all" value="all" onchange="onLegendsToggle('all')" style="accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
+            <div>
+              <div style="font-weight:600;font-size:13px">Add All</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Restore all 26 classic cars</div>
+            </div>
+          </label>
+          <label id="cp-legends-custom-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;transition:border-color .15s">
+            <input type="radio" name="cp-legends-mode" id="cp-legends-custom" value="customizable" onchange="onLegendsToggle('customizable')" style="accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
+            <div>
+              <div style="font-weight:600;font-size:13px">Customizable</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Buyer picks how many (up to 26)</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div id="cp-legends-all-section" style="display:none">
+        <div class="section-title" style="margin-bottom:8px">All 26 Legend Cars</div>
+        <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px 8px" id="cp-legends-all-list"></div>
+      </div>
+      <div id="cp-legends-custom-section" style="display:none">
+        <div class="field">
+          <label>Count <span style="font-size:11px;color:var(--muted);font-weight:400">(1–26)</span></label>
+          <input type="number" id="cp-legends-count" placeholder="e.g. 10" min="1" max="26">
+        </div>
+      </div>
     </div>
 
     <div class="cp-body" id="cp-content-fusions" style="display:none">
-      <div style="color:var(--muted);font-size:13px;text-align:center;padding:48px 0">⚗️ Fusions — coming soon</div>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:16px">
+        <input type="checkbox" id="cp-fusions-all" onchange="onFusionsToggle(this.checked)" style="margin-top:2px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
+        <div>
+          <div style="font-weight:600;font-size:13px">Max All Fusions</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Applies max fusion parts to all owned cars in the save</div>
+        </div>
+      </label>
+      <div id="cp-fusions-data-row" style="display:none;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:12px;font-weight:600;margin-bottom:3px">Fusion Data</div>
+            <div id="cp-fusions-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="openFusionsUpdate()">Update</button>
+        </div>
+      </div>
     </div>
 
     <div class="cp-body" id="cp-content-stage6" style="display:none">
-      <div style="color:var(--muted);font-size:13px;text-align:center;padding:48px 0">6️⃣ Stage 6 — coming soon</div>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:16px">
+        <input type="checkbox" id="cp-stage6-all" onchange="onStage6Toggle(this.checked)" style="margin-top:2px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0">
+        <div>
+          <div style="font-weight:600;font-size:13px">Max Stage 6</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Applies max Stage 6 upgrades to all owned cars in the save</div>
+        </div>
+      </label>
+      <div id="cp-stage6-data-row" style="display:none;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:12px;font-weight:600;margin-bottom:3px">Stage 6 Data</div>
+            <div id="cp-stage6-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="openStage6Update()">Update</button>
+        </div>
+      </div>
     </div>
 
     <div id="cp-notice" style="display:none;margin:0 20px"></div>
@@ -1869,11 +2026,13 @@ select{cursor:pointer}
 
 <!-- Pack Saved Modal -->
 <div class="modal-bg" id="pack-saved-modal" style="z-index:200">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-title">Pack Saved ✓</div>
-    <div style="font-size:14px;font-weight:600;margin-bottom:10px" id="cp-saved-name"></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Pack contents:</div>
-    <div id="cp-saved-summary" style="font-size:13px;line-height:1.8;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px"></div>
+  <div class="modal" style="max-width:480px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+      <div class="modal-title" style="margin:0">Pack Saved</div>
+      <span style="font-size:15px;color:#4caf50">✓</span>
+    </div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:14px;color:var(--accent)" id="cp-saved-name"></div>
+    <div id="cp-saved-summary"></div>
     <div class="modal-actions" style="margin-top:16px">
       <button class="btn btn-primary" onclick="hideModal('pack-saved-modal')">Done</button>
     </div>
@@ -2036,54 +2195,109 @@ select{cursor:pointer}
 
 <!-- Apply NSB Modal -->
 <div class="modal-bg" id="apply-nsb-modal">
-  <div class="modal ansb-outer" id="ansb-outer">
-    <!-- Left pane -->
-    <div class="ansb-left-pane">
-      <div class="modal-title" style="margin-bottom:0">Apply Pack</div>
+  <div class="modal ap-modal" id="ansb-outer">
+    <div class="cp-tab-bar">
+      <div class="cp-tabs">
+        <button class="cp-tab active" id="ap-tab-preview" onclick="apSwitchTab('preview')">Pack Preview</button>
+        <button class="cp-tab" id="ap-tab-currencies" onclick="apSwitchTab('currencies')" style="display:none">Currencies</button>
+        <button class="cp-tab" id="ap-tab-cars" onclick="apSwitchTab('cars')" style="display:none">Cars</button>
+        <button class="cp-tab" id="ap-tab-legends" onclick="apSwitchTab('legends')" style="display:none">Legends</button>
+        <button class="cp-tab" id="ap-tab-fusions-s6" onclick="apSwitchTab('fusions-s6')" style="display:none">Fusions &amp; S6</button>
+      </div>
+      <button class="cp-hdr-close" onclick="hideModal('apply-nsb-modal')" title="Close">✕</button>
+    </div>
+    <div class="cp-divider"></div>
+    <!-- Pack Preview tab -->
+    <div class="ap-body" id="ap-panel-preview">
+      <div id="ansb-pack-title" style="font-size:16px;font-weight:700;color:var(--accent);margin-bottom:2px"></div>
       <div id="ansb-pack-info"></div>
       <div class="field" id="ansb-pack-select-row" style="display:none;margin-bottom:0">
         <label>Pack</label>
-        <select id="ansb-pack-select"></select>
+        <select id="ansb-pack-select" onchange="onAnsbPackSelect(this.value)"></select>
       </div>
       <div class="field" style="margin-bottom:0">
         <label>NSB File</label>
         <label class="file-drop" id="ansb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
           <input type="file" id="ansb-file" style="display:none" onchange="handleNsbFile(event,'ansb')">
-          <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
+          <div class="file-drop-label">Click to select or drag &amp; drop your NSB file</div>
           <div class="file-drop-name" id="ansb-file-name" style="display:none"></div>
         </label>
       </div>
-      <div id="ansb-compare" style="display:none">
-        <div class="section-title" style="margin-bottom:6px">Account Preview</div>
-        <div id="ansb-compare-box"></div>
-      </div>
-      <div id="ansb-car-section" style="display:none">
-        <div class="section-title" style="margin-bottom:8px">Select Cars <span id="ansb-car-count-badge" style="font-weight:400;color:var(--muted);text-transform:none;font-size:11px;letter-spacing:0">(0 selected)</span></div>
-        <div id="ansb-car-locked" style="font-size:12px;color:var(--muted);padding:10px 0;display:none">📂 Please upload NSB file first to enable car selection.</div>
-        <div id="ansb-car-controls" style="display:none">
-          <label class="allow-dup-row"><input type="checkbox" id="ansb-allow-dup" onchange="toggleAllowDuplicates()"> Allow Duplicates (show owned cars)</label>
-          <div class="car-filter-bar" id="ansb-tier-filters"></div>
-          <div class="car-filter-bar" id="ansb-star-filters"></div>
-          <div id="ansb-brand-filters" style="margin-bottom:4px"></div>
-          <div class="car-search-wrap" style="margin-top:4px">
-            <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
-            <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search by name or brand..." oninput="searchCars(this.value)">
-          </div>
-          <div id="ansb-car-results"></div>
+    </div>
+    <!-- Currencies tab -->
+    <div class="ap-body" id="ap-panel-currencies" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:600">Currency Amounts</div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-sm" id="ap-curr-edit-btn" onclick="toggleCurrencyEdit()" style="font-size:11px;padding:3px 9px">✏️ Override</button>
+          <button class="btn btn-secondary btn-sm" id="ap-curr-clear-btn" onclick="clearCurrencyOverride()" style="font-size:11px;padding:3px 9px;display:none">✕ Reset</button>
         </div>
       </div>
+      <div id="ap-curr-override-warn" style="display:none;font-size:11px;color:#FFC107;margin-bottom:8px;padding:6px 10px;background:rgba(255,193,7,.08);border-radius:6px;border:1px solid rgba(255,193,7,.25)">⚠️ Amounts overridden for this apply only — pack is unchanged</div>
+      <div id="ap-curr-table"></div>
+      <div id="ap-curr-edit-form" style="display:none;margin-top:14px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;padding:6px 0;border-top:1px solid var(--border)">Edit amounts for this apply only. Leave a field blank to use the pack default.</div>
+        <div class="curr-grid" id="ap-curr-edit-grid"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+          <button class="btn btn-secondary btn-sm" onclick="cancelCurrencyEdit()">Cancel</button>
+          <button class="btn btn-primary btn-sm" onclick="saveCurrencyOverride()">Apply Override</button>
+        </div>
+      </div>
+    </div>
+    <!-- Cars tab -->
+    <div class="ap-cars-body" id="ap-panel-cars" style="display:none">
+      <div class="ap-cars-left">
+        <div id="ap-cars-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+        <div id="ap-partial-toggle-row" style="display:none;margin-bottom:10px">
+          <label class="allow-dup-row"><input type="checkbox" id="ap-partial-sel" onchange="togglePartialSelection(this.checked)"> Partial Selection — pick specific cars instead of random</label>
+        </div>
+        <div id="ap-cars-picker" style="display:none">
+          <div class="section-title" style="margin-bottom:6px;font-size:11px">Select Cars <span id="ansb-car-count-badge" style="font-weight:400;color:var(--muted);text-transform:none;font-size:11px;letter-spacing:0">(0 selected)</span></div>
+          <div id="ansb-car-locked" style="font-size:12px;color:var(--muted);padding:6px 0;display:none">📂 Upload an NSB file on the Pack Preview tab first.</div>
+          <div id="ansb-car-controls" style="display:none">
+            <label class="allow-dup-row"><input type="checkbox" id="ansb-allow-dup" onchange="toggleAllowDuplicates()"> Allow Duplicates (show owned cars)</label>
+            <div class="car-filter-bar" id="ansb-tier-filters"></div>
+            <div class="car-filter-bar" id="ansb-star-filters"></div>
+            <div id="ansb-brand-filters" style="margin-bottom:4px"></div>
+            <div class="car-search-wrap" style="margin-top:4px">
+              <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
+              <input type="text" class="car-search-input" id="ansb-car-search" placeholder="Search by name or brand..." oninput="searchCars(this.value)">
+            </div>
+            <div id="ansb-car-results"></div>
+          </div>
+        </div>
+      </div>
+      <div class="ap-cars-right" id="ap-cars-right" style="display:none">
+        <div style="font-weight:600;font-size:14px">Selected Cars</div>
+        <div id="ansb-selected-count" style="font-size:12px;color:var(--muted);margin-top:-4px">0 cars selected</div>
+        <div id="ansb-selected-cars-list" style="flex:1;display:flex;flex-direction:column;gap:6px;overflow-y:auto"></div>
+        <div class="cars-remaining-note" id="ansb-cars-remaining-note" style="display:none"></div>
+      </div>
+    </div>
+    <!-- Legends tab -->
+    <div class="ap-body" id="ap-panel-legends" style="display:none">
+      <div id="ap-legends-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+      <div class="car-search-wrap" style="margin-bottom:8px">
+        <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
+        <input type="text" class="car-search-input" id="ap-legends-search" placeholder="Search legend cars..." oninput="searchLegends(this.value)">
+      </div>
+      <div id="ap-legends-list" style="max-height:190px;overflow-y:auto;margin-bottom:12px"></div>
+      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
+        <span>Selected</span><span id="ap-legends-sel-count">0 / 0</span>
+      </div>
+      <div id="ap-legends-selected" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto"></div>
+    </div>
+    <!-- Fusions & Stage 6 tab (placeholder — shown when customizable mode is added) -->
+    <div class="ap-body" id="ap-panel-fusions-s6" style="display:none">
+      <div style="font-size:13px;color:var(--muted)">Customizable fusions and Stage 6 are not configured for this pack.</div>
+    </div>
+    <!-- Footer -->
+    <div class="ap-footer">
       <div id="ansb-notice" style="display:none"></div>
       <div class="modal-actions" style="margin-top:0">
         <button class="btn btn-secondary" onclick="hideModal('apply-nsb-modal')">Cancel</button>
-        <button class="btn btn-primary" id="ansb-apply-btn" onclick="applyNsb()" disabled>Apply & Download</button>
+        <button class="btn btn-primary" id="ansb-apply-btn" onclick="applyNsb()" disabled>Apply &amp; Download</button>
       </div>
-    </div>
-    <!-- Right pane: selected cars -->
-    <div class="ansb-right-pane" id="ansb-cars-pane">
-      <div style="font-weight:600;font-size:14px">Selected Cars</div>
-      <div id="ansb-selected-count" style="font-size:12px;color:var(--muted);margin-top:-4px">0 cars selected</div>
-      <div id="ansb-selected-cars-list" style="flex:1;display:flex;flex-direction:column;gap:6px;overflow-y:auto"></div>
-      <div class="cars-remaining-note" id="ansb-cars-remaining-note" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -2132,6 +2346,42 @@ select{cursor:pointer}
   </div>
 </div>
 
+<!-- Stage 6 Update Modal -->
+<div class="modal-bg" id="stage6-update-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">Stage 6 Data</div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">GitHub Raw URL for Stage 6 data file</label>
+      <input type="text" id="stage6-url-input" placeholder="https://raw.githubusercontent.com/..." style="width:100%">
+    </div>
+    <div id="stage6-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Paste the raw URL then click Fetch.</div>
+    <div class="cars-update-bar" style="display:none" id="stage6-update-bar"><div class="cars-update-bar-fill" id="stage6-update-bar-fill"></div></div>
+    <div id="stage6-update-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('stage6-update-modal')" id="stage6-update-close-btn">Cancel</button>
+      <button class="btn btn-primary" onclick="doStage6Update()" id="stage6-update-go-btn">Fetch & Cache</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fusions Update Modal -->
+<div class="modal-bg" id="fusions-update-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">Fusion Data</div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px">GitHub Raw URL for AllFusions.txt</label>
+      <input type="text" id="fusions-url-input" placeholder="https://raw.githubusercontent.com/..." style="width:100%">
+    </div>
+    <div id="fusions-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Paste the raw URL then click Fetch.</div>
+    <div class="cars-update-bar" style="display:none" id="fusions-update-bar"><div class="cars-update-bar-fill" id="fusions-update-bar-fill"></div></div>
+    <div id="fusions-update-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('fusions-update-modal')" id="fusions-update-close-btn">Cancel</button>
+      <button class="btn btn-primary" onclick="doFusionsUpdate()" id="fusions-update-go-btn">Fetch & Cache</button>
+    </div>
+  </div>
+</div>
+
 <!-- Car DB Update Modal -->
 <div class="modal-bg" id="cars-update-modal">
   <div class="modal" style="max-width:420px">
@@ -2166,7 +2416,37 @@ var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
+var _currencyOverride = {}, _partialSelectionEnabled = false, _selectedLegends = []
+var _nsbCurrentData = null, _applyPackRef = null, _currencyEditMode = false
 var _selMode = false, _selected = new Set()
+var LEGEND_CARS = [
+  { crdb: 'Ferrari_250GTOClassic_1962',            name: 'Ferrari 250 GTO',                amount: 14800 },
+  { crdb: 'AstonMartin_DB5Classic_1964',            name: 'Aston Martin DB5',               amount: 17400 },
+  { crdb: 'MercedesBenz_300SLClassic_1954',         name: 'Mercedes-Benz 300SL',            amount: 17400 },
+  { crdb: 'Shelby_Cobra427SCClassic_1965',          name: 'Shelby Cobra',                   amount: 25800 },
+  { crdb: 'Chevrolet_CorvetteZR1Classic_1970',      name: 'Chevy Corvette C3',              amount: 25800 },
+  { crdb: 'Pontiac_GTOTheJudgeClassic_1969',        name: 'Pontiac GTO',                    amount: 29600 },
+  { crdb: 'Honda_NSXRClassic_1992',                 name: 'Honda NSX-R',                    amount: 36000 },
+  { crdb: 'Plymouth_HemiCudaClassic_1971',          name: 'Plymouth Hemi Cuda',             amount: 38200 },
+  { crdb: 'Ford_GT40MkII_1966',                     name: 'Ford GT40',                      amount: 40400 },
+  { crdb: 'Lamborghini_CountachClassic_1988',       name: 'Lamborghini Countach',           amount: 40400 },
+  { crdb: 'Porsche_CarreraGTClassic_2003',          name: 'Porsche Carrera GT',             amount: 50000 },
+  { crdb: 'Lamborghini_MiuraSVLPClassic_1971',      name: 'Lamborghini Miura SVL',          amount: 50000 },
+  { crdb: 'Bugatti_EB110SSClassic_1992',            name: 'Bugatti EB110',                  amount: 50000 },
+  { crdb: 'Jaguar_XJ220Classic_1993',               name: 'Jaguar XJ220',                   amount: 53400 },
+  { crdb: 'Ford_MustangShelbyGT350LPClassic_1965',  name: 'Ford Mustang Shelby GT350LP',    amount: 56000 },
+  { crdb: 'Saleen_S7Classic_2004',                  name: 'Saleen S7',                      amount: 56400 },
+  { crdb: 'Plymouth_SuperbirdLPClassic_1970',       name: 'Plymouth Superbird LP',          amount: 65000 },
+  { crdb: 'Porsche_911CarreraRS27LPClassic_1973',   name: 'Porsche 911 Carrera RS27 LP',    amount: 65000 },
+  { crdb: 'Datsun_240ZLPClassic_1972',              name: 'Datsun 240Z LP',                 amount: 65000 },
+  { crdb: 'Dodge_ChallengerRTLPClassic_1970',       name: 'Dodge Challenger R/T Classic',   amount: 64000 },
+  { crdb: 'Chevrolet_CorvetteC1LPClassic_1958',     name: 'Chevrolet Corvette C1',          amount: 70000 },
+  { crdb: 'Chevrolet_NovaSSLPClassic_1970',         name: 'Chevy Nova SS Classic',          amount: 70000 },
+  { crdb: 'Ford_EscortMk1RS2000LPClassic_1973',     name: 'Ford Escort Mk1 RS2000 Classic', amount: 70000 },
+  { crdb: 'Dodge_ViperSR1LPClassic_1995',           name: 'Dodge Viper SR1 LP',             amount: 75000 },
+  { crdb: 'Ford_MustangSVTCobraRLPClassic_1993',    name: 'Ford Mustang SVT Cobra R',       amount: 75000 },
+  { crdb: 'Porsche_911Turbo930LPClassic_1977',      name: 'Porsche 911 Turbo (930)',        amount: 75000 },
+]
 var _debugOpen = false, _pollInterval = null
 var _scanAbort = false, _multiAbort = false, _multiRunId = 0
 var _previewAcct = null, _importAcct = null, _afterImportId = null
@@ -3103,6 +3383,17 @@ function cpOnToggle(tab, on) {
   if (!on && _cpCurrentTab === tab) cpSwitchTab('general')
 }
 
+function fmtInput(el) {
+  var raw = el.value.replace(/[^0-9]/g, '')
+  if (!raw) { el.value = ''; return }
+  var num = parseInt(raw, 10)
+  if (!isNaN(num) && num > 0) el.value = num.toLocaleString('en-US')
+}
+
+function unfmtInput(el) {
+  el.value = el.value.replace(/,/g, '')
+}
+
 function cpClearCurrencies() {
   var fields = ['cp-cash','cp-gold','cp-bkeys','cp-skeys','cp-gkeys','cp-fuel','cp-fgreen','cp-fblue','cp-fred','cp-fyellow']
   for (var i = 0; i < fields.length; i++) document.getElementById(fields[i]).value = ''
@@ -3134,6 +3425,20 @@ function resetCpModal() {
   document.getElementById('cp-all-colors').checked = false
   document.getElementById('cp-partial-toggle').checked = false
   onCarModeChange()
+  // reset legend fields
+  var lcAll = document.getElementById('cp-legends-all')
+  var lcCustom = document.getElementById('cp-legends-custom')
+  if (lcAll) lcAll.checked = false
+  if (lcCustom) lcCustom.checked = false
+  document.getElementById('cp-legends-all-section').style.display = 'none'
+  document.getElementById('cp-legends-custom-section').style.display = 'none'
+  document.getElementById('cp-legends-count').value = ''
+  // reset fusions fields
+  document.getElementById('cp-fusions-all').checked = false
+  document.getElementById('cp-fusions-data-row').style.display = 'none'
+  // reset stage6 fields
+  document.getElementById('cp-stage6-all').checked = false
+  document.getElementById('cp-stage6-data-row').style.display = 'none'
   var sections = ['currencies', 'cars', 'legends', 'fusions', 'stage6']
   for (var i = 0; i < sections.length; i++) {
     var toggle = document.getElementById('cp-toggle-' + sections[i])
@@ -3166,6 +3471,145 @@ function onPartialToggle() {
   if (packsSection) packsSection.style.display = on ? '' : 'none'
 }
 
+function onLegendsToggle(which) {
+  document.getElementById('cp-legends-all-section').style.display = which === 'all' ? '' : 'none'
+  document.getElementById('cp-legends-custom-section').style.display = which === 'customizable' ? '' : 'none'
+  if (which === 'all') {
+    var list = document.getElementById('cp-legends-all-list')
+    if (list && !list.innerHTML) {
+      var html = ''
+      for (var i = 0; i < LEGEND_CARS.length; i++) {
+        var lc = LEGEND_CARS[i]
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 6px;border-radius:5px;' + (i % 2 === 0 ? 'background:rgba(255,255,255,.04)' : '') + '">'
+        html += '<span style="font-size:12px">' + escH(lc.name) + '</span>'
+        html += '<span style="font-size:11px;color:var(--muted)">' + lc.amount.toLocaleString() + ' tokens</span>'
+        html += '</div>'
+      }
+      list.innerHTML = html
+    }
+  }
+}
+
+function onFusionsToggle(on) {
+  document.getElementById('cp-fusions-data-row').style.display = on ? '' : 'none'
+  if (on) refreshFusionsDataStatus()
+}
+
+async function refreshFusionsDataStatus() {
+  var el = document.getElementById('cp-fusions-data-status')
+  if (!el) return
+  try {
+    var res = await apiFetch('/csr2/fusions', { count: 0 })
+    el.textContent = res.count > 0 ? res.count + ' car entries cached' : 'No data — click Update to load'
+    el.style.color = res.count > 0 ? 'var(--green)' : 'var(--muted)'
+  } catch { el.textContent = 'Could not check' }
+}
+
+async function openFusionsUpdate() {
+  var stored = await apiFetch('/csr2/fusions', { count: 0, sha: null })
+  var urlInput = document.getElementById('fusions-url-input')
+  // pre-fill with last-used URL from SHA file if available
+  if (urlInput && !urlInput.value) {
+    try {
+      var sha = await fetch('/csr2/fusions-check').then(function(r){ return r.json() }).catch(function(){ return {} })
+    } catch {}
+  }
+  document.getElementById('fusions-update-status').textContent = stored.count > 0
+    ? stored.count + ' entries currently cached. Paste a URL to update.'
+    : 'No fusion data cached yet. Paste the GitHub raw URL below.'
+  document.getElementById('fusions-update-status').style.color = 'var(--muted)'
+  document.getElementById('fusions-update-bar').style.display = 'none'
+  hideNotice('fusions-update-notice')
+  document.getElementById('fusions-update-close-btn').textContent = 'Cancel'
+  document.getElementById('fusions-update-go-btn').style.display = ''
+  showModal('fusions-update-modal')
+}
+
+async function doFusionsUpdate() {
+  var url = document.getElementById('fusions-url-input').value.trim()
+  if (!url) { showNotice('fusions-update-notice', 'error', 'Enter a URL.'); return }
+  // save URL to config first
+  await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fusionsRawUrl: url }) }).catch(function(){})
+  document.getElementById('fusions-update-go-btn').style.display = 'none'
+  document.getElementById('fusions-update-bar').style.display = ''
+  document.getElementById('fusions-update-bar-fill').style.width = '40%'
+  document.getElementById('fusions-update-status').textContent = 'Fetching...'
+  hideNotice('fusions-update-notice')
+  try {
+    var res = await fetch('/csr2/fusions-update', { method: 'POST' }).then(function(r){ return r.json() })
+    document.getElementById('fusions-update-bar-fill').style.width = '100%'
+    if (res.error) {
+      showNotice('fusions-update-notice', 'error', res.error)
+      document.getElementById('fusions-update-go-btn').style.display = ''
+    } else {
+      document.getElementById('fusions-update-status').textContent = 'Done! ' + res.count + ' entries loaded.'
+      document.getElementById('fusions-update-close-btn').textContent = 'Close'
+      showNotice('fusions-update-notice', 'success', res.count + ' car fusions ready.')
+      refreshFusionsDataStatus()
+    }
+  } catch (e) {
+    showNotice('fusions-update-notice', 'error', 'Failed: ' + e.message)
+    document.getElementById('fusions-update-go-btn').style.display = ''
+  }
+}
+
+function onStage6Toggle(on) {
+  document.getElementById('cp-stage6-data-row').style.display = on ? '' : 'none'
+  if (on) refreshStage6DataStatus()
+}
+
+async function refreshStage6DataStatus() {
+  var el = document.getElementById('cp-stage6-data-status')
+  if (!el) return
+  try {
+    var res = await apiFetch('/csr2/stage6', { count: 0 })
+    el.textContent = res.count > 0 ? res.count + ' car entries cached' : 'No data — click Update to load'
+    el.style.color = res.count > 0 ? 'var(--green)' : 'var(--muted)'
+  } catch { el.textContent = 'Could not check' }
+}
+
+async function openStage6Update() {
+  var stored = await apiFetch('/csr2/stage6', { count: 0 })
+  document.getElementById('stage6-update-status').textContent = stored.count > 0
+    ? stored.count + ' entries currently cached. Paste a URL to update.'
+    : 'No Stage 6 data cached yet. Paste the GitHub raw URL below.'
+  document.getElementById('stage6-update-status').style.color = 'var(--muted)'
+  document.getElementById('stage6-update-bar').style.display = 'none'
+  hideNotice('stage6-update-notice')
+  document.getElementById('stage6-update-close-btn').textContent = 'Cancel'
+  document.getElementById('stage6-update-go-btn').style.display = ''
+  showModal('stage6-update-modal')
+}
+
+async function doStage6Update() {
+  var url = document.getElementById('stage6-url-input').value.trim()
+  if (!url) { showNotice('stage6-update-notice', 'error', 'Enter a URL.'); return }
+  await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stage6RawUrl: url }) }).catch(function(){})
+  document.getElementById('stage6-update-go-btn').style.display = 'none'
+  document.getElementById('stage6-update-bar').style.display = ''
+  document.getElementById('stage6-update-bar-fill').style.width = '40%'
+  document.getElementById('stage6-update-status').textContent = 'Fetching...'
+  hideNotice('stage6-update-notice')
+  try {
+    var res = await fetch('/csr2/stage6-update', { method: 'POST' }).then(function(r){ return r.json() })
+    document.getElementById('stage6-update-bar-fill').style.width = '100%'
+    if (res.error) {
+      showNotice('stage6-update-notice', 'error', res.error)
+      document.getElementById('stage6-update-go-btn').style.display = ''
+    } else {
+      document.getElementById('stage6-update-status').textContent = 'Done! ' + res.count + ' entries loaded.'
+      document.getElementById('stage6-update-close-btn').textContent = 'Close'
+      showNotice('stage6-update-notice', 'success', res.count + ' Stage 6 entries ready.')
+      refreshStage6DataStatus()
+    }
+  } catch (e) {
+    showNotice('stage6-update-notice', 'error', 'Failed: ' + e.message)
+    document.getElementById('stage6-update-go-btn').style.display = ''
+  }
+}
+
 async function openCreatePack() {
   resetCpModal()
   await reloadCarPacks()
@@ -3173,7 +3617,7 @@ async function openCreatePack() {
   showModal('create-pack-modal')
 }
 
-function openEditPack(packId) {
+async function openEditPack(packId) {
   var pack = _packs.find(function(p){ return p.id === packId })
   if (!pack) return
   resetCpModal()
@@ -3184,16 +3628,17 @@ function openEditPack(packId) {
   if (hasCurr) {
     document.getElementById('cp-toggle-currencies').checked = true
     cpOnToggle('currencies', true)
-    document.getElementById('cp-cash').value = c.cash || ''
-    document.getElementById('cp-gold').value = c.gold || ''
-    document.getElementById('cp-bkeys').value = c.bronzeKeys || ''
-    document.getElementById('cp-skeys').value = c.silverKeys || ''
-    document.getElementById('cp-gkeys').value = c.goldKeys || ''
-    document.getElementById('cp-fuel').value = c.fuel || ''
-    document.getElementById('cp-fgreen').value = c.fusionGreen || ''
-    document.getElementById('cp-fblue').value = c.fusionBlue || ''
-    document.getElementById('cp-fred').value = c.fusionRed || ''
-    document.getElementById('cp-fyellow').value = c.fusionYellow || ''
+    function sv(id, n) { document.getElementById(id).value = (n > 0) ? n.toLocaleString('en-US') : '' }
+    sv('cp-cash',    c.cash)
+    sv('cp-gold',    c.gold)
+    sv('cp-bkeys',   c.bronzeKeys)
+    sv('cp-skeys',   c.silverKeys)
+    sv('cp-gkeys',   c.goldKeys)
+    sv('cp-fuel',    c.fuel)
+    sv('cp-fgreen',  c.fusionGreen)
+    sv('cp-fblue',   c.fusionBlue)
+    sv('cp-fred',    c.fusionRed)
+    sv('cp-fyellow', c.fusionYellow)
   }
   var carsOn = !!(pack.cars)
   if (carsOn) {
@@ -3225,6 +3670,37 @@ function openEditPack(packId) {
     }
     onCarModeChange()
   }
+  var legendsOn = !!(pack.legends)
+  if (legendsOn) {
+    document.getElementById('cp-toggle-legends').checked = true
+    cpOnToggle('legends', true)
+    if (pack.legends.mode === 'all') {
+      document.getElementById('cp-legends-all').checked = true
+      onLegendsToggle('all')
+    } else if (pack.legends.mode === 'customizable') {
+      document.getElementById('cp-legends-custom').checked = true
+      onLegendsToggle('customizable')
+      document.getElementById('cp-legends-count').value = pack.legends.count || ''
+    }
+  }
+  var fusionsOn = !!(pack.fusions)
+  if (fusionsOn) {
+    document.getElementById('cp-toggle-fusions').checked = true
+    cpOnToggle('fusions', true)
+    if (pack.fusions.mode === 'all') {
+      document.getElementById('cp-fusions-all').checked = true
+      onFusionsToggle(true)
+    }
+  }
+  var stage6On = !!(pack.stage6)
+  if (stage6On) {
+    document.getElementById('cp-toggle-stage6').checked = true
+    cpOnToggle('stage6', true)
+    if (pack.stage6.mode === 'all') {
+      document.getElementById('cp-stage6-all').checked = true
+      onStage6Toggle(true)
+    }
+  }
   await reloadCarPacks()
   renderCarPackCards()
   showModal('create-pack-modal')
@@ -3235,16 +3711,17 @@ async function savePack() {
   if (!name) { showNotice('cp-notice', 'error', 'Enter a pack name.'); return }
   var currencies = {}
   if (document.getElementById('cp-toggle-currencies').checked) {
-    var cash = parseInt(document.getElementById('cp-cash').value) || 0
-    var gold = parseInt(document.getElementById('cp-gold').value) || 0
-    var bkeys = parseInt(document.getElementById('cp-bkeys').value) || 0
-    var skeys = parseInt(document.getElementById('cp-skeys').value) || 0
-    var gkeys = parseInt(document.getElementById('cp-gkeys').value) || 0
-    var fuel = parseInt(document.getElementById('cp-fuel').value) || 0
-    var fgreen = parseInt(document.getElementById('cp-fgreen').value) || 0
-    var fblue = parseInt(document.getElementById('cp-fblue').value) || 0
-    var fred = parseInt(document.getElementById('cp-fred').value) || 0
-    var fyellow = parseInt(document.getElementById('cp-fyellow').value) || 0
+    function rv(id) { return parseInt((document.getElementById(id).value || '').replace(/,/g, ''), 10) || 0 }
+    var cash = rv('cp-cash')
+    var gold = rv('cp-gold')
+    var bkeys = rv('cp-bkeys')
+    var skeys = rv('cp-skeys')
+    var gkeys = rv('cp-gkeys')
+    var fuel = rv('cp-fuel')
+    var fgreen = rv('cp-fgreen')
+    var fblue = rv('cp-fblue')
+    var fred = rv('cp-fred')
+    var fyellow = rv('cp-fyellow')
     if (cash) currencies.cash = cash
     if (gold) currencies.gold = gold
     if (bkeys) currencies.bronzeKeys = bkeys
@@ -3288,23 +3765,70 @@ async function savePack() {
       }
     }
   }
-  var pack = { name, currencies, cars }
+  var legendsOn = document.getElementById('cp-toggle-legends').checked
+  var legends = null
+  if (legendsOn) {
+    var legendModeEl = document.querySelector('input[name="cp-legends-mode"]:checked')
+    if (legendModeEl) {
+      if (legendModeEl.value === 'all') {
+        legends = { mode: 'all' }
+      } else {
+        legends = { mode: 'customizable', count: Math.min(26, parseInt(document.getElementById('cp-legends-count').value) || 0) }
+      }
+    }
+  }
+  var fusionsOn = document.getElementById('cp-toggle-fusions').checked
+  var fusions = null
+  if (fusionsOn && document.getElementById('cp-fusions-all').checked) {
+    fusions = { mode: 'all' }
+  }
+  var stage6On = document.getElementById('cp-toggle-stage6').checked
+  var stage6 = null
+  if (stage6On && document.getElementById('cp-stage6-all').checked) {
+    stage6 = { mode: 'all' }
+  }
+  var pack = { name, currencies, cars, legends, fusions, stage6 }
   var url = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
   var method = _editingPackId ? 'PATCH' : 'POST'
   var res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pack) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (res.error) { showNotice('cp-notice', 'error', res.error); return }
-  var summaryLines = []
-  if (Object.keys(currencies).length > 0) {
-    summaryLines.push('💰 ' + Object.keys(currencies).map(function(k){ return currencies[k] + ' ' + k }).join(', '))
+  var summaryHtml = ''
+  var currKeys = [
+    { k: 'cash',        lbl: 'Cash',        em: '💵' },
+    { k: 'gold',        lbl: 'Gold',        em: '🪙' },
+    { k: 'bronzeKeys',  lbl: 'Bronze Keys', em: '🔑' },
+    { k: 'silverKeys',  lbl: 'Silver Keys', em: '🗝️' },
+    { k: 'goldKeys',    lbl: 'Gold Keys',   em: '✨' },
+    { k: 'fuel',        lbl: 'Fuel',        em: '⛽' },
+    { k: 'fusionGreen', lbl: 'Green Tk',    em: '<span class="token-dot" style="background:#4caf50;display:inline-block"></span>' },
+    { k: 'fusionBlue',  lbl: 'Blue Tk',     em: '<span class="token-dot" style="background:#2196F3;display:inline-block"></span>' },
+    { k: 'fusionRed',   lbl: 'Red Tk',      em: '<span class="token-dot" style="background:#e05252;display:inline-block"></span>' },
+    { k: 'fusionYellow',lbl: 'Yellow Tk',   em: '<span class="token-dot" style="background:#FFC107;display:inline-block"></span>' },
+  ]
+  var hasCurr = false
+  var chipsHtml = ''
+  for (var ci = 0; ci < currKeys.length; ci++) {
+    var ck = currKeys[ci]
+    if (currencies[ck.k]) {
+      hasCurr = true
+      chipsHtml += '<div class="pack-stat-chip"><span class="psc-val">' + ck.em + ' ' + fmtN(currencies[ck.k]) + '</span><span class="psc-lbl">' + ck.lbl + '</span></div>'
+    }
   }
+  if (hasCurr) summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">💰 Currencies</div><div class="pack-stat-grid">' + chipsHtml + '</div></div>'
   if (cars) {
-    var carsDesc = cars.carMode === 'all' ? 'All available cars (' + cars.condition + ')' : cars.count + ' cars — ' + cars.carMode + ', ' + cars.condition
-    summaryLines.push('🚗 ' + carsDesc)
+    var carsDesc = cars.carMode === 'all'
+      ? 'All available cars' + (cars.condition === 'maxed' ? ' · maxed' : '')
+      : fmtN(cars.count) + ' cars — ' + cars.carMode + (cars.condition === 'maxed' ? ' · maxed' : '')
+    summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">🚗 Cars</div><div style="font-size:13px">' + escH(carsDesc) + '</div></div>'
   }
+  if (legends) {
+    var legendDesc = legends.mode === 'all' ? 'All 26 classic legend cars' : fmtN(legends.count) + ' classic cars (buyer picks)'
+    summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">⭐ Legend Tokens</div><div style="font-size:13px">' + escH(legendDesc) + '</div></div>'
+  }
+  if (fusions) summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">⚗️ Fusions</div><div style="font-size:13px">Max fusion parts for all owned cars</div></div>'
+  if (stage6) summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">6️⃣ Stage 6</div><div style="font-size:13px">Max Stage 6 upgrades for all owned cars</div></div>'
   document.getElementById('cp-saved-name').textContent = name
-  document.getElementById('cp-saved-summary').innerHTML = summaryLines.length > 0
-    ? summaryLines.map(function(l){ return '<div style="padding:3px 0">' + escH(l) + '</div>' }).join('')
-    : '<div style="color:var(--muted)">No contents configured</div>'
+  document.getElementById('cp-saved-summary').innerHTML = summaryHtml || '<div style="color:var(--muted);font-size:13px">No contents configured</div>'
   hideModal('create-pack-modal')
   showModal('pack-saved-modal')
   resetCpModal()
@@ -3333,12 +3857,12 @@ function renderCarPackCards() {
     var p = _carPacks[i]
     var sel = _selectedCarPackIds.has(p.id)
     var carCount = Array.isArray(p.cars) ? p.cars.length : 0
-    html += '<div class="cp-pack-card' + (sel ? ' selected' : '') + '" onclick="toggleCarPackSelection(\'' + p.id + '\')" data-id="' + p.id + '">'
+    html += '<div class="cp-pack-card' + (sel ? ' selected' : '') + '" onclick="toggleCarPackSelection(\\'' + p.id + '\\')" data-id="' + p.id + '">'
     html += '<div class="cp-pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div>'
     html += '<div class="cp-pack-card-meta">' + carCount + ' car' + (carCount !== 1 ? 's' : '') + '</div>'
     html += '<div class="cp-pack-card-btns">'
-    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openViewCarPack(\'' + p.id + '\')" title="View">👁</button>'
-    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openEditCarPack(\'' + p.id + '\')" title="Edit">✏️</button>'
+    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openViewCarPack(\\'' + p.id + '\\')" title="View">👁</button>'
+    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openEditCarPack(\\'' + p.id + '\\')" title="Edit">✏️</button>'
     html += '</div>'
     html += '</div>'
   }
@@ -3396,7 +3920,7 @@ function openViewCarPack(id) {
     for (var i = 0; i < cars.length; i++) {
       var c = cars[i]
       html += '<div class="cpp-car-item">'
-      if (c.photoUrl) html += '<img src="' + escH(c.photoUrl) + '" style="width:44px;height:30px;object-fit:cover;border-radius:4px" onerror="this.style.display=\'none\'" loading="lazy">'
+      if (c.photoUrl) html += '<img src="' + escH(c.photoUrl) + '" style="width:44px;height:30px;object-fit:cover;border-radius:4px" onerror="this.style.display=\\'none\\'" loading="lazy">'
       html += '<div class="cpp-car-item-info"><div class="cpp-car-item-name">' + escH(c.name || c.crdb) + '</div>'
       if (c.colorName) html += '<div class="cpp-car-item-color">' + escH(c.colorName) + '</div>'
       html += '</div></div>'
@@ -3450,7 +3974,7 @@ function searchCppCars(query) {
     var col0 = (car.colors && car.colors[0]) || {}
     var thumb = col0.photoUrl || ''
     html += '<div class="car-result-item' + (alreadyAdded ? ' added' : '') + '" onclick="addCarToCarPack(' + idx + ')">'
-    if (thumb) html += '<img class="car-result-thumb" src="' + escH(thumb) + '" onerror="this.style.display=\'none\'" loading="lazy">'
+    if (thumb) html += '<img class="car-result-thumb" src="' + escH(thumb) + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
     else html += '<span class="car-tier-badge">T' + car.tier + '</span>'
     html += '<div class="car-result-info"><div class="car-result-name">' + escH(car.name) + '</div>'
     html += '<div class="car-result-meta">' + (starIcon[car.starType] || '') + ' T' + car.tier + (car.brand ? ' · ' + escH(car.brand) : '') + (alreadyAdded ? ' · Added ✓' : '') + '</div></div>'
@@ -3489,7 +4013,7 @@ function openCppColorPicker(carIdx) {
     var col = colors[i]
     var already = !_cppAllowDupes && selectedKeys.has(car.crdb + '|' + col.name)
     html += '<div class="color-swatch' + (already ? ' loading' : '') + '" onclick="selectCppColor(' + carIdx + ',' + i + ')" title="' + escH(col.name) + '">'
-    html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\'none\'" loading="lazy">'
+    html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
     html += '<div class="color-swatch-name">' + escH(col.name) + (already ? ' ✓' : '') + '</div>'
     html += '</div>'
   }
@@ -3538,12 +4062,12 @@ function renderCppSelectedCars() {
     var crdbEsc = escH(car.crdb || '')
     var colEsc = escH(car.colorName || '')
     html += '<div class="cpp-car-item">'
-    if (car.photoUrl) html += '<img src="' + escH(car.photoUrl) + '" style="width:44px;height:30px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display=\'none\'" loading="lazy">'
+    if (car.photoUrl) html += '<img src="' + escH(car.photoUrl) + '" style="width:44px;height:30px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display=\\'none\\'" loading="lazy">'
     else html += '<span class="car-tier-badge" style="width:44px;height:30px;display:flex;align-items:center;justify-content:center;flex-shrink:0">T' + car.tier + '</span>'
     html += '<div class="cpp-car-item-info"><div class="cpp-car-item-name">' + escH(car.name) + '</div>'
     if (car.colorName) html += '<div class="cpp-car-item-color">' + escH(car.colorName) + '</div>'
     html += '</div>'
-    html += '<button class="cpp-remove-btn" onclick="removeCarFromCarPack(\'' + crdbEsc + '\',\'' + colEsc + '\')" title="Remove">×</button>'
+    html += '<button class="cpp-remove-btn" onclick="removeCarFromCarPack(\\'' + crdbEsc + '\\',\\'' + colEsc + '\\')" title="Remove">×</button>'
     html += '</div>'
   }
   list.innerHTML = html
@@ -3626,7 +4150,6 @@ function openEditNsb(packId) {
   document.getElementById('ansb-file-name').style.display = 'none'
   var ansbLabelEl = document.getElementById('ansb-drop').querySelector('.file-drop-label')
   if (ansbLabelEl) ansbLabelEl.style.display = ''
-  document.getElementById('ansb-compare').style.display = 'none'
   document.getElementById('ansb-apply-btn').disabled = true
   document.getElementById('ansb-drop').classList.remove('over')
   document.getElementById('ansb-car-search').value = ''
@@ -3635,6 +4158,13 @@ function openEditNsb(packId) {
   if (dupChk) dupChk.checked = false
   hideNotice('ansb-notice')
   renderSelectedCars()
+  _currencyOverride = {}
+  _partialSelectionEnabled = false
+  _selectedLegends = []
+  _nsbCurrentData = null
+  _applyPackRef = null
+  _currencyEditMode = false
+  apSwitchTab('preview')
 
   var pack = null
   if (!packId) {
@@ -3676,11 +4206,28 @@ function openEditNsbManual() {
   showModal('edit-nsb-modal')
 }
 
+function apSwitchTab(tab) {
+  var tabs = ['preview','currencies','cars','legends','fusions-s6']
+  for (var i = 0; i < tabs.length; i++) {
+    var btn = document.getElementById('ap-tab-' + tabs[i])
+    var panel = document.getElementById('ap-panel-' + tabs[i])
+    if (btn) btn.classList.toggle('active', tabs[i] === tab)
+    if (panel) panel.style.display = tabs[i] === tab ? (tabs[i] === 'cars' ? 'flex' : '') : 'none'
+  }
+}
+
+function onAnsbPackSelect(packId) {
+  var pack = _packs.find(function(p){ return p.id === packId }) || null
+  renderPackInfoInModal(pack)
+  apSwitchTab('general')
+}
+
 function renderPackInfoInModal(pack) {
+  _applyPackRef = pack
   var box = document.getElementById('ansb-pack-info')
-  var outer = document.getElementById('ansb-outer')
-  var carSection = document.getElementById('ansb-car-section')
-  if (!pack) { box.innerHTML = ''; outer.classList.remove('has-cars'); carSection.style.display = 'none'; return }
+  var titleEl = document.getElementById('ansb-pack-title')
+  if (!pack) { box.innerHTML = ''; if (titleEl) titleEl.textContent = ''; _renderApplyTabs(null); return }
+  if (titleEl) titleEl.textContent = pack.name || 'Unnamed Pack'
 
   var c = pack.currencies || {}
   var chips = []
@@ -3718,16 +4265,280 @@ function renderPackInfoInModal(pack) {
   }
 
   box.innerHTML = html
+  _renderApplyTabs(pack)
+}
 
-  var isCustom = !!(pack.cars && pack.cars.carMode === 'customizable')
-  carSection.style.display = isCustom ? '' : 'none'
-  if (isCustom) {
-    outer.classList.add('has-cars')
+function _renderApplyTabs(pack) {
+  var extraTabs = ['currencies','cars','legends','fusions-s6']
+  for (var i = 0; i < extraTabs.length; i++) {
+    var btn = document.getElementById('ap-tab-' + extraTabs[i])
+    if (btn) btn.style.display = 'none'
+  }
+  if (!pack) return
+
+  // Currencies tab — show if pack has any currencies
+  var c = pack.currencies || {}
+  var hasCurr = !!(c.cash || c.gold || c.bronzeKeys || c.silverKeys || c.goldKeys || c.fuel ||
+    c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow)
+  var currBtn = document.getElementById('ap-tab-currencies')
+  if (currBtn) currBtn.style.display = hasCurr ? '' : 'none'
+  if (hasCurr) renderCurrencyTab(pack, _nsbCurrentData)
+
+  // Cars tab — show for random or customizable
+  var carMode = pack.cars && pack.cars.carMode
+  var showCars = carMode === 'random' || carMode === 'customizable'
+  var carBtn = document.getElementById('ap-tab-cars')
+  if (carBtn) carBtn.style.display = showCars ? '' : 'none'
+  if (showCars) {
+    var hdr = document.getElementById('ap-cars-header')
+    var partialRow = document.getElementById('ap-partial-toggle-row')
+    var picker = document.getElementById('ap-cars-picker')
+    var right = document.getElementById('ap-cars-right')
+    if (carMode === 'random') {
+      if (hdr) hdr.innerHTML = 'This pack will add <strong style="color:var(--text)">' + fmtN(pack.cars.count) + ' random' + (pack.cars.condition === 'maxed' ? ' maxed' : '') + ' cars</strong>. Enable Partial Selection to hand-pick them instead.'
+      if (partialRow) partialRow.style.display = ''
+      _partialSelectionEnabled = false
+      var partialChk = document.getElementById('ap-partial-sel')
+      if (partialChk) partialChk.checked = false
+      if (picker) picker.style.display = 'none'
+      if (right) right.style.display = 'none'
+    } else {
+      if (hdr) hdr.innerHTML = 'Select up to <strong style="color:var(--text)">' + fmtN(pack.cars.count) + ' cars</strong> to include in this pack.'
+      if (partialRow) partialRow.style.display = 'none'
+      if (picker) picker.style.display = ''
+      if (right) { right.style.display = 'flex'; right.style.flexShrink = '0' }
+      renderCarFilterBar()
+      setCarSectionLocked(!_nsbData.ansb)
+    }
+  }
+
+  // Legends tab — only for customizable (buyer picks)
+  var showLegends = !!(pack.legends && pack.legends.mode === 'customizable')
+  var legBtn = document.getElementById('ap-tab-legends')
+  if (legBtn) legBtn.style.display = showLegends ? '' : 'none'
+  if (showLegends) {
+    _selectedLegends = []
+    var hdrEl = document.getElementById('ap-legends-header')
+    if (hdrEl) hdrEl.textContent = 'Select up to ' + (pack.legends.count || 0) + ' legend cars to include.'
+    renderSelectedLegends(pack)
+    searchLegends('')
+  }
+}
+
+// ─── Currencies Tab ───────────────────────────────────────────────────────────
+
+var AP_CURR_KEYS = [
+  { k: 'cash',        lbl: 'Cash',        em: '💵' },
+  { k: 'gold',        lbl: 'Gold',        em: '🪙' },
+  { k: 'bronzeKeys',  lbl: 'Bronze Keys', em: '🔑' },
+  { k: 'silverKeys',  lbl: 'Silver Keys', em: '🗝️' },
+  { k: 'goldKeys',    lbl: 'Gold Keys',   em: '✨' },
+  { k: 'fuel',        lbl: 'Fuel',        em: '⛽' },
+  { k: 'fusionGreen', lbl: 'Green Tk',    em: '<span class="token-dot" style="background:#4caf50;display:inline-block;vertical-align:middle"></span>' },
+  { k: 'fusionBlue',  lbl: 'Blue Tk',     em: '<span class="token-dot" style="background:#2196F3;display:inline-block;vertical-align:middle"></span>' },
+  { k: 'fusionRed',   lbl: 'Red Tk',      em: '<span class="token-dot" style="background:#e05252;display:inline-block;vertical-align:middle"></span>' },
+  { k: 'fusionYellow',lbl: 'Yellow Tk',   em: '<span class="token-dot" style="background:#FFC107;display:inline-block;vertical-align:middle"></span>' },
+]
+
+function renderCurrencyTab(pack, nsbData) {
+  var tableEl = document.getElementById('ap-curr-table')
+  if (!tableEl || !pack) return
+  var c = pack.currencies || {}
+  var hasOverride = Object.keys(_currencyOverride).length > 0
+  var warnEl = document.getElementById('ap-curr-override-warn')
+  var clearBtn = document.getElementById('ap-curr-clear-btn')
+  if (warnEl) warnEl.style.display = hasOverride ? '' : 'none'
+  if (clearBtn) clearBtn.style.display = hasOverride ? '' : 'none'
+
+  var rows = []
+  for (var i = 0; i < AP_CURR_KEYS.length; i++) {
+    var ck = AP_CURR_KEYS[i]
+    var packVal = c[ck.k] || 0
+    var overVal = _currencyOverride[ck.k]
+    var effectiveVal = (overVal !== undefined) ? overVal : packVal
+    if (!packVal && !overVal) continue
+    rows.push({ ck: ck, packVal: packVal, effectiveVal: effectiveVal, overridden: overVal !== undefined })
+  }
+
+  if (!rows.length) { tableEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No currencies in this pack.</div>'; return }
+
+  var html = '<table class="compare-table"><thead><tr>'
+  if (nsbData) {
+    html += '<th>Currency</th><th style="text-align:right">Current</th><th style="text-align:right">+Adding</th><th style="text-align:right">After</th>'
+  } else {
+    html += '<th>Currency</th><th style="text-align:right">Amount</th>'
+  }
+  html += '</tr></thead><tbody>'
+  for (var j = 0; j < rows.length; j++) {
+    var r = rows[j]
+    var addStyle = r.overridden ? 'color:var(--accent);font-weight:600' : ''
+    html += '<tr><td class="comp-label">' + r.ck.em + ' ' + escH(r.ck.lbl) + '</td>'
+    if (nsbData) {
+      var cur = nsbData[r.ck.k] || 0
+      html += '<td class="comp-delta" style="text-align:right">' + fmtN(cur) + '</td>'
+      html += '<td class="comp-delta" style="text-align:right;' + addStyle + '">+' + fmtN(r.effectiveVal) + '</td>'
+      html += '<td class="comp-arrow" style="text-align:right">' + fmtN(cur + r.effectiveVal) + '</td>'
+    } else {
+      html += '<td class="comp-delta" style="text-align:right;' + addStyle + '">' + fmtN(r.effectiveVal) + '</td>'
+    }
+    html += '</tr>'
+  }
+  html += '</tbody></table>'
+  tableEl.innerHTML = html
+}
+
+function toggleCurrencyEdit() {
+  _currencyEditMode = !_currencyEditMode
+  var form = document.getElementById('ap-curr-edit-form')
+  var grid = document.getElementById('ap-curr-edit-grid')
+  if (!form || !grid) return
+  if (_currencyEditMode) {
+    var pack = _applyPackRef
+    if (!pack) return
+    var c = pack.currencies || {}
+    var fieldsHtml = ''
+    for (var i = 0; i < AP_CURR_KEYS.length; i++) {
+      var ck = AP_CURR_KEYS[i]
+      var packVal = c[ck.k] || 0
+      if (!packVal) continue
+      var overVal = _currencyOverride[ck.k]
+      var displayVal = (overVal !== undefined) ? overVal.toLocaleString('en-US') : (packVal > 0 ? packVal.toLocaleString('en-US') : '')
+      fieldsHtml += '<div class="field"><label>' + ck.em + ' ' + escH(ck.lbl) + '</label>'
+      fieldsHtml += '<input type="text" id="ap-ov-' + ck.k + '" value="' + escH(displayVal) + '" placeholder="' + fmtN(packVal) + ' (pack default)" onblur="fmtInput(this)" onfocus="unfmtInput(this)"></div>'
+    }
+    grid.innerHTML = fieldsHtml
+    form.style.display = ''
+    var editBtn = document.getElementById('ap-curr-edit-btn')
+    if (editBtn) editBtn.textContent = '✏️ Editing...'
+  } else {
+    form.style.display = 'none'
+    var editBtn2 = document.getElementById('ap-curr-edit-btn')
+    if (editBtn2) editBtn2.textContent = '✏️ Override'
+  }
+}
+
+function cancelCurrencyEdit() {
+  _currencyEditMode = false
+  var form = document.getElementById('ap-curr-edit-form')
+  if (form) form.style.display = 'none'
+  var editBtn = document.getElementById('ap-curr-edit-btn')
+  if (editBtn) editBtn.textContent = '✏️ Override'
+}
+
+function saveCurrencyOverride() {
+  var pack = _applyPackRef
+  if (!pack) return
+  var c = pack.currencies || {}
+  var newOverride = {}
+  for (var i = 0; i < AP_CURR_KEYS.length; i++) {
+    var ck = AP_CURR_KEYS[i]
+    var packVal = c[ck.k] || 0
+    if (!packVal) continue
+    var input = document.getElementById('ap-ov-' + ck.k)
+    if (!input) continue
+    var raw = parseInt(input.value.replace(/,/g, ''), 10)
+    if (!isNaN(raw) && raw !== packVal) newOverride[ck.k] = raw
+  }
+  _currencyOverride = newOverride
+  cancelCurrencyEdit()
+  renderCurrencyTab(pack, _nsbCurrentData)
+}
+
+function clearCurrencyOverride() {
+  _currencyOverride = {}
+  cancelCurrencyEdit()
+  renderCurrencyTab(_applyPackRef, _nsbCurrentData)
+}
+
+// ─── Cars Tab ─────────────────────────────────────────────────────────────────
+
+function togglePartialSelection(enabled) {
+  _partialSelectionEnabled = enabled
+  var picker = document.getElementById('ap-cars-picker')
+  var right = document.getElementById('ap-cars-right')
+  if (!enabled) {
+    if (picker) picker.style.display = 'none'
+    if (right) right.style.display = 'none'
+    _selectedCars = []
+    renderSelectedCars()
+  } else {
+    if (picker) picker.style.display = ''
+    if (right) { right.style.display = 'flex'; right.style.flexShrink = '0' }
     renderCarFilterBar()
     setCarSectionLocked(!_nsbData.ansb)
-  } else {
-    outer.classList.remove('has-cars')
   }
+}
+
+// ─── Legends Tab ──────────────────────────────────────────────────────────────
+
+function searchLegends(query) {
+  var listEl = document.getElementById('ap-legends-list')
+  if (!listEl) return
+  var pack = _applyPackRef
+  var maxCount = pack && pack.legends ? (pack.legends.count || 0) : 0
+  var q = query ? query.toLowerCase() : ''
+  var selCrdbs = new Set(_selectedLegends.map(function(l){ return l.crdb }))
+  var html = '<div class="car-result-list">'
+  var shown = 0
+  for (var i = 0; i < LEGEND_CARS.length; i++) {
+    var lc = LEGEND_CARS[i]
+    if (q && lc.name.toLowerCase().indexOf(q) === -1) continue
+    var added = selCrdbs.has(lc.crdb)
+    var atCap = _selectedLegends.length >= maxCount
+    html += '<div class="car-result-item">'
+    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(lc.name) + '</span>'
+    html += '<span style="font-size:11px;color:var(--muted);margin-right:8px">' + fmtN(lc.amount) + ' tk</span>'
+    if (added) {
+      html += '<span class="car-result-added">Added</span>'
+    } else if (atCap) {
+      html += '<span class="car-result-added" style="color:var(--muted)">Full</span>'
+    } else {
+      html += '<button class="car-result-add" onclick="addLegend(\\'' + lc.crdb + '\\')">+ Add</button>'
+    }
+    html += '</div>'
+    shown++
+  }
+  if (!shown) html += '<div class="car-result-item" style="color:var(--muted)">No legends found</div>'
+  html += '</div>'
+  listEl.innerHTML = html
+}
+
+function addLegend(crdb) {
+  var lc = LEGEND_CARS.find(function(l){ return l.crdb === crdb })
+  if (!lc) return
+  var pack = _applyPackRef
+  var maxCount = pack && pack.legends ? (pack.legends.count || 0) : 0
+  if (_selectedLegends.length >= maxCount) return
+  if (_selectedLegends.find(function(l){ return l.crdb === crdb })) return
+  _selectedLegends.push(lc)
+  renderSelectedLegends(pack)
+  searchLegends(document.getElementById('ap-legends-search').value)
+}
+
+function removeLegend(crdb) {
+  _selectedLegends = _selectedLegends.filter(function(l){ return l.crdb !== crdb })
+  var pack = _applyPackRef
+  renderSelectedLegends(pack)
+  searchLegends(document.getElementById('ap-legends-search').value)
+}
+
+function renderSelectedLegends(pack) {
+  var selEl = document.getElementById('ap-legends-selected')
+  var countEl = document.getElementById('ap-legends-sel-count')
+  var maxCount = pack && pack.legends ? (pack.legends.count || 0) : 0
+  if (countEl) countEl.textContent = _selectedLegends.length + ' / ' + maxCount
+  if (!selEl) return
+  if (!_selectedLegends.length) {
+    selEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No legends selected yet. Search and add above.</div>'
+    return
+  }
+  selEl.innerHTML = _selectedLegends.map(function(lc) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surf2);border-radius:6px;font-size:12px">' +
+      '<span style="flex:1">' + escH(lc.name) + '</span>' +
+      '<span style="color:var(--muted)">' + fmtN(lc.amount) + ' tk</span>' +
+      '<button onclick="removeLegend(\\'' + lc.crdb + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 2px">×</button>' +
+      '</div>'
+  }).join('')
 }
 
 function renderCarFilterBar() {
@@ -3856,8 +4667,9 @@ function clearNsbFile(which) {
   if (fileInput) fileInput.value = ''
   if (which === 'ansb') {
     document.getElementById('ansb-apply-btn').disabled = true
-    document.getElementById('ansb-compare').style.display = 'none'
+    _nsbCurrentData = null
     _ownedCrdbs = new Set()
+    renderCurrencyTab(_applyPackRef, null)
     setCarSectionLocked(true)
     renderSelectedCars()
     searchCars('')
@@ -3900,49 +4712,13 @@ async function loadNsbComparison() {
     body: JSON.stringify({ nsbBase64: _nsbData.ansb.base64 })
   }).then(function(r){ return r.json() }).catch(function(){ return null })
   if (!res || res.error) return
-  // Store owned car CRDBs so we can filter them from the search list
   _ownedCrdbs = new Set(Array.isArray(res.ownedCrdbs) ? res.ownedCrdbs : [])
-  renderComparison(pack, res)
+  _nsbCurrentData = res
+  renderCurrencyTab(pack, res)
   setCarSectionLocked(false)
   searchCars(document.getElementById('ansb-car-search').value)
 }
 
-function renderComparison(pack, cur) {
-  var c = pack.currencies || {}
-  var rows = []
-  function addRow(lbl, packVal, curVal) {
-    if (!packVal) return
-    rows.push({ lbl: lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal) })
-  }
-  addRow('💵 Cash',        c.cash,       cur.cash       || 0)
-  addRow('🪙 Gold',        c.gold,       cur.gold       || 0)
-  addRow('🔑 Bronze Keys', c.bronzeKeys, cur.bronzeKeys || 0)
-  addRow('🗝️ Silver Keys', c.silverKeys, cur.silverKeys || 0)
-  addRow('✨ Gold Keys',   c.goldKeys,   cur.goldKeys   || 0)
-  addRow('⛽ Fuel',        c.fuel,       cur.fuel       || 0)
-  function addTkRow(color, lbl, packVal, curVal) {
-    if (!packVal) return
-    rows.push({ lbl: '<span class="token-dot" style="background:' + color + '"></span>' + lbl, delta: '+' + fmtN(packVal), curr: fmtN(curVal), after: fmtN(curVal + packVal), isHtml: true })
-  }
-  addTkRow('#4caf50', ' Green Tk', c.fusionGreen,  cur.fusionGreen  || 0)
-  addTkRow('#2196F3', ' Blue Tk',  c.fusionBlue,   cur.fusionBlue   || 0)
-  addTkRow('#e05252', ' Red Tk',   c.fusionRed,    cur.fusionRed    || 0)
-  addTkRow('#FFC107', ' Yellow Tk',c.fusionYellow, cur.fusionYellow || 0)
-  if (!rows.length) { document.getElementById('ansb-compare').style.display = 'none'; return }
-  var html = '<table class="compare-table"><thead><tr>'
-  html += '<th>Item</th><th style="text-align:right">+Amount</th><th style="text-align:right">Current → After</th>'
-  html += '</tr></thead><tbody>'
-  for (var i = 0; i < rows.length; i++) {
-    var r = rows[i]
-    var lblHtml = r.isHtml ? r.lbl : escH(r.lbl)
-    html += '<tr><td class="comp-label">' + lblHtml + '</td>'
-    html += '<td class="comp-delta">' + escH(r.delta) + '</td>'
-    html += '<td class="comp-arrow"><span class="comp-curr">' + escH(r.curr) + '</span><span class="comp-arrow-sym">→</span><span class="comp-after">' + escH(r.after) + '</span></td></tr>'
-  }
-  html += '</tbody></table>'
-  document.getElementById('ansb-compare-box').innerHTML = html
-  document.getElementById('ansb-compare').style.display = ''
-}
 
 function searchCars(query) {
   var results = document.getElementById('ansb-car-results')
@@ -4167,8 +4943,17 @@ async function applyNsb() {
   if (!_nsbData.ansb) return
   var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
   showLoading('Applying pack...')
-  var payload = { nsbBase64: _nsbData.ansb.base64, packId: packId, allowDuplicates: _allowDuplicates }
-  if (_selectedCars.length > 0) payload.selectedCars = _selectedCars
+  var payload = {
+    nsbBase64: _nsbData.ansb.base64,
+    packId: packId,
+    allowDuplicates: _allowDuplicates,
+    usePartialSelection: _partialSelectionEnabled,
+    currencyOverride: Object.keys(_currencyOverride).length > 0 ? _currencyOverride : undefined,
+    selectedLegends: _selectedLegends.length > 0 ? _selectedLegends.map(function(l){ return l.crdb }) : undefined
+  }
+  if (_selectedCars.length > 0 && (_partialSelectionEnabled || (_applyPackRef && _applyPackRef.cars && _applyPackRef.cars.carMode === 'customizable'))) {
+    payload.selectedCars = _selectedCars
+  }
   var startRes = await fetch('/csr2/apply-nsb', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4830,7 +5615,15 @@ const server = http.createServer(async (req, res) => {
       try {
         const buf = Buffer.from(body.nsbBase64, 'base64')
         const data = csr2ReadSave(buf)
-        const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false, jobId)
+        const opts = {
+          applyLegends: body.applyLegends !== false,
+          applyFusions: body.applyFusions !== false,
+          applyStage6: body.applyStage6 !== false,
+          currencyOverride: body.currencyOverride || {},
+          usePartialSelection: body.usePartialSelection || false,
+          selectedLegends: body.selectedLegends || null,
+        }
+        const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false, jobId, opts)
         const out = csr2WriteSave(data)
         applyJobs.get(jobId).done = true
         applyJobs.get(jobId).result = { resultBase64: out.toString('base64'), note: note || null }
@@ -4987,6 +5780,127 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, count: result.length })
     } catch (e) {
       log('[csr2/cars-update] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // ─── Stage 6 data ────────────────────────────────────────────────────────────
+
+  if (req.method === 'GET' && pathname === '/csr2/stage6') {
+    const d = loadStage6Data()
+    return json(res, 200, { count: Object.keys(d).length, data: d })
+  }
+
+  if (req.method === 'GET' && pathname === '/csr2/stage6-check') {
+    try {
+      const stored = loadStage6Sha()
+      const cfg = loadConfig()
+      const rawUrl = cfg.stage6RawUrl || ''
+      if (!rawUrl) return json(res, 200, { hasUpdate: false, note: 'no_url' })
+      const headSha = await new Promise((resolve) => {
+        const u = new URL(rawUrl)
+        https.request({ hostname: u.hostname, path: u.pathname + (u.search || ''), method: 'HEAD',
+          headers: { 'User-Agent': 'aio-tool-v' + VERSION } }, (r) => {
+          resolve(r.headers['etag'] || r.headers['last-modified'] || '')
+        }).on('error', () => resolve('')).end()
+      })
+      return json(res, 200, { hasUpdate: headSha !== '' && headSha !== stored.sha })
+    } catch (e) {
+      return json(res, 200, { hasUpdate: false, error: e.message })
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/stage6-update') {
+    try {
+      const cfg = loadConfig()
+      const rawUrl = cfg.stage6RawUrl || ''
+      if (!rawUrl) return json(res, 400, { error: 'Stage 6 URL not configured. Set it in Settings.' })
+      log('[csr2/stage6-update] Fetching from ' + rawUrl)
+      const txt = await fetchRawGithub(rawUrl)
+      let parsed
+      try { parsed = JSON.parse(txt) } catch {
+        parsed = {}
+        for (const line of txt.split('\n')) {
+          const eq = line.indexOf('=')
+          if (eq < 1) continue
+          const k = line.slice(0, eq).trim()
+          const v = line.slice(eq + 1).trim()
+          try { parsed[k] = JSON.parse(v) } catch { parsed[k] = v }
+        }
+      }
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return json(res, 400, { error: 'Unexpected format — expected JSON object or key=value lines' })
+      }
+      saveStage6Data(parsed)
+      const sha = crypto.createHash('sha1').update(txt).digest('hex')
+      saveStage6Sha({ sha, url: rawUrl, fetchedAt: Date.now() })
+      const count = Object.keys(parsed).length
+      log('[csr2/stage6-update] Saved ' + count + ' entries')
+      return json(res, 200, { ok: true, count })
+    } catch (e) {
+      log('[csr2/stage6-update] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // ─── Fusions data ────────────────────────────────────────────────────────────
+
+  if (req.method === 'GET' && pathname === '/csr2/fusions') {
+    const d = loadFusionData()
+    return json(res, 200, { count: Object.keys(d).length, data: d })
+  }
+
+  if (req.method === 'GET' && pathname === '/csr2/fusions-check') {
+    try {
+      const stored = loadFusionsSha()
+      const cfg = loadConfig()
+      const rawUrl = cfg.fusionsRawUrl || ''
+      if (!rawUrl) return json(res, 200, { hasUpdate: false, note: 'no_url' })
+      // derive sha from etag/last-modified by doing a HEAD request
+      const headSha = await new Promise((resolve) => {
+        const u = new URL(rawUrl)
+        https.request({ hostname: u.hostname, path: u.pathname + (u.search || ''), method: 'HEAD',
+          headers: { 'User-Agent': 'aio-tool-v' + VERSION } }, (r) => {
+          resolve(r.headers['etag'] || r.headers['last-modified'] || '')
+        }).on('error', () => resolve('')).end()
+      })
+      return json(res, 200, { hasUpdate: headSha !== '' && headSha !== stored.sha })
+    } catch (e) {
+      return json(res, 200, { hasUpdate: false, error: e.message })
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/fusions-update') {
+    try {
+      const cfg = loadConfig()
+      const rawUrl = cfg.fusionsRawUrl || ''
+      if (!rawUrl) return json(res, 400, { error: 'Fusions URL not configured. Set it in Settings.' })
+      log('[csr2/fusions-update] Fetching from ' + rawUrl)
+      const txt = await fetchRawGithub(rawUrl)
+      let parsed
+      try { parsed = JSON.parse(txt) } catch {
+        // try line-based key=value format: crdb=json_or_value per line
+        parsed = {}
+        for (const line of txt.split('\n')) {
+          const eq = line.indexOf('=')
+          if (eq < 1) continue
+          const k = line.slice(0, eq).trim()
+          const v = line.slice(eq + 1).trim()
+          try { parsed[k] = JSON.parse(v) } catch { parsed[k] = v }
+        }
+      }
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return json(res, 400, { error: 'Unexpected format — expected JSON object or key=value lines' })
+      }
+      saveFusionData(parsed)
+      // store a simple sha from content hash
+      const sha = crypto.createHash('sha1').update(txt).digest('hex')
+      saveFusionsSha({ sha, url: rawUrl, fetchedAt: Date.now() })
+      const count = Object.keys(parsed).length
+      log('[csr2/fusions-update] Saved ' + count + ' entries')
+      return json(res, 200, { ok: true, count })
+    } catch (e) {
+      log('[csr2/fusions-update] Error: ' + e.message)
       return json(res, 500, { error: e.message })
     }
   }
