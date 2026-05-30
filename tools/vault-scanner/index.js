@@ -4096,11 +4096,16 @@ function searchCppCars(query) {
     var alreadyAdded = !_cppAllowDupes && car.colors && car.colors.length === 1 && selectedKeys.has(car.crdb + '|' + car.colors[0].name)
     var col0 = (car.colors && car.colors[0]) || {}
     var thumb = col0.photoUrl || ''
-    html += '<div class="car-result-item' + (alreadyAdded ? ' added' : '') + '" onclick="addCarToCarPack(' + idx + ')">'
+    html += '<div class="car-result-item">'
     if (thumb) html += '<img class="car-result-thumb" src="' + escH(thumb) + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
     else html += '<span class="car-tier-badge">T' + car.tier + '</span>'
     html += '<div class="car-result-info"><div class="car-result-name">' + escH(car.name) + '</div>'
-    html += '<div class="car-result-meta">' + (starIcon[car.starType] || '') + ' T' + car.tier + (car.brand ? ' · ' + escH(car.brand) : '') + (alreadyAdded ? ' · Added ✓' : '') + '</div></div>'
+    html += '<div class="car-result-meta">' + (starIcon[car.starType] || '') + ' T' + car.tier + (car.brand ? ' · ' + escH(car.brand) : '') + '</div></div>'
+    if (alreadyAdded) {
+      html += '<span class="car-result-added">Added</span>'
+    } else {
+      html += '<button class="car-result-add" onclick="addCarToCarPack(' + idx + ')">+ Add</button>'
+    }
     html += '</div>'
   }
   html += '</div>'
