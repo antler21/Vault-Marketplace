@@ -1551,9 +1551,9 @@ select{cursor:pointer}
 .comp-arrow-sym{color:var(--border);margin:0 5px}
 .comp-after{color:#4caf50;font-weight:600}
 .car-search-wrap{position:relative;margin-bottom:2px}
-.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 34px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
-.car-search-input:focus{border-color:var(--accent)}
-.car-search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:12px;display:inline-block;width:18px;text-align:center}
+input.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 34px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
+input.car-search-input:focus{border-color:var(--accent)}
+.car-search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:12px;display:inline-block;width:18px;text-align:center;overflow:hidden}
 .car-result-list{border:1px solid var(--border);border-radius:8px;background:var(--surf2);overflow-y:auto;max-height:260px;margin-top:4px}
 .car-result-item{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px}
 .car-result-item:not(:last-child){border-bottom:1px solid rgba(255,255,255,.05)}
