@@ -1551,9 +1551,9 @@ select{cursor:pointer}
 .comp-arrow-sym{color:var(--border);margin:0 5px}
 .comp-after{color:#4caf50;font-weight:600}
 .car-search-wrap{position:relative;margin-bottom:2px}
-.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 40px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
+.car-search-input{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:8px 12px 8px 34px;color:var(--text);font-size:13px;outline:none;box-sizing:border-box}
 .car-search-input:focus{border-color:var(--accent)}
-.car-search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.car-search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:12px;display:inline-block;width:18px;text-align:center}
 .car-result-list{border:1px solid var(--border);border-radius:8px;background:var(--surf2);overflow-y:auto;max-height:260px;margin-top:4px}
 .car-result-item{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px}
 .car-result-item:not(:last-child){border-bottom:1px solid rgba(255,255,255,.05)}
@@ -1623,6 +1623,7 @@ select{cursor:pointer}
 .color-swatch-name{padding:4px 6px 6px;font-size:11px;text-align:center;color:var(--text);line-height:1.3}
 .color-swatch.loading{opacity:.5;pointer-events:none}
 .selected-car-photo{width:44px;height:30px;object-fit:cover;border-radius:4px;background:var(--surf2);flex-shrink:0}
+.car-result-thumb{width:60px;height:38px;object-fit:cover;border-radius:4px;flex-shrink:0;background:var(--surf)}
 .selected-car-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .selected-car-info .scar-name{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .selected-car-info .scar-color{font-size:10px;color:var(--muted)}
@@ -5190,11 +5191,14 @@ function renderSelectedCars() {
   if (noteEl) {
     var packId = document.getElementById('ansb-pack-select').dataset.forcedId || document.getElementById('ansb-pack-select').value
     var pack = _packs.find(function(p){ return p.id === packId })
-    var total = pack && pack.cars && pack.cars.count ? pack.cars.count : 0
+    var rawTotal = pack && pack.cars && pack.cars.count ? pack.cars.count : 0
+    var total = (_partialSelectionEnabled && pack && pack.cars && pack.cars.partial && pack.cars.partial.count)
+      ? pack.cars.partial.count
+      : rawTotal
     if (total > 0) {
       var remaining = Math.max(0, total - displayCount)
       noteEl.style.display = ''
-      noteEl.textContent = displayCount + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled with cars you don\\'t own yet.' : 'All slots filled.')
+      noteEl.textContent = displayCount + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled randomly.' : 'All slots filled.')
     } else {
       noteEl.style.display = 'none'
     }
