@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.2'
+const VERSION = '0.7.3'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
