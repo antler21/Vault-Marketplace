@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.3'
+const VERSION = '0.7.4'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -2407,7 +2407,7 @@ input.car-search-input:focus{border-color:var(--accent)}
 </div>
 
 <!-- Color Picker Modal -->
-<div class="modal-bg" id="color-picker-modal">
+<div class="modal-bg" id="color-picker-modal" style="z-index:200">
   <div class="modal" style="max-width:600px">
     <div class="modal-title" id="cp2-car-name">Select Color</div>
     <div class="modal-sub" id="cp2-car-sub">Choose a paint color to add this car</div>
