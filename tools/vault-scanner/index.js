@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.4'
+const VERSION = '0.7.5'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1263,7 +1263,7 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, o
     }
   }
 
-  // Stage 6 — replaces cues entirely with the cached array (optionally replacing amounts)
+  // Stage 6 — replaces cues entirely
   if (applyStage6 && pack.stage6 && pack.stage6.mode === 'all') {
     const stage6Data = loadStage6Data()
     if (Array.isArray(stage6Data) && stage6Data.length > 0) {
@@ -1271,6 +1271,25 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, o
       data.cues = amt !== null
         ? stage6Data.map(entry => typeof entry === 'number' ? amt : entry)
         : stage6Data
+    }
+  } else if (applyStage6 && pack.stage6 && pack.stage6.mode === 'customizable') {
+    const stage6Data = loadStage6Data()
+    if (Array.isArray(stage6Data) && stage6Data.length > 0 && Array.isArray(opts.selectedS6Cars) && opts.selectedS6Cars.length > 0) {
+      const selectedSet = new Set(opts.selectedS6Cars)
+      const filtered = []
+      let i = 0
+      while (i < stage6Data.length) {
+        const entry = stage6Data[i]
+        if (typeof entry === 'object' && entry !== null) {
+          const next = stage6Data[i + 1]
+          if (entry.esdb && selectedSet.has(entry.esdb)) {
+            filtered.push(entry)
+            if (typeof next === 'number') filtered.push(next)
+          }
+          i += (typeof next === 'number') ? 2 : 1
+        } else { i++ }
+      }
+      if (filtered.length > 0) data.cues = filtered
     }
   }
 
@@ -2039,7 +2058,7 @@ input.car-search-input:focus{border-color:var(--accent)}
         </label>
         <label class="toggle-card" id="cp-stage6-custom-card" onclick="onStage6ModeClick('customizable')" style="flex:1;cursor:pointer;padding:10px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;gap:10px">
           <input type="radio" name="cp-stage6-mode" id="cp-stage6-custom" value="customizable" style="accent-color:var(--accent)">
-          <div><div style="font-weight:600;font-size:13px">Customizable</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Buyer picks brand(s)</div></div>
+          <div><div style="font-weight:600;font-size:13px">Customizable</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Buyer picks specific car(s)</div></div>
         </label>
       </div>
       <div id="cp-stage6-all-opts" style="display:none;margin-bottom:14px">
@@ -2047,8 +2066,7 @@ input.car-search-input:focus{border-color:var(--accent)}
       </div>
       <div id="cp-stage6-custom-opts" style="display:none;margin-bottom:14px">
         <div class="curr-grid">
-          <div class="field"><label>Stage 6 Count <span style="font-size:11px;color:var(--muted);font-weight:400">(max 50)</span></label><input type="number" id="cp-stage6-count" placeholder="e.g. 20" min="1" max="50"></div>
-          <div class="field"><label>Brand Picks</label><input type="number" id="cp-stage6-brand-amount" placeholder="e.g. 3" min="1"></div>
+          <div class="field"><label>Car Count <span style="font-size:11px;color:var(--muted);font-weight:400">How many cars buyer can pick</span></label><input type="number" id="cp-stage6-count" placeholder="e.g. 5" min="1" max="50"></div>
         </div>
       </div>
       <div id="cp-stage6-data-row" style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px">
@@ -2261,7 +2279,8 @@ input.car-search-input:focus{border-color:var(--accent)}
         <button class="cp-tab" id="ap-tab-currencies" onclick="apSwitchTab('currencies')" style="display:none">Currencies</button>
         <button class="cp-tab" id="ap-tab-cars" onclick="apSwitchTab('cars')" style="display:none">Cars</button>
         <button class="cp-tab" id="ap-tab-legends" onclick="apSwitchTab('legends')" style="display:none">Legends</button>
-        <button class="cp-tab" id="ap-tab-fusions-s6" onclick="apSwitchTab('fusions-s6')" style="display:none">Fusions &amp; S6</button>
+        <button class="cp-tab" id="ap-tab-fusions" onclick="apSwitchTab('fusions')" style="display:none">Fusions</button>
+        <button class="cp-tab" id="ap-tab-stage6" onclick="apSwitchTab('stage6')" style="display:none">Stage 6</button>
       </div>
       <button class="cp-hdr-close" onclick="hideModal('apply-nsb-modal')" title="Close">✕</button>
     </div>
@@ -2312,6 +2331,12 @@ input.car-search-input:focus{border-color:var(--accent)}
         </div>
         <div id="ap-cars-picker" style="display:none">
           <div class="section-title" style="margin-bottom:6px;font-size:11px">Select Cars <span id="ansb-car-count-badge" style="font-weight:400;color:var(--muted);text-transform:none;font-size:11px;letter-spacing:0">(0 selected)</span></div>
+          <!-- Car Packs quick-add -->
+          <div id="ansb-car-packs-section" style="display:none;margin-bottom:10px">
+            <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Car Packs</div>
+            <div id="ansb-car-packs-list" style="display:flex;flex-direction:column;gap:6px;max-height:140px;overflow-y:auto"></div>
+            <div style="height:1px;background:var(--border);margin-top:10px"></div>
+          </div>
           <div id="ansb-car-locked" style="font-size:12px;color:var(--muted);padding:6px 0;display:none">📂 Upload an NSB file on the Pack Preview tab first.</div>
           <div id="ansb-car-controls" style="display:none">
             <label class="allow-dup-row"><input type="checkbox" id="ansb-allow-dup" onchange="toggleAllowDuplicates()"> Allow Duplicates (show owned cars)</label>
@@ -2346,23 +2371,31 @@ input.car-search-input:focus{border-color:var(--accent)}
       </div>
       <div id="ap-legends-selected" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto"></div>
     </div>
-    <!-- Fusions & Stage 6 tab -->
-    <div class="ap-body" id="ap-panel-fusions-s6" style="display:none">
-      <!-- Customizable fusions brand picker -->
-      <div id="ap-fusions-section" style="display:none">
-        <div id="ap-fusions-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
-        <div class="car-search-wrap" style="margin-bottom:8px">
-          <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
-          <input type="text" class="car-search-input" id="ap-brands-search" placeholder="Search brands..." oninput="searchBrands(this.value)">
-        </div>
-        <div id="ap-brands-list" style="max-height:180px;overflow-y:auto;margin-bottom:10px"></div>
-        <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
-          <span>Selected Brands</span><span id="ap-brands-sel-count">0 / 0</span>
-        </div>
-        <div id="ap-brands-selected" style="display:flex;flex-wrap:wrap;gap:6px;max-height:90px;overflow-y:auto"></div>
+    <!-- Fusions tab (brand picker) -->
+    <div class="ap-body" id="ap-panel-fusions" style="display:none">
+      <div id="ap-fusions-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+      <div class="car-search-wrap" style="margin-bottom:8px">
+        <span class="car-search-icon">🔍</span>
+        <input type="text" class="car-search-input" id="ap-brands-search" placeholder="Search brands..." oninput="searchBrands(this.value)">
       </div>
-      <!-- Fallback message when pack has no customizable fusions/s6 -->
-      <div id="ap-fusions-placeholder" style="font-size:13px;color:var(--muted)">This pack does not have customizable fusions or Stage 6.</div>
+      <div id="ap-brands-list" style="max-height:180px;overflow-y:auto;margin-bottom:10px"></div>
+      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
+        <span>Selected Brands</span><span id="ap-brands-sel-count">0 / 0</span>
+      </div>
+      <div id="ap-brands-selected" style="display:flex;flex-wrap:wrap;gap:6px;max-height:90px;overflow-y:auto"></div>
+    </div>
+    <!-- Stage 6 tab (car picker) -->
+    <div class="ap-body" id="ap-panel-stage6" style="display:none">
+      <div id="ap-s6-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
+      <div class="car-search-wrap" style="margin-bottom:8px">
+        <span class="car-search-icon">🔍</span>
+        <input type="text" class="car-search-input" id="ap-s6-search" placeholder="Search cars..." oninput="searchS6Cars(this.value)">
+      </div>
+      <div id="ap-s6-list" style="max-height:180px;overflow-y:auto;margin-bottom:10px"></div>
+      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
+        <span>Selected Cars</span><span id="ap-s6-sel-count">0 / 0</span>
+      </div>
+      <div id="ap-s6-selected" style="display:flex;flex-wrap:wrap;gap:6px;max-height:90px;overflow-y:auto"></div>
     </div>
     <!-- Footer -->
     <div class="ap-footer">
@@ -2371,6 +2404,18 @@ input.car-search-input:focus{border-color:var(--accent)}
         <button class="btn btn-secondary" onclick="hideModal('apply-nsb-modal')">Cancel</button>
         <button class="btn btn-primary" id="ansb-apply-btn" onclick="applyNsb()" disabled>Apply &amp; Download</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate Cars Confirm Modal -->
+<div class="modal-bg" id="dup-confirm-modal" style="z-index:250">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Duplicate Cars</div>
+    <div class="modal-sub" id="dup-confirm-msg"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="confirmAddCarPack(false)">Skip Duplicates</button>
+      <button class="btn btn-primary" onclick="confirmAddCarPack(true)">Add All</button>
     </div>
   </div>
 </div>
@@ -2519,7 +2564,8 @@ var _scanAbort = false, _multiAbort = false, _multiRunId = 0
 var _previewAcct = null, _importAcct = null, _afterImportId = null
 var _csr2CarsDb = [], _ownedCrdbs = new Set(), _allowDuplicates = false
 var _colorPickerCar = null, _colorPickerCarIdx = -1, _selectingColor = false
-var _selectedBrands = [], _brandsList = []
+var _selectedBrands = [], _brandsList = [], _selectedS6Cars = [], _s6CarsList = []
+var _pendingCarPackId = null
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -2536,8 +2582,36 @@ async function init() {
   updateCarDbCountBadge()
   renderView()
   startPoll()
-  // Silently check for car DB updates after UI is ready
+  // Silently check for car DB updates and remote data updates after UI is ready
   setTimeout(checkCsr2CarsUpdate, 3000)
+  setTimeout(checkForDataUpdates, 6000)
+}
+
+async function checkForDataUpdates() {
+  try {
+    var res = await apiFetch('/csr2/updates-check', null)
+    if (res && (res.fusions || res.stage6)) {
+      var what = []
+      if (res.fusions) what.push('Fusions')
+      if (res.stage6) what.push('Stage 6')
+      showDataUpdateBanner(what)
+    }
+  } catch (e) {}
+}
+
+function showDataUpdateBanner(what) {
+  var existing = document.getElementById('data-update-banner')
+  if (existing) return
+  var banner = document.createElement('div')
+  banner.id = 'data-update-banner'
+  banner.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;background:var(--surf2);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:12px;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,.4)'
+  banner.innerHTML = '<div style="font-weight:600;margin-bottom:4px">📦 Data Update Available</div>' +
+    '<div style="color:var(--muted);margin-bottom:8px">New ' + what.join(' & ') + ' data on GitHub.</div>' +
+    '<div style="display:flex;gap:6px">' +
+    '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove();openFusionsUpdate()" style="font-size:11px;padding:4px 10px">Update Now</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove()" style="font-size:11px;padding:4px 10px">Dismiss</button>' +
+    '</div>'
+  document.body.appendChild(banner)
 }
 
 function updateCarDbCountBadge() {
@@ -3514,7 +3588,6 @@ function resetCpModal() {
   document.getElementById('cp-stage6-custom').checked = false
   document.getElementById('cp-stage6-amount').value = ''
   document.getElementById('cp-stage6-count').value = ''
-  document.getElementById('cp-stage6-brand-amount').value = ''
   document.getElementById('cp-stage6-all-opts').style.display = 'none'
   document.getElementById('cp-stage6-custom-opts').style.display = 'none'
   var sections = ['currencies', 'cars', 'legends', 'fusions', 'stage6', 'gifts']
@@ -3788,7 +3861,6 @@ async function openEditPack(packId) {
       if (pack.stage6.amount) document.getElementById('cp-stage6-amount').value = pack.stage6.amount
     } else if (pack.stage6.mode === 'customizable') {
       if (pack.stage6.count) document.getElementById('cp-stage6-count').value = pack.stage6.count
-      if (pack.stage6.brandAmount) document.getElementById('cp-stage6-brand-amount').value = pack.stage6.brandAmount
     }
     refreshStage6DataStatus()
   }
@@ -3896,7 +3968,6 @@ async function savePack() {
       stage6 = {
         mode: 'customizable',
         count: parseInt(document.getElementById('cp-stage6-count').value) || 0,
-        brandAmount: parseInt(document.getElementById('cp-stage6-brand-amount').value) || 1
       }
     }
   }
@@ -3947,7 +4018,7 @@ async function savePack() {
   if (stage6) {
     var s6Desc = stage6.mode === 'all'
       ? 'All Stage 6' + (stage6.amount ? ' · ' + fmtN(stage6.amount) + ' per part' : ' · max')
-      : 'Customizable · ' + (stage6.count || 0) + ' parts · ' + (stage6.brandAmount || 1) + ' brand(s)'
+      : 'Customizable · buyer picks up to ' + (stage6.count || 0) + ' car(s)'
     summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">6️⃣ Stage 6</div><div style="font-size:13px">' + escH(s6Desc) + '</div></div>'
   }
   document.getElementById('cp-saved-name').textContent = name
@@ -4291,6 +4362,8 @@ function openEditNsb(packId) {
   _selectedLegends = []
   _selectedBrands = []
   _brandsList = []
+  _selectedS6Cars = []
+  _s6CarsList = []
   _nsbCurrentData = null
   _applyPackRef = null
   _currencyEditMode = false
@@ -4337,7 +4410,7 @@ function openEditNsbManual() {
 }
 
 function apSwitchTab(tab) {
-  var tabs = ['preview','currencies','cars','legends','fusions-s6']
+  var tabs = ['preview','currencies','cars','legends','fusions','stage6']
   for (var i = 0; i < tabs.length; i++) {
     var btn = document.getElementById('ap-tab-' + tabs[i])
     var panel = document.getElementById('ap-panel-' + tabs[i])
@@ -4410,7 +4483,7 @@ function renderPackInfoInModal(pack) {
 }
 
 function _renderApplyTabs(pack) {
-  var extraTabs = ['currencies','cars','legends','fusions-s6']
+  var extraTabs = ['currencies','cars','legends','fusions','stage6']
   for (var i = 0; i < extraTabs.length; i++) {
     var btn = document.getElementById('ap-tab-' + extraTabs[i])
     if (btn) btn.style.display = 'none'
@@ -4452,6 +4525,8 @@ function _renderApplyTabs(pack) {
       renderCarFilterBar()
       setCarSectionLocked(!_nsbData.ansb)
     }
+    // Car packs section — always rendered when Cars tab is shown
+    renderApCarPacks(pack)
   }
 
   // Legends tab — only for customizable (buyer picks)
@@ -4466,23 +4541,29 @@ function _renderApplyTabs(pack) {
     searchLegends('')
   }
 
-  // Fusions & S6 tab — show for customizable fusions
+  // Fusions tab — brand picker
   var showFusionsTab = !!(pack.fusions && pack.fusions.mode === 'customizable')
-  var fusBtn = document.getElementById('ap-tab-fusions-s6')
+  var fusBtn = document.getElementById('ap-tab-fusions')
   if (fusBtn) fusBtn.style.display = showFusionsTab ? '' : 'none'
-  var fusSect = document.getElementById('ap-fusions-section')
-  var fusPlaceholder = document.getElementById('ap-fusions-placeholder')
   if (showFusionsTab) {
-    if (fusSect) fusSect.style.display = ''
-    if (fusPlaceholder) fusPlaceholder.style.display = 'none'
     _selectedBrands = []
     var fusHdr = document.getElementById('ap-fusions-header')
     if (fusHdr) fusHdr.textContent = 'Select up to ' + (pack.fusions.brandAmount || 1) + ' brand(s) to include fusions for.'
     renderSelectedBrands(pack)
     loadAndSearchBrands('')
-  } else {
-    if (fusSect) fusSect.style.display = 'none'
-    if (fusPlaceholder) fusPlaceholder.style.display = ''
+  }
+
+  // Stage 6 tab — car picker
+  var showS6Tab = !!(pack.stage6 && pack.stage6.mode === 'customizable')
+  var s6Btn = document.getElementById('ap-tab-stage6')
+  if (s6Btn) s6Btn.style.display = showS6Tab ? '' : 'none'
+  if (showS6Tab) {
+    _selectedS6Cars = []
+    var s6Hdr = document.getElementById('ap-s6-header')
+    var s6Count = pack.stage6.count || 0
+    if (s6Hdr) s6Hdr.textContent = 'Select up to ' + s6Count + ' car(s) to include Stage 6 upgrades for.'
+    renderSelectedS6Cars(pack)
+    loadAndSearchS6Cars('')
   }
 }
 
@@ -4628,6 +4709,7 @@ function togglePartialSelection(enabled) {
     renderCarFilterBar()
     setCarSectionLocked(!_nsbData.ansb)
   }
+  renderApCarPacks(_applyPackRef)
 }
 
 // ─── Legends Tab ──────────────────────────────────────────────────────────────
@@ -4801,6 +4883,182 @@ function renderSelectedBrands(pack) {
       '<button onclick="removeBrand(\\'' + b.id + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 0 0 2px">×</button>' +
       '</span>'
   }).join('')
+}
+
+// ─── Stage 6 Car Picker ───────────────────────────────────────────────────────
+
+async function loadAndSearchS6Cars(query) {
+  if (!_s6CarsList.length) {
+    try {
+      var res = await apiFetch('/csr2/stage6-cars', null)
+      _s6CarsList = Array.isArray(res.data) ? res.data : []
+    } catch (e) { _s6CarsList = [] }
+  }
+  searchS6Cars(query)
+}
+
+function searchS6Cars(query) {
+  var listEl = document.getElementById('ap-s6-list')
+  if (!listEl) return
+  if (!_s6CarsList.length) {
+    listEl.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px">No Stage 6 data loaded — fetch it in Tools → CSR2.</div>'
+    return
+  }
+  var pack = _applyPackRef
+  var maxCount = pack && pack.stage6 ? (pack.stage6.count || 0) : 0
+  var q = query ? query.toLowerCase() : ''
+  var selCrdbs = new Set(_selectedS6Cars.map(function(c){ return c.crdb }))
+  var html = '<div class="car-result-list">'
+  var shown = 0
+  for (var i = 0; i < _s6CarsList.length; i++) {
+    var c = _s6CarsList[i]
+    var displayName = c.name || c.crdb || ''
+    if (q && displayName.toLowerCase().indexOf(q) === -1) continue
+    var added = selCrdbs.has(c.crdb)
+    var atCap = _selectedS6Cars.length >= maxCount
+    html += '<div class="car-result-item">'
+    if (c.tier) html += '<span style="font-size:10px;font-weight:700;color:var(--accent);background:rgba(255,165,0,.15);border-radius:4px;padding:1px 5px;margin-right:4px;flex-shrink:0">T' + c.tier + '</span>'
+    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(displayName) + '</span>'
+    if (added) {
+      html += '<span class="car-result-added">Added</span>'
+    } else if (atCap) {
+      html += '<span class="car-result-added" style="color:var(--muted)">Full</span>'
+    } else {
+      html += '<button class="car-result-add" onclick="addS6Car(\\'' + c.crdb + '\\')">+ Add</button>'
+    }
+    html += '</div>'
+    shown++
+  }
+  if (!shown) html += '<div class="car-result-item" style="color:var(--muted)">No cars found</div>'
+  html += '</div>'
+  listEl.innerHTML = html
+}
+
+function addS6Car(crdb) {
+  var c = _s6CarsList.find(function(x){ return x.crdb === crdb })
+  if (!c) return
+  var pack = _applyPackRef
+  var maxCount = pack && pack.stage6 ? (pack.stage6.count || 0) : 0
+  if (_selectedS6Cars.length >= maxCount) return
+  if (_selectedS6Cars.find(function(x){ return x.crdb === crdb })) return
+  _selectedS6Cars.push(c)
+  renderSelectedS6Cars(pack)
+  searchS6Cars(document.getElementById('ap-s6-search').value)
+}
+
+function removeS6Car(crdb) {
+  _selectedS6Cars = _selectedS6Cars.filter(function(c){ return c.crdb !== crdb })
+  var pack = _applyPackRef
+  renderSelectedS6Cars(pack)
+  searchS6Cars(document.getElementById('ap-s6-search').value)
+}
+
+function renderSelectedS6Cars(pack) {
+  var selEl = document.getElementById('ap-s6-selected')
+  var countEl = document.getElementById('ap-s6-sel-count')
+  var maxCount = pack && pack.stage6 ? (pack.stage6.count || 0) : 0
+  if (countEl) countEl.textContent = _selectedS6Cars.length + ' / ' + maxCount
+  if (!selEl) return
+  if (!_selectedS6Cars.length) {
+    selEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">No cars selected yet.</div>'
+    return
+  }
+  selEl.innerHTML = _selectedS6Cars.map(function(c) {
+    var displayName = c.name || c.crdb || ''
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:16px;font-size:12px">' +
+      (c.tier ? '<span style="font-size:10px;font-weight:700;color:var(--accent)">T' + c.tier + '</span>' : '') +
+      escH(displayName) +
+      '<button onclick="removeS6Car(\\'' + c.crdb + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 0 0 2px">×</button>' +
+      '</span>'
+  }).join('')
+}
+
+// ─── Car Packs in Apply Pack Cars tab ─────────────────────────────────────────
+
+function renderApCarPacks(pack) {
+  var sect = document.getElementById('ansb-car-packs-section')
+  if (!sect) return
+  if (!_carPacks.length) { sect.style.display = 'none'; return }
+  sect.style.display = ''
+  var limit = _partialSelectionEnabled && pack && pack.cars && pack.cars.partial && pack.cars.partial.count
+    ? pack.cars.partial.count
+    : (pack && pack.cars && pack.cars.count ? pack.cars.count : 0)
+  var html = ''
+  for (var i = 0; i < _carPacks.length; i++) {
+    var cp = _carPacks[i]
+    var packCars = cp.cars || []
+    var selCrdbs = _selectedCars.map(function(c){ return c.crdb + '|' + (c.colorName || '') })
+    var selSet = new Set(selCrdbs)
+    var dupCount = 0
+    for (var j = 0; j < packCars.length; j++) {
+      var key = packCars[j].crdb + '|' + (packCars[j].colorName || '')
+      if (selSet.has(key)) dupCount++
+    }
+    var addedCount = dupCount
+    var remaining = Math.max(0, limit - _selectedCars.length)
+    var atLimit = remaining === 0
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;font-size:12px">'
+    html += '<div style="flex:1;min-width:0"><div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + escH(cp.name || 'Unnamed Pack') + '</div>'
+    html += '<div style="font-size:11px;color:var(--muted);margin-top:1px">' + packCars.length + ' cars' + (addedCount > 0 ? ' · <span style="color:var(--accent)">' + addedCount + ' already added</span>' : '') + '</div></div>'
+    if (atLimit) {
+      html += '<span class="car-result-added" style="color:var(--muted)">Limit reached</span>'
+    } else {
+      html += '<button class="car-result-add" onclick="addCarPackToSelection(\\'' + cp.id + '\\')">+ Add All</button>'
+    }
+    html += '</div>'
+  }
+  document.getElementById('ansb-car-packs-list').innerHTML = html
+}
+
+function addCarPackToSelection(packId) {
+  var cp = _carPacks.find(function(p){ return p.id === packId })
+  if (!cp) return
+  var pack = _applyPackRef
+  var limit = _partialSelectionEnabled && pack && pack.cars && pack.cars.partial && pack.cars.partial.count
+    ? pack.cars.partial.count
+    : (pack && pack.cars && pack.cars.count ? pack.cars.count : 0)
+  var selSet = new Set(_selectedCars.map(function(c){ return c.crdb + '|' + (c.colorName || '') }))
+  var packCars = cp.cars || []
+  var dupes = packCars.filter(function(c){ return selSet.has(c.crdb + '|' + (c.colorName || '')) })
+  if (_allowDuplicates && dupes.length > 0) {
+    _pendingCarPackId = packId
+    var msgEl = document.getElementById('dup-confirm-msg')
+    if (msgEl) msgEl.textContent = dupes.length + ' car' + (dupes.length === 1 ? '' : 's') + ' in this pack ' + (dupes.length === 1 ? 'is' : 'are') + ' already selected. Add them again as duplicates?'
+    showModal('dup-confirm-modal')
+  } else {
+    _doAddCarPack(packId, false)
+  }
+}
+
+function confirmAddCarPack(includeDupes) {
+  hideModal('dup-confirm-modal')
+  if (_pendingCarPackId) _doAddCarPack(_pendingCarPackId, includeDupes)
+  _pendingCarPackId = null
+}
+
+function _doAddCarPack(packId, includeDupes) {
+  var cp = _carPacks.find(function(p){ return p.id === packId })
+  if (!cp) return
+  var pack = _applyPackRef
+  var limit = _partialSelectionEnabled && pack && pack.cars && pack.cars.partial && pack.cars.partial.count
+    ? pack.cars.partial.count
+    : (pack && pack.cars && pack.cars.count ? pack.cars.count : 0)
+  var packCars = cp.cars || []
+  var added = 0
+  for (var i = 0; i < packCars.length; i++) {
+    if (limit && _selectedCars.length >= limit) break
+    var c = packCars[i]
+    var key = c.crdb + '|' + (c.colorName || '')
+    var isDupe = _selectedCars.some(function(s){ return s.crdb + '|' + (s.colorName || '') === key })
+    if (isDupe && !includeDupes) continue
+    _selectedCars.push({ crdb: c.crdb, name: c.name, tier: c.tier, colorName: c.colorName || '', photoUrl: c.photoUrl || '', stockTxtUrl: c.stockTxtUrl || '', maxedTxtUrl: c.maxedTxtUrl || null })
+    added++
+  }
+  renderSelectedCars()
+  renderApCarPacks(pack)
+  if (document.getElementById('ansb-car-controls').style.display !== 'none') {
+    searchCars(document.getElementById('ansb-car-search').value)
+  }
 }
 
 function renderCarFilterBar() {
@@ -5221,7 +5479,8 @@ async function applyNsb() {
     usePartialSelection: _partialSelectionEnabled,
     currencyOverride: Object.keys(_currencyOverride).length > 0 ? _currencyOverride : undefined,
     selectedLegends: _selectedLegends.length > 0 ? _selectedLegends.map(function(l){ return l.crdb }) : undefined,
-    selectedBrands: _selectedBrands.length > 0 ? _selectedBrands.map(function(b){ return b.id }) : undefined
+    selectedBrands: _selectedBrands.length > 0 ? _selectedBrands.map(function(b){ return b.id }) : undefined,
+    selectedS6Cars: _selectedS6Cars.length > 0 ? _selectedS6Cars.map(function(c){ return c.crdb }) : undefined
   }
   if (_selectedCars.length > 0 && (_partialSelectionEnabled || (_applyPackRef && _applyPackRef.cars && _applyPackRef.cars.carMode === 'customizable'))) {
     payload.selectedCars = _selectedCars
@@ -5895,6 +6154,7 @@ const server = http.createServer(async (req, res) => {
           usePartialSelection: body.usePartialSelection || false,
           selectedLegends: body.selectedLegends || null,
           selectedBrands: body.selectedBrands || null,
+          selectedS6Cars: body.selectedS6Cars || null,
         }
         const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false, jobId, opts)
         const out = csr2WriteSave(data)
@@ -6154,40 +6414,66 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ─── Brand IDs data ──────────────────────────────────────────────────────────
+  // ─── Brand IDs — derived from fusions data ───────────────────────────────────
 
   if (req.method === 'GET' && pathname === '/csr2/brands') {
-    const d = loadBrandData()
-    return json(res, 200, { count: d.length, data: d })
+    const fusionData = loadFusionData()
+    const seen = new Map()
+    for (let i = 0; i < fusionData.length; i++) {
+      const entry = fusionData[i]
+      if (typeof entry === 'object' && entry !== null && entry.upma && !seen.has(entry.upma)) {
+        seen.set(entry.upma, { id: entry.upma, name: entry.upma })
+      }
+    }
+    const brandList = Array.from(seen.values())
+    return json(res, 200, { count: brandList.length, data: brandList })
   }
 
-  if (req.method === 'POST' && pathname === '/csr2/brands-update') {
+  // ─── Stage 6 cars — derived from stage6 data ─────────────────────────────────
+
+  if (req.method === 'GET' && pathname === '/csr2/stage6-cars') {
+    const stage6Data = loadStage6Data()
+    const carsDb = loadCsr2Cars()
+    const nameMap = {}
+    for (const car of carsDb) { if (car.crdb) nameMap[car.crdb] = { name: car.name, tier: car.tier } }
+    const seen = new Map()
+    for (let i = 0; i < stage6Data.length; i++) {
+      const entry = stage6Data[i]
+      if (typeof entry === 'object' && entry !== null && entry.esdb && !seen.has(entry.esdb)) {
+        const info = nameMap[entry.esdb] || {}
+        seen.set(entry.esdb, { crdb: entry.esdb, name: info.name || entry.esdb, tier: info.tier || null })
+      }
+    }
+    const carList = Array.from(seen.values())
+    return json(res, 200, { count: carList.length, data: carList })
+  }
+
+  // ─── Data update check ────────────────────────────────────────────────────────
+
+  if (req.method === 'GET' && pathname === '/csr2/updates-check') {
+    const FUSIONS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/3.Fusions/%23%23AllFusions.txt'
+    const STAGE6_URL  = "https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/4.Stage6's/%23%23AllStage6's.txt"
+    async function headEtag(url) {
+      return new Promise(resolve => {
+        try {
+          const u = new URL(url)
+          https.request({ hostname: u.hostname, path: u.pathname + (u.search || ''), method: 'HEAD',
+            headers: { 'User-Agent': 'aio-tool-v' + VERSION } }, r => {
+            resolve(r.headers['etag'] || r.headers['last-modified'] || '')
+          }).on('error', () => resolve('')).end()
+        } catch { resolve('') }
+      })
+    }
     try {
-      const BRANDS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/3.Fusions/%23AllBrandIDs.txt'
-      log('[csr2/brands-update] Fetching from ' + BRANDS_URL)
-      const txt = await fetchRawGithub(BRANDS_URL)
-      let raw
-      try { raw = JSON.parse(txt) } catch {
-        return json(res, 400, { error: 'Failed to parse brand IDs data as JSON' })
-      }
-      // Normalize to array of {id, name}
-      let brands = []
-      if (Array.isArray(raw)) {
-        if (raw.length && typeof raw[0] === 'string') brands = raw.map(id => ({ id, name: id }))
-        else if (raw.length && raw[0].id) brands = raw
-        else if (raw.length && raw[0].BrandID) brands = raw.map(x => ({ id: x.BrandID, name: x.BrandName || x.BrandID }))
-        else brands = raw
-      } else if (raw && typeof raw === 'object') {
-        brands = Object.keys(raw).map(k => ({ id: k, name: raw[k] || k }))
-      }
-      saveBrandData(brands)
-      const sha = crypto.createHash('sha1').update(txt).digest('hex')
-      saveBrandsSha({ sha, url: BRANDS_URL, fetchedAt: Date.now() })
-      log('[csr2/brands-update] Saved ' + brands.length + ' brands')
-      return json(res, 200, { ok: true, count: brands.length })
+      const [fusEtag, s6Etag] = await Promise.all([headEtag(FUSIONS_URL), headEtag(STAGE6_URL)])
+      const fusStored = loadFusionsSha()
+      const s6Stored  = loadStage6Sha()
+      return json(res, 200, {
+        fusions: fusEtag !== '' && fusEtag !== (fusStored.sha || ''),
+        stage6:  s6Etag  !== '' && s6Etag  !== (s6Stored.sha  || ''),
+      })
     } catch (e) {
-      log('[csr2/brands-update] Error: ' + e.message)
-      return json(res, 500, { error: e.message })
+      return json(res, 200, { fusions: false, stage6: false })
     }
   }
 
