@@ -72,7 +72,7 @@ function saveJson(file, data) {
 
 function loadAccounts() { return loadJson(ACCOUNTS_FILE, []) }
 function saveAccounts(a) { saveJson(ACCOUNTS_FILE, a) }
-function loadConfig() { const c = loadJson(CONFIG_FILE, {}); if (!c.webappUrl) c.webappUrl = 'https://antlervaults.store'; return c }
+function loadConfig() { const c = loadJson(CONFIG_FILE, {}); if (!c.webappUrl) c.webappUrl = 'https://www.antlervaults.store'; return c }
 function saveConfig(c) { saveJson(CONFIG_FILE, c) }
 function loadPacks()     { return loadJson(PACKS_FILE, []) }
 function savePacks(p)   { saveJson(PACKS_FILE, p) }
