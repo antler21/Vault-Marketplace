@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.5'
+const VERSION = '0.7.6'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1894,6 +1894,16 @@ input.car-search-input:focus{border-color:var(--accent)}
           <span>🎁 Gifts</span>
         </div>
       </div>
+      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+        <div class="section-title" style="margin-bottom:8px">Fusions &amp; Stage 6 Options</div>
+        <label class="allow-dup-row" style="cursor:pointer;align-items:flex-start;gap:8px">
+          <input type="checkbox" id="cp-fusion-s6-choose-one" style="margin-top:2px;flex-shrink:0">
+          <div>
+            <div style="font-size:13px">Buyer picks Fusions <strong>or</strong> Stage 6 — not both</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Only applies when both are set to Customizable. Buyer chooses one on the Pack Preview tab.</div>
+          </div>
+        </label>
+      </div>
     </div>
 
     <div class="cp-body" id="cp-content-gifts" style="display:none">
@@ -2289,6 +2299,20 @@ input.car-search-input:focus{border-color:var(--accent)}
     <div class="ap-body" id="ap-panel-preview">
       <div id="ansb-pack-title" style="font-size:16px;font-weight:700;color:var(--accent);margin-bottom:2px"></div>
       <div id="ansb-pack-info"></div>
+      <!-- Fusions vs Stage 6 choice (choose-one mode) -->
+      <div id="ap-fusion-s6-choice" style="display:none;margin-top:12px;padding:12px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Choose one to include:</div>
+        <div style="display:flex;gap:10px">
+          <label id="ap-choice-fusions-wrap" style="flex:1;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;gap:8px;transition:border-color .15s" onclick="onFusionS6Choice('fusions')">
+            <input type="radio" name="ap-fusion-s6-radio" id="ap-choice-fusions" style="accent-color:var(--accent)">
+            <span style="font-size:13px;font-weight:500">⚗️ Fusions</span>
+          </label>
+          <label id="ap-choice-stage6-wrap" style="flex:1;cursor:pointer;padding:10px 12px;border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;gap:8px;transition:border-color .15s" onclick="onFusionS6Choice('stage6')">
+            <input type="radio" name="ap-fusion-s6-radio" id="ap-choice-stage6" style="accent-color:var(--accent)">
+            <span style="font-size:13px;font-weight:500">6️⃣ Stage 6</span>
+          </label>
+        </div>
+      </div>
       <div class="field" id="ansb-pack-select-row" style="display:none;margin-bottom:0">
         <label>Pack</label>
         <select id="ansb-pack-select" onchange="onAnsbPackSelect(this.value)"></select>
@@ -2565,7 +2589,7 @@ var _previewAcct = null, _importAcct = null, _afterImportId = null
 var _csr2CarsDb = [], _ownedCrdbs = new Set(), _allowDuplicates = false
 var _colorPickerCar = null, _colorPickerCarIdx = -1, _selectingColor = false
 var _selectedBrands = [], _brandsList = [], _selectedS6Cars = [], _s6CarsList = []
-var _pendingCarPackId = null
+var _pendingCarPackId = null, _fusionS6Choice = null
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -3555,6 +3579,7 @@ function resetCpModal() {
   _editingPackId = null
   _selectedCarPackIds = new Set()
   document.getElementById('cp-name').value = ''
+  document.getElementById('cp-fusion-s6-choose-one').checked = false
   cpClearCurrencies()
   // reset all car fields
   var carFields = ['cp-car-count','cp-car-condition','cp-car-mode','cp-custom-count','cp-custom-condition','cp-all-condition','cp-partial-count','cp-partial-condition']
@@ -3864,6 +3889,7 @@ async function openEditPack(packId) {
     }
     refreshStage6DataStatus()
   }
+  document.getElementById('cp-fusion-s6-choose-one').checked = pack.fusionS6Mode === 'choose-one'
   await reloadCarPacks()
   renderCarPackCards()
   showModal('create-pack-modal')
@@ -3971,7 +3997,8 @@ async function savePack() {
       }
     }
   }
-  var pack = { name, currencies, cars, legends, fusions, stage6 }
+  var fusionS6Mode = document.getElementById('cp-fusion-s6-choose-one').checked ? 'choose-one' : 'independent'
+  var pack = { name, currencies, cars, legends, fusions, stage6, fusionS6Mode }
   var url = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
   var method = _editingPackId ? 'PATCH' : 'POST'
   var res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pack) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
@@ -4364,6 +4391,7 @@ function openEditNsb(packId) {
   _brandsList = []
   _selectedS6Cars = []
   _s6CarsList = []
+  _fusionS6Choice = null
   _nsbCurrentData = null
   _applyPackRef = null
   _currencyEditMode = false
@@ -4541,29 +4569,93 @@ function _renderApplyTabs(pack) {
     searchLegends('')
   }
 
-  // Fusions tab — brand picker
-  var showFusionsTab = !!(pack.fusions && pack.fusions.mode === 'customizable')
-  var fusBtn = document.getElementById('ap-tab-fusions')
-  if (fusBtn) fusBtn.style.display = showFusionsTab ? '' : 'none'
-  if (showFusionsTab) {
+  // Fusions & Stage 6 — check choose-one mode
+  var fusCust = !!(pack.fusions && pack.fusions.mode === 'customizable')
+  var s6Cust  = !!(pack.stage6  && pack.stage6.mode  === 'customizable')
+  var chooseOne = pack.fusionS6Mode === 'choose-one' && fusCust && s6Cust
+  var choiceEl = document.getElementById('ap-fusion-s6-choice')
+  if (choiceEl) choiceEl.style.display = chooseOne ? '' : 'none'
+
+  if (chooseOne) {
+    // Reset choice state — tabs only shown after buyer picks one
+    _fusionS6Choice = null
     _selectedBrands = []
+    _selectedS6Cars = []
+    var fusBtnC = document.getElementById('ap-tab-fusions')
+    var s6BtnC  = document.getElementById('ap-tab-stage6')
+    if (fusBtnC) fusBtnC.style.display = 'none'
+    if (s6BtnC)  s6BtnC.style.display  = 'none'
+    var rFus = document.getElementById('ap-choice-fusions')
+    var rS6  = document.getElementById('ap-choice-stage6')
+    if (rFus) rFus.checked = false
+    if (rS6)  rS6.checked  = false
+    // Pre-load lists in background so pickers are instant once buyer chooses
+    loadAndSearchBrands('')
+    loadAndSearchS6Cars('')
+  } else {
+    // Independent mode — show each tab based on its own setting
+    var showFusionsTab = fusCust
+    var fusBtn = document.getElementById('ap-tab-fusions')
+    if (fusBtn) fusBtn.style.display = showFusionsTab ? '' : 'none'
+    if (showFusionsTab) {
+      _selectedBrands = []
+      var fusHdr = document.getElementById('ap-fusions-header')
+      if (fusHdr) fusHdr.textContent = 'Select up to ' + (pack.fusions.brandAmount || 1) + ' brand(s) to include fusions for.'
+      renderSelectedBrands(pack)
+      loadAndSearchBrands('')
+    }
+
+    var showS6Tab = s6Cust
+    var s6Btn = document.getElementById('ap-tab-stage6')
+    if (s6Btn) s6Btn.style.display = showS6Tab ? '' : 'none'
+    if (showS6Tab) {
+      _selectedS6Cars = []
+      var s6Hdr = document.getElementById('ap-s6-header')
+      if (s6Hdr) s6Hdr.textContent = 'Select up to ' + (pack.stage6.count || 0) + ' car(s) to include Stage 6 upgrades for.'
+      renderSelectedS6Cars(pack)
+      loadAndSearchS6Cars('')
+    }
+  }
+}
+
+function onFusionS6Choice(choice) {
+  _fusionS6Choice = choice
+  var pack = _applyPackRef
+  // Clear the other option's selections
+  if (choice === 'fusions') {
+    _selectedS6Cars = []
+    renderSelectedS6Cars(pack)
+  } else {
+    _selectedBrands = []
+    renderSelectedBrands(pack)
+  }
+  // Update radio visuals
+  var rFus = document.getElementById('ap-choice-fusions')
+  var rS6  = document.getElementById('ap-choice-stage6')
+  if (rFus) rFus.checked = choice === 'fusions'
+  if (rS6)  rS6.checked  = choice === 'stage6'
+  var wFus = document.getElementById('ap-choice-fusions-wrap')
+  var wS6  = document.getElementById('ap-choice-stage6-wrap')
+  if (wFus) wFus.style.borderColor = choice === 'fusions' ? 'var(--accent)' : 'var(--border)'
+  if (wS6)  wS6.style.borderColor  = choice === 'stage6'  ? 'var(--accent)' : 'var(--border)'
+  // Show only the chosen tab
+  var fusBtn = document.getElementById('ap-tab-fusions')
+  var s6Btn  = document.getElementById('ap-tab-stage6')
+  if (fusBtn) fusBtn.style.display = choice === 'fusions' ? '' : 'none'
+  if (s6Btn)  s6Btn.style.display  = choice === 'stage6'  ? '' : 'none'
+  // Initialize the chosen picker
+  if (choice === 'fusions' && pack && pack.fusions) {
     var fusHdr = document.getElementById('ap-fusions-header')
     if (fusHdr) fusHdr.textContent = 'Select up to ' + (pack.fusions.brandAmount || 1) + ' brand(s) to include fusions for.'
     renderSelectedBrands(pack)
-    loadAndSearchBrands('')
-  }
-
-  // Stage 6 tab — car picker
-  var showS6Tab = !!(pack.stage6 && pack.stage6.mode === 'customizable')
-  var s6Btn = document.getElementById('ap-tab-stage6')
-  if (s6Btn) s6Btn.style.display = showS6Tab ? '' : 'none'
-  if (showS6Tab) {
-    _selectedS6Cars = []
+    searchBrands(document.getElementById('ap-brands-search') ? document.getElementById('ap-brands-search').value : '')
+    apSwitchTab('fusions')
+  } else if (choice === 'stage6' && pack && pack.stage6) {
     var s6Hdr = document.getElementById('ap-s6-header')
-    var s6Count = pack.stage6.count || 0
-    if (s6Hdr) s6Hdr.textContent = 'Select up to ' + s6Count + ' car(s) to include Stage 6 upgrades for.'
+    if (s6Hdr) s6Hdr.textContent = 'Select up to ' + (pack.stage6.count || 0) + ' car(s) to include Stage 6 upgrades for.'
     renderSelectedS6Cars(pack)
-    loadAndSearchS6Cars('')
+    searchS6Cars(document.getElementById('ap-s6-search') ? document.getElementById('ap-s6-search').value : '')
+    apSwitchTab('stage6')
   }
 }
 
@@ -5479,8 +5571,8 @@ async function applyNsb() {
     usePartialSelection: _partialSelectionEnabled,
     currencyOverride: Object.keys(_currencyOverride).length > 0 ? _currencyOverride : undefined,
     selectedLegends: _selectedLegends.length > 0 ? _selectedLegends.map(function(l){ return l.crdb }) : undefined,
-    selectedBrands: _selectedBrands.length > 0 ? _selectedBrands.map(function(b){ return b.id }) : undefined,
-    selectedS6Cars: _selectedS6Cars.length > 0 ? _selectedS6Cars.map(function(c){ return c.crdb }) : undefined
+    selectedBrands: (_fusionS6Choice !== 'stage6' && _selectedBrands.length > 0) ? _selectedBrands.map(function(b){ return b.id }) : undefined,
+    selectedS6Cars: (_fusionS6Choice !== 'fusions' && _selectedS6Cars.length > 0) ? _selectedS6Cars.map(function(c){ return c.crdb }) : undefined
   }
   if (_selectedCars.length > 0 && (_partialSelectionEnabled || (_applyPackRef && _applyPackRef.cars && _applyPackRef.cars.carMode === 'customizable'))) {
     payload.selectedCars = _selectedCars
