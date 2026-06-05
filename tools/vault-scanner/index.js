@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.6'
+const VERSION = '0.7.7'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1032,6 +1032,21 @@ function fetchRawGithub(rawUrl) {
         let data = ''
         res.on('data', c => data += c)
         res.on('end', () => resolve(data))
+      }).on('error', reject)
+    }
+    get(rawUrl)
+  })
+}
+
+function fetchRawGithubWithEtag(rawUrl) {
+  return new Promise((resolve, reject) => {
+    const get = (url) => {
+      https.get(url, { headers: { 'User-Agent': 'aio-tool-v' + VERSION } }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) return get(res.headers.location)
+        const etag = res.headers['etag'] || res.headers['last-modified'] || ''
+        let data = ''
+        res.on('data', c => data += c)
+        res.on('end', () => resolve({ text: data, etag }))
       }).on('error', reject)
     }
     get(rawUrl)
@@ -2609,6 +2624,7 @@ async function init() {
   // Silently check for car DB updates and remote data updates after UI is ready
   setTimeout(checkCsr2CarsUpdate, 3000)
   setTimeout(checkForDataUpdates, 6000)
+  setTimeout(checkToolVersion, 9000)
 }
 
 async function checkForDataUpdates() {
@@ -2621,6 +2637,31 @@ async function checkForDataUpdates() {
       showDataUpdateBanner(what)
     }
   } catch (e) {}
+}
+
+async function checkToolVersion() {
+  if (!_url) return
+  try {
+    var res = await fetch(_url + '/api/tool-version').then(function(r){ return r.json() }).catch(function(){ return null })
+    if (res && res.version && res.version !== VERSION) {
+      showToolUpdateBanner(res.version)
+    }
+  } catch (e) {}
+}
+
+function showToolUpdateBanner(newVersion) {
+  var existing = document.getElementById('tool-update-banner')
+  if (existing) return
+  var banner = document.createElement('div')
+  banner.id = 'tool-update-banner'
+  banner.style.cssText = 'position:fixed;bottom:16px;left:16px;z-index:9999;background:var(--surf2);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:12px;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,.4)'
+  banner.innerHTML = '<div style="font-weight:600;margin-bottom:4px">🔄 Tool Update Available</div>' +
+    '<div style="color:var(--muted);margin-bottom:8px">v' + newVersion + ' is ready. Download and replace this exe.</div>' +
+    '<div style="display:flex;gap:6px">' +
+    '<a href="' + escH(_url) + '/aio-tool-v' + escH(newVersion) + '.exe" download class="btn btn-primary btn-sm" style="font-size:11px;padding:4px 10px;text-decoration:none">Download v' + escH(newVersion) + '</a>' +
+    '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\\'tool-update-banner\\').remove()" style="font-size:11px;padding:4px 10px">Dismiss</button>' +
+    '</div>'
+  document.body.appendChild(banner)
 }
 
 function showDataUpdateBanner(what) {
@@ -5553,7 +5594,25 @@ function renderSelectedCars() {
     if (total > 0) {
       var remaining = Math.max(0, total - displayCount)
       noteEl.style.display = ''
-      noteEl.textContent = displayCount + '/' + total + ' selected. ' + (remaining > 0 ? 'Remaining ' + remaining + ' will be filled randomly.' : 'All slots filled.')
+      if (remaining > 0) {
+        // Check if all selectable (non-owned, not already selected) cars have been added
+        var selCrdbSet = new Set(_selectedCars.map(function(c){ return c.crdb + '|' + (c.colorName || '') }))
+        var moreAvail = 0
+        for (var ci = 0; ci < _csr2CarsDb.length; ci++) {
+          var dbCar = _csr2CarsDb[ci]
+          if (!dbCar.crdb) continue
+          if (!_allowDuplicates && _ownedCrdbs.has(dbCar.crdb)) continue
+          var carKey = dbCar.crdb + '|' + (dbCar.colors && dbCar.colors[0] ? dbCar.colors[0].name : '')
+          if (!selCrdbSet.has(dbCar.crdb + '|' + (dbCar.colors && dbCar.colors[0] ? dbCar.colors[0].name || '' : ''))) { moreAvail++; break }
+        }
+        if (moreAvail === 0 && displayCount > 0) {
+          noteEl.textContent = displayCount + '/' + total + ' selected — all available cars added! Remaining ' + remaining + ' will be filled randomly.'
+        } else {
+          noteEl.textContent = displayCount + '/' + total + ' selected. Remaining ' + remaining + ' will be filled randomly.'
+        }
+      } else {
+        noteEl.textContent = displayCount + '/' + total + ' selected. All slots filled!'
+      }
     } else {
       noteEl.style.display = 'none'
     }
@@ -6440,16 +6499,15 @@ const server = http.createServer(async (req, res) => {
     try {
       const STAGE6_URL = "https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/4.Stage6's/%23%23AllStage6's.txt"
       log('[csr2/stage6-update] Fetching from ' + STAGE6_URL)
-      const txt = await fetchRawGithub(STAGE6_URL)
+      const { text: txt, etag } = await fetchRawGithubWithEtag(STAGE6_URL)
       let parsed
       try { parsed = JSON.parse(txt) } catch {
         return json(res, 400, { error: 'Failed to parse Stage 6 data as JSON' })
       }
       saveStage6Data(parsed)
-      const sha = crypto.createHash('sha1').update(txt).digest('hex')
-      saveStage6Sha({ sha, url: STAGE6_URL, fetchedAt: Date.now() })
+      saveStage6Sha({ sha: etag || crypto.createHash('sha1').update(txt).digest('hex'), url: STAGE6_URL, fetchedAt: Date.now() })
       const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
-      log('[csr2/stage6-update] Saved ' + count + ' entries')
+      log('[csr2/stage6-update] Saved ' + count + ' entries (etag=' + etag + ')')
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/stage6-update] Error: ' + e.message)
@@ -6489,16 +6547,15 @@ const server = http.createServer(async (req, res) => {
     try {
       const FUSIONS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/3.Fusions/%23%23AllFusions.txt'
       log('[csr2/fusions-update] Fetching from ' + FUSIONS_URL)
-      const txt = await fetchRawGithub(FUSIONS_URL)
+      const { text: txt, etag } = await fetchRawGithubWithEtag(FUSIONS_URL)
       let parsed
       try { parsed = JSON.parse(txt) } catch {
         return json(res, 400, { error: 'Failed to parse fusions data as JSON' })
       }
       saveFusionData(parsed)
-      const sha = crypto.createHash('sha1').update(txt).digest('hex')
-      saveFusionsSha({ sha, url: FUSIONS_URL, fetchedAt: Date.now() })
+      saveFusionsSha({ sha: etag || crypto.createHash('sha1').update(txt).digest('hex'), url: FUSIONS_URL, fetchedAt: Date.now() })
       const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
-      log('[csr2/fusions-update] Saved ' + count + ' entries')
+      log('[csr2/fusions-update] Saved ' + count + ' entries (etag=' + etag + ')')
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/fusions-update] Error: ' + e.message)
