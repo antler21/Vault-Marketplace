@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.8'
+const VERSION = '0.7.9'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -491,14 +491,16 @@ async function runScan(lcuPort, password) {
   log(`Summoner: ${summoner.gameName || summoner.displayName} (level ${summoner.summonerLevel})`)
 
   log('Fetching all inventory data in parallel...')
-  const [skinsRes, lootRes, emotesRes, iconsRes, wardsRes, finishersRes, walletRes,
+  const [skinsRes, lootRes, emotesRes, iconsRes, wardsRes, wardsV1Res, finishersRes, walletRes,
          regionRes, tftCompanionsRes, tftTacticianRes, tftCompanionV1Res, tftMapSkinsRes, tftDamageSkinsRes,
+         tftMapV1Res, tftBoomV1Res,
          masteryCollRes, masteryLocalRes, skinInvRes] = await Promise.all([
     lcuGet(lcuPort, password, `/lol-champions/v1/inventories/${summonerId}/skins-minimal`),
     lcuGet(lcuPort, password, '/lol-loot/v1/player-loot'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/EMOTE'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/SUMMONER_ICON'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/WARD_SKIN'),
+    lcuGet(lcuPort, password, '/lol-inventory/v1/inventory?inventoryTypes=%5B%22WARD_SKIN%22%5D'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/NEXUS_FINISHER'),
     lcuGet(lcuPort, password, '/lol-store/v1/wallet'),
     lcuGet(lcuPort, password, '/riotclient/region-locale'),
@@ -507,6 +509,8 @@ async function runScan(lcuPort, password) {
     lcuGet(lcuPort, password, '/lol-inventory/v1/inventory?inventoryTypes=%5B%22COMPANION%22%5D'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/TFT_MAP_SKIN'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/TFT_DAMAGE_SKIN'),
+    lcuGet(lcuPort, password, '/lol-inventory/v1/inventory?inventoryTypes=%5B%22TFT_MAP_SKIN%22%5D'),
+    lcuGet(lcuPort, password, '/lol-inventory/v1/inventory?inventoryTypes=%5B%22TFT_DAMAGE_SKIN%22%5D'),
     lcuGet(lcuPort, password, '/lol-collections/v1/inventories/champion-mastery'),
     lcuGet(lcuPort, password, '/lol-champion-mastery/v1/local-player/champion-mastery'),
     lcuGet(lcuPort, password, '/lol-inventory/v2/inventory/CHAMPION_SKIN'),
@@ -519,7 +523,8 @@ async function runScan(lcuPort, password) {
   debugRes('loot', lootRes)
   debugRes('emotes', emotesRes)
   debugRes('icons', iconsRes)
-  debugRes('wards', wardsRes)
+  debugRes('wards (v2)', wardsRes)
+  debugRes('wards (v1)', wardsV1Res)
   debugRes('finishers (NEXUS_FINISHER)', finishersRes)
   debugRes('wallet', walletRes)
   debugRes('region', regionRes)
@@ -563,9 +568,10 @@ async function runScan(lcuPort, password) {
   const ownedIconIds = extractIds(iconsRes.data)
   log(`Found ${ownedIconIds.length} icons.`)
 
-  // Wards
+  // Wards — try v2, then v1
   let ownedWardIds = extractIds(wardsRes.data)
-  log(`Found ${ownedWardIds.length} ward skins (dedicated endpoint).`)
+  if (ownedWardIds.length === 0 && wardsV1Res.ok) ownedWardIds = extractIds(wardsV1Res.data)
+  log(`Found ${ownedWardIds.length} ward skins (v2/v1 endpoints).`)
 
   // Finishers
   const ownedFinisherIds = extractIds(finishersRes.data)
@@ -599,8 +605,10 @@ async function runScan(lcuPort, password) {
       : extractIds(companionSource)
   }
   let tftMapSkinIds    = extractIds(tftMapSkinsRes.data)
+  if (tftMapSkinIds.length === 0 && tftMapV1Res.ok) tftMapSkinIds = extractIds(tftMapV1Res.data)
   let tftDamageSkinIds = extractIds(tftDamageSkinsRes.data)
-  log(`TFT: ${tftCompanionIds.length} companions, ${tftMapSkinIds.length} arenas, ${tftDamageSkinIds.length} booms (dedicated endpoints)`)
+  if (tftDamageSkinIds.length === 0 && tftBoomV1Res.ok) tftDamageSkinIds = extractIds(tftBoomV1Res.data)
+  log(`TFT: ${tftCompanionIds.length} companions, ${tftMapSkinIds.length} arenas, ${tftDamageSkinIds.length} booms (v2+v1 endpoints)`)
 
   // ─── Discovery scan ───────────────────────────────────────────────────────
   const DISCOVERY_TYPES = [
