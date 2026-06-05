@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.10'
+const VERSION = '0.7.11'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -3354,14 +3354,23 @@ async function generateLink() {
   var skinCount = Array.isArray(d.ownedSkinIds) ? d.ownedSkinIds.length : (Array.isArray(_previewAcct.ownedSkinIds) ? _previewAcct.ownedSkinIds.length : 0)
   var body = {
     summonerName: d.summonerName || '', tagLine: d.tagLine || '', region: d.region || '',
+    puuid: d.puuid || null,
     profileIconId: d.profileIconId || null, summonerLevel: d.summonerLevel || null,
-    soloRank: d.soloRank || null, flexRank: d.flexRank || null,
-    soloPeakRank: d.soloPeakRank || null, soloPrevRank: d.soloPrevRank || null,
-    rp: d.rp || null, be: d.be || null,
+    soloRank: d.soloRank || null, flexRank: d.flexRank || null, tftRank: d.tftRank || null,
+    soloPeakRank: d.soloPeakRank || null, flexPeakRank: d.flexPeakRank || null,
+    soloPrevRank: d.soloPrevRank || null, flexPrevRank: d.flexPrevRank || null,
+    rp: d.rp ?? null, be: d.be ?? null,
     ownedSkinIds: d.ownedSkinIds || [], ownedChromaIds: d.ownedChromaIds || [],
     ownedEmoteIds: d.ownedEmoteIds || [], ownedIconIds: d.ownedIconIds || [],
-    lootSummary: d.lootSummary || null, rankHistory: d.rankHistory || null,
+    ownedWardIds: d.ownedWardIds || [], ownedFinisherIds: d.ownedFinisherIds || [],
+    tftCompanionIds: d.tftCompanionIds || [], tftMapSkinIds: d.tftMapSkinIds || [], tftDamageSkinIds: d.tftDamageSkinIds || [],
+    lootSummary: d.lootSummary || null, rankHistory: d.rankHistory || null, rankHistoryPeak: d.rankHistoryPeak || null,
     champCount: d.champCount || null, championMastery: d.championMastery || null,
+    vintageSkinIds: d.vintageSkinIds || [],
+    accountCreatedEstimate: d.accountCreatedEstimate || null,
+    firstRpPurchaseDate: d.firstRpPurchaseDate || null,
+    firstRpPurchaseItemId: d.firstRpPurchaseItemId ?? null,
+    firstRpPurchaseItemType: d.firstRpPurchaseItemType || null,
     lastMatch: d.lastMatch || null,
     hideName: hideName,
     expiresAt: days > 0 ? new Date(Date.now() + days * 86400000).toISOString() : null,
@@ -3417,14 +3426,23 @@ async function doImport() {
   var skinCount = Array.isArray(d.ownedSkinIds) ? d.ownedSkinIds.length : 0
   var body = {
     summonerName: d.summonerName || '', tagLine: d.tagLine || '', region: d.region || '',
+    puuid: d.puuid || null,
     profileIconId: d.profileIconId || null, summonerLevel: d.summonerLevel || null,
-    soloRank: d.soloRank || null, flexRank: d.flexRank || null,
-    soloPeakRank: d.soloPeakRank || null, soloPrevRank: d.soloPrevRank || null,
-    rp: d.rp || null, be: d.be || null,
+    soloRank: d.soloRank || null, flexRank: d.flexRank || null, tftRank: d.tftRank || null,
+    soloPeakRank: d.soloPeakRank || null, flexPeakRank: d.flexPeakRank || null,
+    soloPrevRank: d.soloPrevRank || null, flexPrevRank: d.flexPrevRank || null,
+    rp: d.rp ?? null, be: d.be ?? null,
     ownedSkinIds: d.ownedSkinIds || [], ownedChromaIds: d.ownedChromaIds || [],
     ownedEmoteIds: d.ownedEmoteIds || [], ownedIconIds: d.ownedIconIds || [],
-    lootSummary: d.lootSummary || null, rankHistory: d.rankHistory || null,
+    ownedWardIds: d.ownedWardIds || [], ownedFinisherIds: d.ownedFinisherIds || [],
+    tftCompanionIds: d.tftCompanionIds || [], tftMapSkinIds: d.tftMapSkinIds || [], tftDamageSkinIds: d.tftDamageSkinIds || [],
+    lootSummary: d.lootSummary || null, rankHistory: d.rankHistory || null, rankHistoryPeak: d.rankHistoryPeak || null,
     champCount: d.champCount || null, championMastery: d.championMastery || null,
+    vintageSkinIds: d.vintageSkinIds || [],
+    accountCreatedEstimate: d.accountCreatedEstimate || null,
+    firstRpPurchaseDate: d.firstRpPurchaseDate || null,
+    firstRpPurchaseItemId: d.firstRpPurchaseItemId ?? null,
+    firstRpPurchaseItemType: d.firstRpPurchaseItemType || null,
     lastMatch: d.lastMatch || null, accountTitle: skinCount + ' Skins Account',
   }
   var res = await fetch(_url + '/api/lol-skins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
