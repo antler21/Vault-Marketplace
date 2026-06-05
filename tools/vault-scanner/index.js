@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.7'
+const VERSION = '0.7.8'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -564,8 +564,8 @@ async function runScan(lcuPort, password) {
   log(`Found ${ownedIconIds.length} icons.`)
 
   // Wards
-  const ownedWardIds = extractIds(wardsRes.data)
-  log(`Found ${ownedWardIds.length} ward skins.`)
+  let ownedWardIds = extractIds(wardsRes.data)
+  log(`Found ${ownedWardIds.length} ward skins (dedicated endpoint).`)
 
   // Finishers
   const ownedFinisherIds = extractIds(finishersRes.data)
@@ -598,9 +598,9 @@ async function runScan(lcuPort, password) {
       ? owned.map(t => t.itemId ?? t.id).filter(x => x != null && x !== 0)
       : extractIds(companionSource)
   }
-  const tftMapSkinIds    = extractIds(tftMapSkinsRes.data)
-  const tftDamageSkinIds = extractIds(tftDamageSkinsRes.data)
-  log(`TFT: ${tftCompanionIds.length} companions, ${tftMapSkinIds.length} arenas, ${tftDamageSkinIds.length} booms`)
+  let tftMapSkinIds    = extractIds(tftMapSkinsRes.data)
+  let tftDamageSkinIds = extractIds(tftDamageSkinsRes.data)
+  log(`TFT: ${tftCompanionIds.length} companions, ${tftMapSkinIds.length} arenas, ${tftDamageSkinIds.length} booms (dedicated endpoints)`)
 
   // ─── Discovery scan ───────────────────────────────────────────────────────
   const DISCOVERY_TYPES = [
@@ -741,6 +741,44 @@ async function runScan(lcuPort, password) {
     }
     debugRes(`discovery/${type}`, res)
   })
+
+  // ─── Fallbacks for wards/TFT if dedicated endpoints returned empty ──────────
+  // Riot sometimes changes endpoint behaviour; _discovery hits the same types and can substitute
+  function extractIdsFromInvAll(type) {
+    const allData = invAllV2Res.ok
+      ? (Array.isArray(invAllV2Res.data) ? invAllV2Res.data
+        : Array.isArray(invAllV2Res.data?.items) ? invAllV2Res.data.items
+        : [])
+      : []
+    return allData.filter(i => (i.inventoryType || i.type || '').toUpperCase() === type)
+      .map(i => i.itemId ?? i.id).filter(x => x != null && x !== 0)
+  }
+
+  if (ownedWardIds.length === 0) {
+    const fromDisc = extractIds(_discovery['WARD_SKIN']?.data)
+    const fromAll  = extractIdsFromInvAll('WARD_SKIN')
+    ownedWardIds = fromDisc.length > 0 ? fromDisc : fromAll
+    if (ownedWardIds.length > 0) log(`Ward fallback: ${ownedWardIds.length} from ${fromDisc.length > 0 ? 'discovery' : 'all-inventory'}`)
+  }
+  if (tftCompanionIds.length === 0) {
+    const discComp = extractIds(_discovery['TFT_COMPANION']?.data || _discovery['TFT_TACTICIAN']?.data || _discovery['COMPANION']?.data)
+    const allComp  = extractIdsFromInvAll('TFT_COMPANION')
+    tftCompanionIds = discComp.length > 0 ? discComp : allComp
+    if (tftCompanionIds.length > 0) log(`TFT companion fallback: ${tftCompanionIds.length}`)
+  }
+  if (tftMapSkinIds.length === 0) {
+    const fromDisc = extractIds(_discovery['TFT_MAP_SKIN']?.data)
+    const fromAll  = extractIdsFromInvAll('TFT_MAP_SKIN')
+    tftMapSkinIds = fromDisc.length > 0 ? fromDisc : fromAll
+    if (tftMapSkinIds.length > 0) log(`TFT map skin fallback: ${tftMapSkinIds.length}`)
+  }
+  if (tftDamageSkinIds.length === 0) {
+    const fromDisc = extractIds(_discovery['TFT_DAMAGE_SKIN']?.data)
+    const fromAll  = extractIdsFromInvAll('TFT_DAMAGE_SKIN')
+    tftDamageSkinIds = fromDisc.length > 0 ? fromDisc : fromAll
+    if (tftDamageSkinIds.length > 0) log(`TFT damage skin fallback: ${tftDamageSkinIds.length}`)
+  }
+  log(`After fallbacks — wards=${ownedWardIds.length}, tftComp=${tftCompanionIds.length}, tftMap=${tftMapSkinIds.length}, tftBoom=${tftDamageSkinIds.length}`)
 
   // Wallet (RP + BE) — try /lol-store/v1/wallet first, fall back to parameterised endpoint
   let rp = null, be = null
