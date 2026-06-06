@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.11'
+const VERSION = '0.7.12'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1120,6 +1120,21 @@ function fetchRawGithubWithEtag(rawUrl) {
       }).on('error', reject)
     }
     get(rawUrl)
+  })
+}
+
+// Fetch what a HEAD request returns for a URL — used to store a consistent reference for update checks.
+// GET and HEAD can return different ETags on GitHub's CDN (e.g. weak vs strong, compressed vs not).
+// By always storing the HEAD result and always comparing HEAD results, the check stays consistent.
+function headEtagCheck(url) {
+  return new Promise(resolve => {
+    try {
+      const u = new URL(url)
+      https.request({ hostname: u.hostname, path: u.pathname + (u.search || ''), method: 'HEAD',
+        headers: { 'User-Agent': 'aio-tool-v' + VERSION } }, r => {
+        resolve(r.headers['etag'] || r.headers['last-modified'] || '')
+      }).on('error', () => resolve('')).end()
+    } catch { resolve('') }
   })
 }
 
@@ -2701,10 +2716,7 @@ async function checkForDataUpdates() {
   try {
     var res = await apiFetch('/csr2/updates-check', null)
     if (res && (res.fusions || res.stage6)) {
-      var what = []
-      if (res.fusions) what.push('Fusions')
-      if (res.stage6) what.push('Stage 6')
-      showDataUpdateBanner(what)
+      showDataUpdateBanner(res.fusions, res.stage6)
     }
   } catch (e) {}
 }
@@ -2734,18 +2746,22 @@ function showToolUpdateBanner(newVersion) {
   document.body.appendChild(banner)
 }
 
-function showDataUpdateBanner(what) {
+function showDataUpdateBanner(hasFusions, hasStage6) {
   var existing = document.getElementById('data-update-banner')
   if (existing) return
+  var labels = []
+  if (hasFusions) labels.push('Fusions')
+  if (hasStage6) labels.push('Stage 6')
   var banner = document.createElement('div')
   banner.id = 'data-update-banner'
-  banner.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;background:var(--surf2);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:12px;max-width:280px;box-shadow:0 4px 20px rgba(0,0,0,.4)'
+  banner.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;background:var(--surf2);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:12px;max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,.4)'
+  var btns = ''
+  if (hasFusions) btns += '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove();openFusionsUpdate()" style="font-size:11px;padding:4px 10px">Update Fusions</button>'
+  if (hasStage6) btns += '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove();openStage6Update()" style="font-size:11px;padding:4px 10px">Update Stage 6</button>'
+  btns += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove()" style="font-size:11px;padding:4px 10px">Dismiss</button>'
   banner.innerHTML = '<div style="font-weight:600;margin-bottom:4px">📦 Data Update Available</div>' +
-    '<div style="color:var(--muted);margin-bottom:8px">New ' + what.join(' & ') + ' data on GitHub.</div>' +
-    '<div style="display:flex;gap:6px">' +
-    '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove();openFusionsUpdate()" style="font-size:11px;padding:4px 10px">Update Now</button>' +
-    '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove()" style="font-size:11px;padding:4px 10px">Dismiss</button>' +
-    '</div>'
+    '<div style="color:var(--muted);margin-bottom:8px">New ' + labels.join(' & ') + ' data on GitHub.</div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">' + btns + '</div>'
   document.body.appendChild(banner)
 }
 
@@ -6587,15 +6603,17 @@ const server = http.createServer(async (req, res) => {
     try {
       const STAGE6_URL = "https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/4.Stage6's/%23%23AllStage6's.txt"
       log('[csr2/stage6-update] Fetching from ' + STAGE6_URL)
-      const { text: txt, etag } = await fetchRawGithubWithEtag(STAGE6_URL)
+      const { text: txt } = await fetchRawGithubWithEtag(STAGE6_URL)
       let parsed
       try { parsed = JSON.parse(txt) } catch {
         return json(res, 400, { error: 'Failed to parse Stage 6 data as JSON' })
       }
       saveStage6Data(parsed)
-      saveStage6Sha({ sha: etag || crypto.createHash('sha1').update(txt).digest('hex'), url: STAGE6_URL, fetchedAt: Date.now() })
+      // Store the HEAD ETag (not the GET ETag) so future HEAD checks compare consistently
+      const headSha = await headEtagCheck(STAGE6_URL)
+      saveStage6Sha({ sha: headSha || crypto.createHash('sha1').update(txt).digest('hex'), url: STAGE6_URL, fetchedAt: Date.now() })
       const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
-      log('[csr2/stage6-update] Saved ' + count + ' entries (etag=' + etag + ')')
+      log('[csr2/stage6-update] Saved ' + count + ' entries (headSha=' + headSha + ')')
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/stage6-update] Error: ' + e.message)
@@ -6635,15 +6653,17 @@ const server = http.createServer(async (req, res) => {
     try {
       const FUSIONS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/3.Fusions/%23%23AllFusions.txt'
       log('[csr2/fusions-update] Fetching from ' + FUSIONS_URL)
-      const { text: txt, etag } = await fetchRawGithubWithEtag(FUSIONS_URL)
+      const { text: txt } = await fetchRawGithubWithEtag(FUSIONS_URL)
       let parsed
       try { parsed = JSON.parse(txt) } catch {
         return json(res, 400, { error: 'Failed to parse fusions data as JSON' })
       }
       saveFusionData(parsed)
-      saveFusionsSha({ sha: etag || crypto.createHash('sha1').update(txt).digest('hex'), url: FUSIONS_URL, fetchedAt: Date.now() })
+      // Store the HEAD ETag (not the GET ETag) so future HEAD checks compare consistently
+      const headSha = await headEtagCheck(FUSIONS_URL)
+      saveFusionsSha({ sha: headSha || crypto.createHash('sha1').update(txt).digest('hex'), url: FUSIONS_URL, fetchedAt: Date.now() })
       const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
-      log('[csr2/fusions-update] Saved ' + count + ' entries (etag=' + etag + ')')
+      log('[csr2/fusions-update] Saved ' + count + ' entries (headSha=' + headSha + ')')
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/fusions-update] Error: ' + e.message)
