@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { LayoutDashboard, Gamepad2, Users, Monitor, FileText, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
+import { LayoutDashboard, Gamepad2, Users, Monitor, FileText, ShoppingCart, Settings, ChevronLeft, ChevronRight, LogOut } from 'lucide-react'
 import { getAuthClient } from '../lib/supabase-auth'
 import { useRouter } from 'next/navigation'
 
@@ -10,7 +10,7 @@ const navItems = [
   { icon: Users, label: 'Accounts' },
   { icon: Monitor, label: 'Platforms' },
   { icon: FileText, label: 'Posting' },
-  // { icon: ShoppingCart, label: 'Orders' },
+  { icon: ShoppingCart, label: 'Orders' },
   // { icon: Tag, label: 'Offers' },
   // { icon: Package, label: 'Services' },
   // { icon: Wrench, label: 'Tools' },
