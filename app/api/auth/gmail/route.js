@@ -7,7 +7,7 @@ export async function GET() {
     response_type: 'code',
     scope: GMAIL_SCOPES,
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'select_account consent',
   })
 
   const url = `https://accounts.google.com/o/oauth2/v2/auth?${params}`
