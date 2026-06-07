@@ -49,33 +49,37 @@ async function getValidToken() {
 function parseEmail(text, platform) {
   const result = {}
   const rules = platform.emailParsingRules || platform.email_parsing_rules || {}
+  const customFields = rules.customFields || []
 
   console.log('=== PARSING EMAIL ===')
   console.log('Platform:', platform.name)
-  console.log('Rules:', JSON.stringify(rules))
-  console.log('Email text:', text.substring(0, 500))
+  console.log('Custom fields configured:', customFields.length)
+  console.log('Email text (first 500):', text.substring(0, 500))
 
-  for (const [field, rule] of Object.entries(rules)) {
-    if (!rule || !rule.keyword) continue
+  for (const field of customFields) {
+    if (!field || !field.keyword) continue
     const lines = text.split('\n')
     for (const line of lines) {
-      if (line.toLowerCase().includes(rule.keyword.toLowerCase())) {
+      if (line.toLowerCase().includes(field.keyword.toLowerCase())) {
         const afterKeyword = line.substring(
-          line.toLowerCase().indexOf(rule.keyword.toLowerCase()) + rule.keyword.length
+          line.toLowerCase().indexOf(field.keyword.toLowerCase()) + field.keyword.length
         ).trim()
         const value = afterKeyword.replace(/^[:=\s]+/, '').split(/\s{2,}|\|/)[0].trim()
         if (value) {
-          result[field] = value
-          console.log(`Matched field "${field}": "${value}"`)
+          result[field.label] = value
+          console.log(`Matched field "${field.label}" via keyword "${field.keyword}": "${value}"`)
         }
         break
       }
     }
   }
 
-  if (result.price) {
-    const priceMatch = result.price.match(/[\d,.]+/)
-    if (priceMatch) result.price = parseFloat(priceMatch[0].replace(',', ''))
+  // Detect price field by label
+  for (const [label, val] of Object.entries(result)) {
+    if (label.toLowerCase().includes('price') || label.toLowerCase().includes('amount')) {
+      const priceMatch = val.match(/[\d,.]+/)
+      if (priceMatch) result[label] = parseFloat(priceMatch[0].replace(',', ''))
+    }
   }
 
   console.log('Parsed result:', JSON.stringify(result))
@@ -84,7 +88,7 @@ function parseEmail(text, platform) {
 
 function meetsMinimumParseRequirements(parsed) {
   const filledFields = Object.values(parsed).filter(v => v !== null && v !== undefined && v !== '')
-  return filledFields.length >= 2
+  return filledFields.length >= 1
 }
 
 export async function GET() {
@@ -146,11 +150,11 @@ export async function POST(request) {
     const newOrders = []
 
     for (const msg of listData.messages) {
-      // Check by Gmail message ID
+      // Check by Gmail message ID stored as order_id fallback
       const { data: existingByMsgId } = await supabase
         .from('orders')
         .select('id')
-        .eq('raw_email', msg.id)
+        .eq('order_id', msg.id)
         .single()
 
       if (existingByMsgId) {
@@ -208,16 +212,20 @@ export async function POST(request) {
         continue
       }
 
-      // Check by parsed order ID
-      if (parsed.orderId) {
+      // Check by parsed order ID (computed after parsing)
+      const earlyOrderId = Object.entries(parsed).find(([label]) => {
+        const l = label.toLowerCase()
+        return ['order id', 'order_id', 'orderid', 'order #', 'order number'].some(k => l.includes(k))
+      })?.[1]
+      if (earlyOrderId) {
         const { data: existingByOrderId } = await supabase
           .from('orders')
           .select('id')
-          .eq('order_id', parsed.orderId)
+          .eq('order_id', earlyOrderId)
           .single()
 
         if (existingByOrderId) {
-          console.log('Already processed (order id):', parsed.orderId)
+          console.log('Already processed (order id):', earlyOrderId)
           await fetch(
             `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}/modify`,
             {
@@ -230,14 +238,27 @@ export async function POST(request) {
         }
       }
 
+      // Map parsed fields to DB columns by matching label keywords
+      const findParsedValue = (keys) => {
+        for (const [label, val] of Object.entries(parsed)) {
+          const l = label.toLowerCase()
+          if (keys.some(k => l.includes(k))) return val
+        }
+        return null
+      }
+      const parsedOrderId = findParsedValue(['order id', 'order_id', 'orderid', 'order #', 'order number'])
+      const parsedTitle = findParsedValue(['title', 'item', 'product', 'listing', 'description'])
+      const parsedPrice = findParsedValue(['price', 'amount', 'total', 'cost'])
+      const parsedBuyer = findParsedValue(['buyer', 'customer', 'user', 'purchaser', 'name'])
+
       // Save order to database
       const { data: saved } = await supabase.from('orders').insert([{
         platform_name: matchedPlatform.name,
-        order_id: parsed.orderId || msg.id,
-        title: parsed.title || subject,
-        price: parsed.price || 0,
+        order_id: parsedOrderId || msg.id,
+        title: parsedTitle || subject,
+        price: parsedPrice ? parseFloat(String(parsedPrice).replace(/[^0-9.]/g, '')) || 0 : 0,
         price_currency: 'USD',
-        buyer: parsed.buyer || '',
+        buyer: parsedBuyer || '',
         status: 'Pending',
         raw_email: fullText,
         email_date: dateHeader ? new Date(dateHeader).toISOString() : new Date().toISOString(),

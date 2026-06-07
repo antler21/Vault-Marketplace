@@ -1842,6 +1842,7 @@ input.car-search-input:focus{border-color:var(--accent)}
         <button class="btn btn-secondary btn-sm" id="cars-update-btn" onclick="openCarsUpdate()">↺ Car DB <span id="cars-db-count" style="font-size:10px;opacity:.6"></span></button>
         <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
         <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
+        <button class="btn btn-secondary btn-sm" id="sync-all-packs-btn" onclick="syncAllPacks()">↑ Sync All</button>
         <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
       </div>
       <div class="grid" id="packs-grid"></div>
@@ -3640,6 +3641,21 @@ function uid() { return Date.now().toString(36) + Math.random().toString(36).sli
 
 async function reloadPacks() {
   _packs = await apiFetch('/csr2/packs', [])
+}
+
+async function syncAllPacks() {
+  var btn = document.getElementById('sync-all-packs-btn')
+  if (btn) { btn.textContent = 'Syncing…'; btn.disabled = true }
+  try {
+    var res = await fetch('/csr2/packs/sync-all', { method: 'POST' })
+    var data = await res.json()
+    if (btn) btn.textContent = '✓ Synced ' + (data.synced || 0)
+  } catch (e) {
+    if (btn) btn.textContent = '✗ Failed'
+  }
+  setTimeout(function() {
+    if (btn) { btn.textContent = '↑ Sync All'; btn.disabled = false }
+  }, 3000)
 }
 
 function renderPacks() {
@@ -6284,6 +6300,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   // CSR2 packs CRUD
+  if (req.method === 'POST' && pathname === '/csr2/packs/sync-all') {
+    const packs = loadPacks()
+    packs.forEach(p => syncPackToWebapp(p))
+    return json(res, 200, { synced: packs.length })
+  }
+
   if (req.method === 'GET' && pathname === '/csr2/packs') {
     return json(res, 200, loadPacks())
   }
