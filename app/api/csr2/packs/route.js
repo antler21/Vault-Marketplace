@@ -3,10 +3,13 @@ import { supabase } from '../../../lib/supabase'
 export async function GET() {
   const { data, error } = await supabase
     .from('csr2_packs')
-    .select('id, name, data, synced_at')
+    .select('*')
     .order('name')
 
-  if (error) return Response.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[csr2/packs GET]', error.message)
+    return Response.json({ error: error.message }, { status: 500 })
+  }
   return Response.json(data)
 }
 
@@ -21,11 +24,14 @@ export async function POST(request) {
 
   const { data: saved, error } = await supabase
     .from('csr2_packs')
-    .upsert({ name, data: data || body, synced_at: new Date().toISOString() }, { onConflict: 'name' })
+    .upsert({ name, data: data || body }, { onConflict: 'name' })
     .select()
     .single()
 
-  if (error) return Response.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[csr2/packs POST]', error.message, error.details, error.hint)
+    return Response.json({ error: error.message, details: error.details, hint: error.hint }, { status: 500 })
+  }
   return Response.json({ ok: true, pack: saved })
 }
 
