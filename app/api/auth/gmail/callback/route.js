@@ -10,9 +10,11 @@ export async function GET(request) {
 
   console.log('Callback received, code:', code ? 'exists' : 'missing', 'error:', error)
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
   if (error || !code) {
     console.error('No code or error param:', error)
-    return Response.redirect('http://localhost:3000?gmailError=true')
+    return Response.redirect(`${appUrl}?gmailError=true`)
   }
 
   try {
@@ -39,7 +41,7 @@ export async function GET(request) {
 
     if (tokens.error) {
       console.error('Token error:', tokens.error, tokens.error_description)
-      return Response.redirect('http://localhost:3000?gmailError=true')
+      return Response.redirect(`${appUrl}?gmailError=true`)
     }
 
     console.log('Getting user info...')
@@ -63,13 +65,13 @@ export async function GET(request) {
 
     if (dbError) {
       console.error('DB error:', dbError.message)
-      return Response.redirect('http://localhost:3000?gmailError=true')
+      return Response.redirect(`${appUrl}?gmailError=true`)
     }
 
     console.log('Success! Redirecting...')
-    return Response.redirect('http://localhost:3000?gmailConnected=true')
+    return Response.redirect(`${appUrl}?gmailConnected=true`)
   } catch (err) {
     console.error('Gmail OAuth exception:', err.message, err.stack)
-    return Response.redirect('http://localhost:3000?gmailError=true')
+    return Response.redirect(`${appUrl}?gmailError=true`)
   }
 }
