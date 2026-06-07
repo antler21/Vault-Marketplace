@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.14'
+const VERSION = '0.7.15'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1125,44 +1125,65 @@ function fetchRawGithubWithEtag(rawUrl) {
 
 // Push a pack to the webapp's csr2_packs table. Fire-and-forget — never blocks a local save.
 function syncPackToWebapp(pack) {
+  function doPost(url, attempt) {
+    try {
+      const body = JSON.stringify({ name: pack.name, data: pack })
+      const u = new URL(url)
+      const opts = {
+        hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
+        path: u.pathname, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'aio-tool-v' + VERSION },
+      }
+      const req = (u.protocol === 'https:' ? https : require('http')).request(opts, r => {
+        if ((r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) && r.headers.location && attempt < 3) {
+          r.resume()
+          const redirectUrl = r.headers.location.startsWith('http') ? r.headers.location : new URL(r.headers.location, url).toString()
+          log('[sync] Pack redirect ' + r.statusCode + ' → ' + redirectUrl)
+          return doPost(redirectUrl, attempt + 1)
+        }
+        r.resume()
+        log('[sync] Pack "' + pack.name + '" synced → webapp (' + r.statusCode + ')')
+      })
+      req.on('error', e => log('[sync] Pack sync error: ' + e.message))
+      req.write(body)
+      req.end()
+    } catch (e) { log('[sync] Pack sync error: ' + e.message) }
+  }
   try {
     const cfg = loadConfig()
     const base = (cfg.webappUrl || '').replace(/\/$/, '')
     if (!base) return
-    const body = JSON.stringify({ name: pack.name, data: pack })
-    const u = new URL(base + '/api/csr2/packs')
-    const opts = {
-      hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
-      path: u.pathname, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'aio-tool-v' + VERSION },
-    }
-    const req = (u.protocol === 'https:' ? https : require('http')).request(opts, r => {
-      r.resume()
-      log('[sync] Pack "' + pack.name + '" synced → webapp (' + r.statusCode + ')')
-    })
-    req.on('error', e => log('[sync] Pack sync error: ' + e.message))
-    req.write(body)
-    req.end()
+    doPost(base + '/api/csr2/packs', 0)
   } catch (e) { log('[sync] Pack sync error: ' + e.message) }
 }
 
 function deletePackFromWebapp(packName) {
+  function doDelete(url, attempt) {
+    try {
+      const u = new URL(url)
+      const opts = {
+        hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
+        path: u.pathname + u.search, method: 'DELETE',
+        headers: { 'User-Agent': 'aio-tool-v' + VERSION },
+      }
+      const req = (u.protocol === 'https:' ? https : require('http')).request(opts, r => {
+        if ((r.statusCode === 301 || r.statusCode === 302 || r.statusCode === 307 || r.statusCode === 308) && r.headers.location && attempt < 3) {
+          r.resume()
+          const redirectUrl = r.headers.location.startsWith('http') ? r.headers.location : new URL(r.headers.location, url).toString()
+          return doDelete(redirectUrl, attempt + 1)
+        }
+        r.resume()
+        log('[sync] Pack "' + packName + '" deleted from webapp (' + r.statusCode + ')')
+      })
+      req.on('error', e => log('[sync] Pack delete error: ' + e.message))
+      req.end()
+    } catch (e) { log('[sync] Pack delete error: ' + e.message) }
+  }
   try {
     const cfg = loadConfig()
     const base = (cfg.webappUrl || '').replace(/\/$/, '')
     if (!base) return
-    const u = new URL(base + '/api/csr2/packs?name=' + encodeURIComponent(packName))
-    const opts = {
-      hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
-      path: u.pathname + u.search, method: 'DELETE',
-      headers: { 'User-Agent': 'aio-tool-v' + VERSION },
-    }
-    const req = (u.protocol === 'https:' ? https : require('http')).request(opts, r => {
-      r.resume()
-      log('[sync] Pack "' + packName + '" deleted from webapp (' + r.statusCode + ')')
-    })
-    req.on('error', e => log('[sync] Pack delete error: ' + e.message))
-    req.end()
+    doDelete(base + '/api/csr2/packs?name=' + encodeURIComponent(packName), 0)
   } catch (e) { log('[sync] Pack delete error: ' + e.message) }
 }
 
