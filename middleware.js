@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
-const PUBLIC_PREFIXES = ['/login', '/preview', '/overview', '/buy', '/api/lol-skins', '/api/border-skins', '/api/lol-checker', '/api/og', '/api/games']
+const PUBLIC_PREFIXES = ['/login', '/preview', '/overview', '/buy', '/csr2', '/api/lol-skins', '/api/border-skins', '/api/lol-checker', '/api/og', '/api/games', '/api/csr2']
 
 const TOOL_CORS = {
   'Access-Control-Allow-Origin': 'http://localhost:35199',
