@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.12'
+const VERSION = '0.7.13'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1121,6 +1121,49 @@ function fetchRawGithubWithEtag(rawUrl) {
     }
     get(rawUrl)
   })
+}
+
+// Push a pack to the webapp's csr2_packs table. Fire-and-forget — never blocks a local save.
+function syncPackToWebapp(pack) {
+  try {
+    const cfg = loadConfig()
+    const base = (cfg.webappUrl || '').replace(/\/$/, '')
+    if (!base) return
+    const body = JSON.stringify({ name: pack.name, data: pack })
+    const u = new URL(base + '/api/csr2/packs')
+    const opts = {
+      hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.pathname, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), 'User-Agent': 'aio-tool-v' + VERSION },
+    }
+    const req = (u.protocol === 'https:' ? https : require('http')).request(opts, r => {
+      r.resume()
+      log('[sync] Pack "' + pack.name + '" synced → webapp (' + r.statusCode + ')')
+    })
+    req.on('error', e => log('[sync] Pack sync error: ' + e.message))
+    req.write(body)
+    req.end()
+  } catch (e) { log('[sync] Pack sync error: ' + e.message) }
+}
+
+function deletePackFromWebapp(packName) {
+  try {
+    const cfg = loadConfig()
+    const base = (cfg.webappUrl || '').replace(/\/$/, '')
+    if (!base) return
+    const u = new URL(base + '/api/csr2/packs?name=' + encodeURIComponent(packName))
+    const opts = {
+      hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.pathname + u.search, method: 'DELETE',
+      headers: { 'User-Agent': 'aio-tool-v' + VERSION },
+    }
+    const req = (u.protocol === 'https:' ? https : require('http')).request(opts, r => {
+      r.resume()
+      log('[sync] Pack "' + packName + '" deleted from webapp (' + r.statusCode + ')')
+    })
+    req.on('error', e => log('[sync] Pack delete error: ' + e.message))
+    req.end()
+  } catch (e) { log('[sync] Pack delete error: ' + e.message) }
 }
 
 // Fetch what a HEAD request returns for a URL — used to store a consistent reference for update checks.
@@ -6252,6 +6295,7 @@ const server = http.createServer(async (req, res) => {
     body.createdAt = new Date().toISOString()
     packs.push(body)
     savePacks(packs)
+    syncPackToWebapp(body)
     return json(res, 200, body)
   }
 
@@ -6265,11 +6309,14 @@ const server = http.createServer(async (req, res) => {
       if (idx === -1) return json(res, 404, { error: 'Pack not found' })
       packs[idx] = { ...packs[idx], ...body }
       savePacks(packs)
+      syncPackToWebapp(packs[idx])
       return json(res, 200, packs[idx])
     }
     if (req.method === 'DELETE') {
       const packs = loadPacks()
+      const target = packs.find(p => p.id === id)
       savePacks(packs.filter(p => p.id !== id))
+      if (target?.name) deletePackFromWebapp(target.name)
       return json(res, 200, { ok: true })
     }
   }
