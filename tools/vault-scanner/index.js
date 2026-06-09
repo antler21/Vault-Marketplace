@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.15'
+const VERSION = '0.7.16'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1794,6 +1794,8 @@ input.car-search-input:focus{border-color:var(--accent)}
 .ensb-input{width:100px;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:5px 8px;color:var(--text);font-size:13px;outline:none;text-align:right}
 .ensb-input:focus{border-color:var(--accent)}
 .ensb-after{font-size:13px;color:#4caf50;font-weight:600;min-width:90px;text-align:right}
+.ensb-full-tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;padding:11px 14px;transition:color .15s,border-color .15s;white-space:nowrap}
+.ensb-full-tab:hover{color:var(--text)}.ensb-full-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .result-icon{font-size:46px;text-align:center;margin:4px 0 10px}
 .result-title{font-size:18px;font-weight:700;text-align:center;margin-bottom:6px}
 .result-desc{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;max-width:320px;margin:0 auto}
@@ -2410,9 +2412,9 @@ input.car-search-input:focus{border-color:var(--accent)}
 
 <!-- Edit NSB Manual Modal -->
 <div class="modal-bg" id="edit-nsb-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:480px">
     <div class="modal-title">Edit NSB</div>
-    <div class="modal-sub">Load a save file to edit values manually or apply unban</div>
+    <div class="modal-sub">Load a save file to manually edit values or apply unban</div>
     <div class="field">
       <label>NSB File</label>
       <label class="file-drop" id="ensb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ensb')">
@@ -2421,26 +2423,38 @@ input.car-search-input:focus{border-color:var(--accent)}
         <div class="file-drop-name" id="ensb-file-name" style="display:none"></div>
       </label>
     </div>
-    <div id="ensb-form" style="display:none">
-      <div class="pack-sect-hdr" style="margin-bottom:8px">➕ Add to Account</div>
-      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
-        <div class="ensb-row"><span class="ensb-label">💵 Cash</span><input type="number" class="ensb-input" id="ensb-cash" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-cash-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label">🪙 Gold</span><input type="number" class="ensb-input" id="ensb-gold" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-gold-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label">🔑 Bronze Keys</span><input type="number" class="ensb-input" id="ensb-bkeys" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-bkeys-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label">🗝️ Silver Keys</span><input type="number" class="ensb-input" id="ensb-skeys" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-skeys-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label">✨ Gold Keys</span><input type="number" class="ensb-input" id="ensb-gkeys" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-gkeys-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label">⛽ Fuel</span><input type="number" class="ensb-input" id="ensb-fuel" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fuel-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#4caf50"></span>Green Tk</span><input type="number" class="ensb-input" id="ensb-fgreen" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fgreen-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#2196F3"></span>Blue Tk</span><input type="number" class="ensb-input" id="ensb-fblue" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fblue-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#e05252"></span>Red Tk</span><input type="number" class="ensb-input" id="ensb-fred" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fred-after">—</span></div>
-        <div class="ensb-row"><span class="ensb-label"><span class="token-dot" style="background:#FFC107"></span>Yellow Tk</span><input type="number" class="ensb-input" id="ensb-fyellow" value="0" min="0" oninput="updateEnsbAfter()"><span class="ensb-after" id="ensb-fyellow-after">—</span></div>
-      </div>
-    </div>
     <div id="ensb-notice" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('edit-nsb-modal')">Cancel</button>
       <button class="btn btn-secondary" id="ensb-unban-btn" onclick="showModal('unban-confirm-modal')" disabled style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#ef4444">🚫 Unban</button>
-      <button class="btn btn-primary" id="ensb-apply-btn" onclick="applyManualEdit()" disabled>Apply &amp; Download</button>
+      <button class="btn btn-primary" id="ensb-apply-btn" onclick="openEnsbEditor()" disabled>Edit NSB →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit NSB Full Editor Modal -->
+<div class="modal-bg" id="ensb-editor-modal" style="align-items:stretch;padding:16px">
+  <div style="display:flex;width:100%;height:100%;max-width:1100px;margin:auto;background:var(--surf);border-radius:12px;border:1px solid var(--border);overflow:hidden">
+    <!-- Left panel: live stats -->
+    <div id="ensb-left-panel" style="width:176px;min-width:176px;background:var(--surf2);border-right:1px solid var(--border);padding:14px 12px;overflow-y:auto;display:flex;flex-direction:column"></div>
+    <!-- Right area -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
+      <!-- Tab bar -->
+      <div style="display:flex;align-items:flex-end;border-bottom:1px solid var(--border);background:var(--surf2);padding:0 12px;flex-shrink:0">
+        <button class="ensb-full-tab active" id="ensb-tab-currency" onclick="switchEnsbTab('currency')">💵 Currency</button>
+        <button class="ensb-full-tab" id="ensb-tab-garage" onclick="switchEnsbTab('garage')">🚗 Garage</button>
+        <button class="ensb-full-tab" id="ensb-tab-legends" onclick="switchEnsbTab('legends')">⭐ Legends</button>
+        <button class="ensb-full-tab" id="ensb-tab-fusions" onclick="switchEnsbTab('fusions')">⚗️ Fusions</button>
+        <button class="ensb-full-tab" id="ensb-tab-stage6" onclick="switchEnsbTab('stage6')">6️⃣ Stage 6</button>
+        <button onclick="hideModal('ensb-editor-modal')" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:0 4px;line-height:1;align-self:center" title="Close">✕</button>
+      </div>
+      <!-- Tab content -->
+      <div id="ensb-tab-content" style="flex:1;overflow-y:auto;padding:18px 20px"></div>
+      <!-- Footer -->
+      <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0">
+        <button class="btn btn-secondary" onclick="hideModal('ensb-editor-modal')">Cancel</button>
+        <button class="btn btn-primary" onclick="downloadEnsbFull()">⬇ Apply &amp; Download</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2717,6 +2731,9 @@ var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
+var _ensbFullData = null
+var _ensbEditorState = { currency: {}, garageQueue: [], legends: {}, fusions: {}, stage6: {} }
+var _ensbActiveTab = 'currency'
 var _currencyOverride = {}, _partialSelectionEnabled = false, _selectedLegends = []
 var _nsbCurrentData = null, _applyPackRef = null, _currencyEditMode = false
 var _selMode = false, _selected = new Set()
@@ -4644,21 +4661,14 @@ function openEditNsb(packId) {
 function openEditNsbManual() {
   _nsbData.ensb = null
   _ensbCurrent = {}
+  _ensbFullData = null
   document.getElementById('ensb-file-name').style.display = 'none'
   var ensbLabelEl = document.getElementById('ensb-drop').querySelector('.file-drop-label')
   if (ensbLabelEl) ensbLabelEl.style.display = ''
-  document.getElementById('ensb-form').style.display = 'none'
   document.getElementById('ensb-apply-btn').disabled = true
   document.getElementById('ensb-unban-btn').disabled = true
   document.getElementById('ensb-drop').classList.remove('over')
   hideNotice('ensb-notice')
-  var fields = ['cash','gold','bkeys','skeys','gkeys','fuel','fgreen','fblue','fred','fyellow']
-  for (var i = 0; i < fields.length; i++) {
-    var el = document.getElementById('ensb-' + fields[i])
-    if (el) el.value = '0'
-    var af = document.getElementById('ensb-' + fields[i] + '-after')
-    if (af) af.textContent = '—'
-  }
   showModal('edit-nsb-modal')
 }
 
@@ -5513,8 +5523,8 @@ function clearNsbFile(which) {
   } else if (which === 'ensb') {
     document.getElementById('ensb-apply-btn').disabled = true
     document.getElementById('ensb-unban-btn').disabled = true
-    document.getElementById('ensb-form').style.display = 'none'
     _ensbCurrent = {}
+    _ensbFullData = null
   } else {
     document.getElementById('unban-apply-btn').disabled = true
   }
@@ -5533,10 +5543,8 @@ async function loadEnsbCurrent() {
   }).then(function(r){ return r.json() }).catch(function(){ return null })
   if (!res || res.error) { showNotice('ensb-notice', 'error', 'Could not read save file.'); return }
   _ensbCurrent = res
-  document.getElementById('ensb-form').style.display = ''
   document.getElementById('ensb-apply-btn').disabled = false
   document.getElementById('ensb-unban-btn').disabled = false
-  updateEnsbAfter()
 }
 
 async function loadNsbComparison() {
@@ -5852,37 +5860,320 @@ async function pollApplyJob(jobId) {
   }
 }
 
-async function applyManualEdit() {
+// ─── NSB Full Editor ──────────────────────────────────────────────────────────
+
+async function openEnsbEditor() {
   if (!_nsbData.ensb) return
-  showLoading('Applying edits...')
-  var additions = {
-    cash:       parseInt(document.getElementById('ensb-cash').value)   || 0,
-    gold:       parseInt(document.getElementById('ensb-gold').value)   || 0,
-    bronzeKeys: parseInt(document.getElementById('ensb-bkeys').value)  || 0,
-    silverKeys: parseInt(document.getElementById('ensb-skeys').value)  || 0,
-    goldKeys:   parseInt(document.getElementById('ensb-gkeys').value)  || 0,
-    fuel:       parseInt(document.getElementById('ensb-fuel').value)   || 0,
-    fusionGreen:  parseInt(document.getElementById('ensb-fgreen').value)  || 0,
-    fusionBlue:   parseInt(document.getElementById('ensb-fblue').value)   || 0,
-    fusionRed:    parseInt(document.getElementById('ensb-fred').value)    || 0,
-    fusionYellow: parseInt(document.getElementById('ensb-fyellow').value) || 0,
-  }
-  var res = await fetch('/csr2/edit-nsb', {
+  showLoading('Reading save file...')
+  var res = await fetch('/csr2/read-nsb-full', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nsbBase64: _nsbData.ensb.base64, additions: additions })
+    body: JSON.stringify({ nsbBase64: _nsbData.ensb.base64 })
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   hideLoading()
-  if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
+  if (res.error) { showNotice('ensb-notice', 'error', 'Could not read save: ' + res.error); return }
+  _ensbFullData = res
+  var c = res.currencies || {}
+  _ensbEditorState = {
+    currency: {
+      cash: c.cash || 0, gold: c.gold || 0,
+      bronzeKeys: c.bronzeKeys || 0, silverKeys: c.silverKeys || 0, goldKeys: c.goldKeys || 0,
+      fuel: c.fuel || 0, fusionGreen: c.fusionGreen || 0, fusionBlue: c.fusionBlue || 0,
+      fusionRed: c.fusionRed || 0, fusionYellow: c.fusionYellow || 0,
+    },
+    garageQueue: [],
+    legends: {},
+    fusions: {},
+    stage6: {},
+  }
+  var owned = (res.legends && res.legends.owned) || []
+  for (var i = 0; i < owned.length; i++) _ensbEditorState.legends[owned[i].crdb] = owned[i].amount
+  var brands = (res.fusions && res.fusions.brands) || []
+  for (var j = 0; j < brands.length; j++) _ensbEditorState.fusions[brands[j].id] = brands[j].amount
+  var s6cars = (res.stage6 && res.stage6.cars) || []
+  for (var k = 0; k < s6cars.length; k++) _ensbEditorState.stage6[s6cars[k].id] = s6cars[k].amount
+  _ensbActiveTab = 'currency'
+  showModal('ensb-editor-modal')
+  renderEnsbLeftPanel()
+  switchEnsbTab('currency')
+}
+
+function switchEnsbTab(tab) {
+  _ensbActiveTab = tab
+  var tabs = ['currency','garage','legends','fusions','stage6']
+  for (var i = 0; i < tabs.length; i++) {
+    var btn = document.getElementById('ensb-tab-' + tabs[i])
+    if (btn) btn.classList.toggle('active', tabs[i] === tab)
+  }
+  if (tab === 'currency') renderEnsbCurrencyTab()
+  else if (tab === 'garage') renderEnsbGarageTab()
+  else if (tab === 'legends') renderEnsbLegendsTab()
+  else if (tab === 'fusions') renderEnsbFusionsTab()
+  else if (tab === 'stage6') renderEnsbStage6Tab()
+}
+
+function renderEnsbLeftPanel() {
+  var c = _ensbEditorState.currency
+  var baseCarCount = _ensbFullData ? (_ensbFullData.garage && _ensbFullData.garage.carCount || 0) : 0
+  var carCount = baseCarCount + _ensbEditorState.garageQueue.length
+  var legendCount = Object.keys(_ensbEditorState.legends).length
+  var fusionBrands = Object.values(_ensbEditorState.fusions).filter(function(v){ return v > 0 }).length
+  var s6Cars = Object.values(_ensbEditorState.stage6).filter(function(v){ return v > 0 }).length
+  var rows = [
+    ['💵 Cash', fmtN(c.cash || 0)],
+    ['🪙 Gold', fmtN(c.gold || 0)],
+    ['🔑 Bronze Keys', fmtN(c.bronzeKeys || 0)],
+    ['🗝 Silver Keys', fmtN(c.silverKeys || 0)],
+    ['✨ Gold Keys', fmtN(c.goldKeys || 0)],
+    ['⛽ Fuel', fmtN(c.fuel || 0)],
+    ['🟢 Green Tk', fmtN(c.fusionGreen || 0)],
+    ['🔵 Blue Tk', fmtN(c.fusionBlue || 0)],
+    ['🔴 Red Tk', fmtN(c.fusionRed || 0)],
+    ['🟡 Yellow Tk', fmtN(c.fusionYellow || 0)],
+    null,
+    ['🚗 Cars', carCount],
+    ['⭐ Legends', legendCount],
+    ['⚗ Fusions', fusionBrands + ' brands'],
+    ['6️⃣ Stage 6', s6Cars + ' cars'],
+  ]
+  var html = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px">Account Stats</div>'
+  for (var i = 0; i < rows.length; i++) {
+    if (!rows[i]) { html += '<div style="height:1px;background:var(--border);margin:8px 0"></div>'; continue }
+    html += '<div style="padding:4px 0"><div style="font-size:10px;color:var(--muted)">' + rows[i][0] + '</div>'
+    html += '<div style="font-size:13px;font-weight:600">' + rows[i][1] + '</div></div>'
+  }
+  var panel = document.getElementById('ensb-left-panel')
+  if (panel) panel.innerHTML = html
+}
+
+function renderEnsbCurrencyTab() {
+  var c = _ensbEditorState.currency
+  var fields = [
+    { key:'cash',         label:'💵 Cash',          id:'ensbe-cash' },
+    { key:'gold',         label:'🪙 Gold',           id:'ensbe-gold' },
+    { key:'bronzeKeys',   label:'🔑 Bronze Keys',    id:'ensbe-bkeys' },
+    { key:'silverKeys',   label:'🗝 Silver Keys',    id:'ensbe-skeys' },
+    { key:'goldKeys',     label:'✨ Gold Keys',      id:'ensbe-gkeys' },
+    { key:'fuel',         label:'⛽ Fuel',            id:'ensbe-fuel' },
+    { key:'fusionGreen',  label:'🟢 Green Tokens',   id:'ensbe-fgreen' },
+    { key:'fusionBlue',   label:'🔵 Blue Tokens',    id:'ensbe-fblue' },
+    { key:'fusionRed',    label:'🔴 Red Tokens',     id:'ensbe-fred' },
+    { key:'fusionYellow', label:'🟡 Yellow Tokens',  id:'ensbe-fyellow' },
+  ]
+  var html = '<div style="display:flex;flex-direction:column;gap:8px;max-width:420px">'
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields[i]
+    html += '<div class="ensb-row"><span class="ensb-label">' + f.label + '</span>'
+    html += '<input type="number" class="ensb-input" id="' + f.id + '" value="' + (c[f.key] || 0) + '" min="0" '
+    html += 'oninput="ensbCurrencyChange(\\'' + f.key + '\\',this.value)"></div>'
+  }
+  html += '</div>'
+  document.getElementById('ensb-tab-content').innerHTML = html
+}
+
+function ensbCurrencyChange(key, val) {
+  _ensbEditorState.currency[key] = Math.max(0, parseInt(val) || 0)
+  renderEnsbLeftPanel()
+}
+
+var _ensbGarageSearch = ''
+
+function renderEnsbGarageTab() {
+  var q = _ensbGarageSearch.toLowerCase()
+  var ownedSet = new Set(_ensbFullData ? (_ensbFullData.garage && _ensbFullData.garage.ownedCrdbs || []) : [])
+  var queueSet = new Set(_ensbEditorState.garageQueue.map(function(c){ return c.crdb }))
+  var available = _csr2CarsDb.filter(function(car){ return car.crdb && !ownedSet.has(car.crdb) && !queueSet.has(car.crdb) })
+  var filtered = q ? available.filter(function(car){ return (car.name||'').toLowerCase().includes(q) || (car.crdb||'').toLowerCase().includes(q) }) : available
+  var html = '<div style="display:flex;gap:16px;height:calc(100% - 0px)">'
+  html += '<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">'
+  html += '<input id="ensb-garage-search" placeholder="Search cars..." value="' + escH(_ensbGarageSearch) + '" '
+  html += 'style="background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;width:100%;box-sizing:border-box" '
+  html += 'oninput="_ensbGarageSearch=this.value;renderEnsbGarageTab()">'
+  html += '<div style="font-size:12px;color:var(--muted)">' + filtered.length + ' available</div>'
+  html += '<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px">'
+  var show = filtered.slice(0, 80)
+  for (var i = 0; i < show.length; i++) {
+    var car = show[i]
+    var safecrdb = car.crdb.replace(/'/g,"\\'")
+    var safename = (car.name||car.crdb).replace(/'/g,"\\'").replace(/"/g,'&quot;')
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px">'
+    html += '<span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(car.name || car.crdb) + '</span>'
+    html += '<button onclick="ensbAddCarToQueue(\'' + safecrdb + '\',\'' + safename + '\',false)" style="background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--text);white-space:nowrap">Stock</button>'
+    html += '<button onclick="ensbAddCarToQueue(\'' + safecrdb + '\',\'' + safename + '\',true)" style="background:rgba(126,101,81,.15);border:1px solid var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">Max</button>'
+    html += '</div>'
+  }
+  if (filtered.length > 80) html += '<div style="font-size:11px;color:var(--muted);padding:6px;text-align:center">+' + (filtered.length - 80) + ' more — search to filter</div>'
+  if (filtered.length === 0) html += '<div style="color:var(--muted);font-size:13px;padding:8px 0">No cars found.</div>'
+  html += '</div></div>'
+  html += '<div style="width:220px;min-width:220px;display:flex;flex-direction:column;gap:8px">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Queue (' + _ensbEditorState.garageQueue.length + ')</div>'
+  html += '<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px">'
+  for (var j = 0; j < _ensbEditorState.garageQueue.length; j++) {
+    var qcar = _ensbEditorState.garageQueue[j]
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px">'
+    html += '<span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(qcar.name) + '</span>'
+    html += '<span style="font-size:11px;color:var(--muted);white-space:nowrap">' + (qcar.maxed ? 'Max' : 'Stock') + '</span>'
+    html += '<button onclick="ensbRemoveCarFromQueue(' + j + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">×</button>'
+    html += '</div>'
+  }
+  if (_ensbEditorState.garageQueue.length === 0) {
+    html += '<div style="color:var(--muted);font-size:13px;line-height:1.5">No cars queued.<br><small>Click Stock or Max to add.</small></div>'
+  }
+  html += '</div></div></div>'
+  document.getElementById('ensb-tab-content').innerHTML = html
+}
+
+function ensbAddCarToQueue(crdb, name, maxed) {
+  _ensbEditorState.garageQueue.push({ crdb: crdb, name: name, maxed: maxed })
+  renderEnsbGarageTab()
+  renderEnsbLeftPanel()
+}
+
+function ensbRemoveCarFromQueue(idx) {
+  _ensbEditorState.garageQueue.splice(idx, 1)
+  renderEnsbGarageTab()
+  renderEnsbLeftPanel()
+}
+
+function renderEnsbLegendsTab() {
+  var ownedSet = new Set(Object.keys(_ensbEditorState.legends))
+  var html = '<div style="max-width:520px">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Owned (' + ownedSet.size + ')</div>'
+  if (ownedSet.size === 0) html += '<div style="color:var(--muted);font-size:13px;margin-bottom:12px">No legend cars owned. Add from below.</div>'
+  for (var i = 0; i < LEGEND_CARS.length; i++) {
+    var lc = LEGEND_CARS[i]
+    if (!ownedSet.has(lc.crdb)) continue
+    var amt = _ensbEditorState.legends[lc.crdb] || 0
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;margin-bottom:4px">'
+    html += '<span style="flex:1;font-size:13px">' + escH(lc.name) + '</span>'
+    html += '<span style="font-size:11px;color:var(--muted)">max ' + fmtN(lc.amount) + '</span>'
+    html += '<input type="number" value="' + amt + '" min="0" max="' + lc.amount + '" '
+    html += 'oninput="ensbLegendChange(\'' + lc.crdb + '\\',this.value)" '
+    html += 'style="width:90px;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;outline:none;text-align:right">'
+    html += '<button onclick="ensbRemoveLegend(\'' + lc.crdb + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">×</button>'
+    html += '</div>'
+  }
+  var available = LEGEND_CARS.filter(function(lc){ return !ownedSet.has(lc.crdb) })
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:16px 0 8px">Available (' + available.length + ')</div>'
+  for (var j = 0; j < available.length; j++) {
+    var lc2 = available[j]
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;margin-bottom:4px">'
+    html += '<span style="flex:1;font-size:13px">' + escH(lc2.name) + '</span>'
+    html += '<span style="font-size:11px;color:var(--muted)">max ' + fmtN(lc2.amount) + '</span>'
+    html += '<button onclick="ensbAddLegend(\'' + lc2.crdb + '\')" '
+    html += 'style="background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;color:var(--accent)">Add</button>'
+    html += '</div>'
+  }
+  if (available.length === 0) html += '<div style="color:var(--muted);font-size:13px">All legend cars are already owned.</div>'
+  html += '</div>'
+  document.getElementById('ensb-tab-content').innerHTML = html
+}
+
+function ensbAddLegend(crdb) {
+  var lc = LEGEND_CARS.find(function(l){ return l.crdb === crdb })
+  if (!lc) return
+  _ensbEditorState.legends[crdb] = lc.amount
+  renderEnsbLegendsTab()
+  renderEnsbLeftPanel()
+}
+
+function ensbRemoveLegend(crdb) {
+  delete _ensbEditorState.legends[crdb]
+  renderEnsbLegendsTab()
+  renderEnsbLeftPanel()
+}
+
+function ensbLegendChange(crdb, val) {
+  _ensbEditorState.legends[crdb] = Math.max(0, parseInt(val) || 0)
+  renderEnsbLeftPanel()
+}
+
+function renderEnsbFusionsTab() {
+  var brands = (_ensbFullData && _ensbFullData.fusions && _ensbFullData.fusions.brands) || []
+  if (brands.length === 0) {
+    document.getElementById('ensb-tab-content').innerHTML = '<div style="color:var(--muted);font-size:13px">No fusion data — download car database first.</div>'
+    return
+  }
+  var html = '<div style="display:flex;flex-direction:column;gap:6px;max-width:460px">'
+  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + brands.length + ' brands</div>'
+  for (var i = 0; i < brands.length; i++) {
+    var b = brands[i]
+    var amt = _ensbEditorState.fusions[b.id] !== undefined ? _ensbEditorState.fusions[b.id] : b.amount
+    html += '<div class="ensb-row"><span class="ensb-label">' + escH(b.name || b.id) + '</span>'
+    html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
+    html += 'oninput="ensbFusionChange(\'' + b.id.replace(/'/g,"\\'") + '\\',this.value)"></div>'
+  }
+  html += '</div>'
+  document.getElementById('ensb-tab-content').innerHTML = html
+}
+
+function ensbFusionChange(brandId, val) {
+  _ensbEditorState.fusions[brandId] = Math.max(0, parseInt(val) || 0)
+  renderEnsbLeftPanel()
+}
+
+function renderEnsbStage6Tab() {
+  var cars = (_ensbFullData && _ensbFullData.stage6 && _ensbFullData.stage6.cars) || []
+  if (cars.length === 0) {
+    document.getElementById('ensb-tab-content').innerHTML = '<div style="color:var(--muted);font-size:13px">No stage 6 data — download car database first.</div>'
+    return
+  }
+  var html = '<div style="display:flex;flex-direction:column;gap:6px;max-width:460px">'
+  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + cars.length + ' cars</div>'
+  for (var i = 0; i < cars.length; i++) {
+    var car = cars[i]
+    var amt = _ensbEditorState.stage6[car.id] !== undefined ? _ensbEditorState.stage6[car.id] : car.amount
+    html += '<div class="ensb-row"><span class="ensb-label">' + escH(car.name || car.id) + '</span>'
+    html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
+    html += 'oninput="ensbStage6Change(\'' + car.id.replace(/'/g,"\\'") + '\\',this.value)"></div>'
+  }
+  html += '</div>'
+  document.getElementById('ensb-tab-content').innerHTML = html
+}
+
+function ensbStage6Change(carId, val) {
+  _ensbEditorState.stage6[carId] = Math.max(0, parseInt(val) || 0)
+  renderEnsbLeftPanel()
+}
+
+async function downloadEnsbFull() {
+  if (!_nsbData.ensb) return
+  showLoading('Starting...')
+  var startRes = await fetch('/csr2/edit-nsb-full', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      nsbBase64: _nsbData.ensb.base64,
+      currency: _ensbEditorState.currency,
+      garageQueue: _ensbEditorState.garageQueue,
+      legends: _ensbEditorState.legends,
+      fusions: _ensbEditorState.fusions,
+      stage6: _ensbEditorState.stage6,
+    })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (startRes.error) { hideLoading(); return }
+  var jobId = startRes.jobId
+  var result = null
+  for (var n = 0; n < 180; n++) {
+    await new Promise(function(r){ setTimeout(r, 1000) })
+    var poll = await fetch('/csr2/apply-progress?jobId=' + jobId).then(function(r){ return r.json() }).catch(function(){ return null })
+    if (!poll) continue
+    if (poll.progress) showLoading(poll.progress)
+    if (poll.done) { result = poll; break }
+  }
+  hideLoading()
+  if (!result || result.error) return
   var fname = _nsbData.ensb.name || 'PlayerProfile'
-  var ensbInput = document.getElementById('ensb-file')
-  if (ensbInput) ensbInput.value = ''
   if (_csr2OutputFolder) {
-    var savedE = await saveNsbToFolder(res.resultBase64, fname, { title: 'Edits Applied!', desc: '', folderMode: true, whichNsb: 'ensb' })
-    if (!savedE.conflict) showApplyResult(true, 'Edits Applied!', '', true, 'ensb')
+    var saved = await saveNsbToFolder(result.resultBase64, fname, { title: 'Edits Applied!', desc: result.note || '', folderMode: true, whichNsb: 'ensb' })
+    if (!saved.conflict) {
+      hideModal('ensb-editor-modal')
+      showApplyResult(true, 'Edits Applied!', result.note || '', true, 'ensb')
+    }
   } else {
-    downloadNsb(res.resultBase64, fname)
-    showApplyResult(true, 'Edits Applied!', 'The modified save file has been downloaded.', false, 'ensb')
+    downloadNsb(result.resultBase64, fname)
+    hideModal('ensb-editor-modal')
+    showApplyResult(true, 'Edits Applied!', result.note || 'The modified save file has been downloaded.', false, 'ensb')
   }
 }
 
@@ -5985,27 +6276,6 @@ async function applyUnbanFromManual() {
   } else {
     downloadNsb(res.resultBase64, fname)
     showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.', false, 'ensb')
-  }
-}
-
-function updateEnsbAfter() {
-  var fields = [
-    { key:'cash',   cur:_ensbCurrent.cash||0,   id:'ensb-cash'   },
-    { key:'gold',   cur:_ensbCurrent.gold||0,   id:'ensb-gold'   },
-    { key:'bronzeKeys',cur:_ensbCurrent.bronzeKeys||0,id:'ensb-bkeys'},
-    { key:'silverKeys',cur:_ensbCurrent.silverKeys||0,id:'ensb-skeys'},
-    { key:'goldKeys',  cur:_ensbCurrent.goldKeys||0,  id:'ensb-gkeys'},
-    { key:'fuel',   cur:_ensbCurrent.fuel||0,   id:'ensb-fuel'   },
-    { key:'fusionGreen', cur:_ensbCurrent.fusionGreen||0,  id:'ensb-fgreen'},
-    { key:'fusionBlue',  cur:_ensbCurrent.fusionBlue||0,   id:'ensb-fblue' },
-    { key:'fusionRed',   cur:_ensbCurrent.fusionRed||0,    id:'ensb-fred'  },
-    { key:'fusionYellow',cur:_ensbCurrent.fusionYellow||0, id:'ensb-fyellow'},
-  ]
-  for (var i = 0; i < fields.length; i++) {
-    var f = fields[i]
-    var add = parseInt(document.getElementById(f.id) ? document.getElementById(f.id).value : '0') || 0
-    var af = document.getElementById(f.id + '-after')
-    if (af) af.textContent = add > 0 ? fmtN(f.cur + add) : '—'
   }
 }
 
@@ -6437,6 +6707,183 @@ const server = http.createServer(async (req, res) => {
   }
 
   // CSR2 edit-nsb (manual add to existing values)
+  // CSR2 read-nsb-full — full parsed data for the editor
+  if (req.method === 'POST' && pathname === '/csr2/read-nsb-full') {
+    const body = await readBody(req)
+    if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
+    try {
+      const buf = Buffer.from(body.nsbBase64, 'base64')
+      const data = csr2ReadSave(buf)
+      const currencies = {
+        cash:         Math.max(0, (data.caea || 0) - (data.casp || 0)),
+        gold:         Math.max(0, (data.goea || 0) - (data.gosp || 0)),
+        bronzeKeys:   Math.max(0, (data.gbke || 0) - (data.gbks || 0)),
+        silverKeys:   Math.max(0, (data.gske || 0) - (data.gsks || 0)),
+        goldKeys:     Math.max(0, (data.ggke || 0) - (data.ggks || 0)),
+        fuel:         data.fupi || 0,
+        fusionGreen:  (data.afme && data.afme.Green)  || 0,
+        fusionBlue:   (data.afme && data.afme.Blue)   || 0,
+        fusionRed:    (data.afme && data.afme.Red)    || 0,
+        fusionYellow: (data.afme && data.afme.Yellow) || 0,
+      }
+      const ownedCrdbs = Array.isArray(data.caow) ? data.caow.map(c => c.crdb).filter(Boolean) : []
+      const crpe = data.crpe || {}
+      const lcMap = LEGEND_CARS.reduce((m, lc) => { m[lc.crdb] = lc; return m }, {})
+      const legendsOwned = []
+      for (const [crdb, amount] of Object.entries(crpe)) {
+        const lc = lcMap[crdb]; if (lc) legendsOwned.push({ crdb, name: lc.name, amount, maxAmount: lc.amount })
+      }
+      const legendsAvailable = LEGEND_CARS.filter(lc => !(lc.crdb in crpe)).map(lc => ({ crdb: lc.crdb, name: lc.name, maxAmount: lc.amount }))
+      const fusionData = loadFusionData()
+      const fusAmounts = {}
+      for (let i = 0; i < (data.caup || []).length; i++) {
+        const e = data.caup[i]
+        if (typeof e === 'object' && e !== null && e.upma) {
+          const next = data.caup[i + 1]; if (typeof next === 'number') fusAmounts[e.upma] = next
+        }
+      }
+      const fusSeen = new Map()
+      for (let i = 0; i < fusionData.length; i++) {
+        const e = fusionData[i]
+        if (typeof e === 'object' && e !== null && e.upma && !fusSeen.has(e.upma))
+          fusSeen.set(e.upma, { id: e.upma, name: e.upma, amount: fusAmounts[e.upma] || 0 })
+      }
+      const stage6Data = loadStage6Data()
+      const s6Amounts = {}
+      for (let i = 0; i < (data.cues || []).length; i++) {
+        const e = data.cues[i]
+        if (typeof e === 'object' && e !== null && e.esdb) {
+          const next = data.cues[i + 1]; if (typeof next === 'number') s6Amounts[e.esdb] = next
+        }
+      }
+      const carsDb = loadCsr2Cars()
+      const nameMap = {}; for (const car of carsDb) { if (car.crdb) nameMap[car.crdb] = car.name }
+      const s6Seen = new Map()
+      for (let i = 0; i < stage6Data.length; i++) {
+        const e = stage6Data[i]
+        if (typeof e === 'object' && e !== null && e.esdb && !s6Seen.has(e.esdb))
+          s6Seen.set(e.esdb, { id: e.esdb, name: nameMap[e.esdb] || e.esdb, amount: s6Amounts[e.esdb] || 0 })
+      }
+      return json(res, 200, {
+        currencies,
+        garage: { carCount: ownedCrdbs.length, ownedCrdbs },
+        legends: { owned: legendsOwned, available: legendsAvailable },
+        fusions: { brands: Array.from(fusSeen.values()) },
+        stage6: { cars: Array.from(s6Seen.values()) },
+      })
+    } catch (e) {
+      log('[csr2/read-nsb-full] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // CSR2 edit-nsb-full — full editor: currency SET, legends SET, fusions SET, stage6 SET, garage ADD
+  if (req.method === 'POST' && pathname === '/csr2/edit-nsb-full') {
+    const body = await readBody(req)
+    if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
+    const jobId = uid()
+    applyJobs.set(jobId, { progress: 'Starting...', done: false, result: null })
+    ;(async () => {
+      try {
+        const buf = Buffer.from(body.nsbBase64, 'base64')
+        const data = csr2ReadSave(buf)
+        // Currency — set final value (caea = casp + desired, so balance = desired)
+        const c = body.currency || {}
+        if ('cash'        in c) data.caea = (data.casp || 0) + Math.max(0, c.cash)
+        if ('gold'        in c) data.goea = (data.gosp || 0) + Math.max(0, c.gold)
+        if ('bronzeKeys'  in c) data.gbke = (data.gbks || 0) + Math.max(0, c.bronzeKeys)
+        if ('silverKeys'  in c) data.gske = (data.gsks || 0) + Math.max(0, c.silverKeys)
+        if ('goldKeys'    in c) data.ggke = (data.ggks || 0) + Math.max(0, c.goldKeys)
+        if ('fuel'        in c) data.fupi = Math.max(0, c.fuel)
+        if (!data.afme) data.afme = {}
+        if ('fusionGreen'  in c) data.afme.Green  = Math.max(0, c.fusionGreen)
+        if ('fusionBlue'   in c) data.afme.Blue   = Math.max(0, c.fusionBlue)
+        if ('fusionRed'    in c) data.afme.Red    = Math.max(0, c.fusionRed)
+        if ('fusionYellow' in c) data.afme.Yellow = Math.max(0, c.fusionYellow)
+        // Legends — replace crpe entirely with editor state
+        if (body.legends && typeof body.legends === 'object') {
+          data.crpe = {}
+          for (const [crdb, amount] of Object.entries(body.legends)) data.crpe[crdb] = Math.max(0, parseInt(amount) || 0)
+        }
+        // Fusions — rebuild caup from template with overridden amounts
+        const fusDelta = body.fusions && typeof body.fusions === 'object' ? body.fusions : null
+        if (fusDelta && Object.keys(fusDelta).length > 0) {
+          const fusionData = loadFusionData()
+          if (Array.isArray(fusionData) && fusionData.length > 0) {
+            const newCaup = []
+            for (let i = 0; i < fusionData.length; i++) {
+              const e = fusionData[i]
+              if (typeof e === 'object' && e !== null && e.upma) {
+                newCaup.push(e)
+                const next = fusionData[i + 1]
+                if (typeof next === 'number') { newCaup.push(e.upma in fusDelta ? Math.max(0, fusDelta[e.upma]) : next); i++ }
+              } else if (typeof e !== 'number') { newCaup.push(e) }
+            }
+            data.caup = newCaup
+          }
+        }
+        // Stage 6 — rebuild cues from template with overridden amounts
+        const s6Delta = body.stage6 && typeof body.stage6 === 'object' ? body.stage6 : null
+        if (s6Delta && Object.keys(s6Delta).length > 0) {
+          const stage6Data = loadStage6Data()
+          if (Array.isArray(stage6Data) && stage6Data.length > 0) {
+            const newCues = []
+            for (let i = 0; i < stage6Data.length; i++) {
+              const e = stage6Data[i]
+              if (typeof e === 'object' && e !== null && e.esdb) {
+                newCues.push(e)
+                const next = stage6Data[i + 1]
+                if (typeof next === 'number') { newCues.push(e.esdb in s6Delta ? Math.max(0, s6Delta[e.esdb]) : next); i++ }
+              } else if (typeof e !== 'number') { newCues.push(e) }
+            }
+            data.cues = newCues
+          }
+        }
+        // Garage — add queued cars
+        let note = null
+        const garageQueue = Array.isArray(body.garageQueue) ? body.garageQueue : []
+        if (garageQueue.length > 0) {
+          if (!Array.isArray(data.caow)) data.caow = []
+          if (typeof data.ncui !== 'number' || data.ncui < data.caow.length) data.ncui = data.caow.length
+          const ownedCrdbs = new Set(data.caow.map(c => c.crdb).filter(Boolean))
+          const carsDb = loadCsr2Cars()
+          const dbMap = {}; for (const car of carsDb) { if (car.crdb) dbMap[car.crdb] = car }
+          const setProgress = msg => { const job = applyJobs.get(jobId); if (job) job.progress = msg }
+          const toAdd = garageQueue.filter(q => q.crdb && !ownedCrdbs.has(q.crdb))
+          let added = 0, failed = 0
+          for (let i = 0; i < toAdd.length; i++) {
+            const q = toAdd[i]
+            setProgress('Fetching car data... ' + i + ' / ' + toAdd.length)
+            const dbCar = dbMap[q.crdb]
+            if (!dbCar) { failed++; continue }
+            try {
+              const col = (dbCar.colors && dbCar.colors[0]) || {}
+              const txtUrl = q.maxed ? (col.maxedTxtUrl || col.stockTxtUrl) : col.stockTxtUrl
+              if (!txtUrl) { failed++; continue }
+              const txt = await fetchRawGithub(txtUrl)
+              const carJson = JSON.parse(txt)
+              carJson.unid = data.ncui++
+              data.caow.push(carJson)
+              ownedCrdbs.add(q.crdb)
+              added++
+            } catch { failed++ }
+          }
+          data.cgpi = [...Array(data.ncui).keys(), -1]
+          if (added > 0 || failed > 0) note = added + ' car(s) added' + (failed > 0 ? ', ' + failed + ' failed' : '') + '.'
+        }
+        const out = csr2WriteSave(data)
+        applyJobs.get(jobId).done = true
+        applyJobs.get(jobId).result = { resultBase64: out.toString('base64'), note: note || null }
+      } catch (e) {
+        log('[csr2/edit-nsb-full] Error: ' + e.message)
+        applyJobs.get(jobId).done = true
+        applyJobs.get(jobId).result = { error: e.message }
+      }
+      setTimeout(() => applyJobs.delete(jobId), 5 * 60 * 1000)
+    })()
+    return json(res, 200, { jobId })
+  }
+
   if (req.method === 'POST' && pathname === '/csr2/edit-nsb') {
     const body = await readBody(req)
     if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
