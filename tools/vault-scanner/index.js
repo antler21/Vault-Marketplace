@@ -2436,7 +2436,7 @@ input.car-search-input:focus{border-color:var(--accent)}
 <div class="modal-bg" id="ensb-editor-modal" style="align-items:stretch;padding:16px">
   <div style="display:flex;width:100%;height:100%;max-width:1100px;margin:auto;background:var(--surf);border-radius:12px;border:1px solid var(--border);overflow:hidden">
     <!-- Left panel: live stats -->
-    <div id="ensb-left-panel" style="width:176px;min-width:176px;background:var(--surf2);border-right:1px solid var(--border);padding:14px 12px;overflow-y:auto;display:flex;flex-direction:column"></div>
+    <div id="ensb-left-panel" style="width:220px;min-width:220px;background:var(--surf2);border-right:1px solid var(--border);padding:16px 14px;overflow-y:auto;display:flex;flex-direction:column"></div>
     <!-- Right area -->
     <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
       <!-- Tab bar -->
@@ -5919,28 +5919,40 @@ function renderEnsbLeftPanel() {
   var legendCount = Object.keys(_ensbEditorState.legends).length
   var fusionBrands = Object.values(_ensbEditorState.fusions).filter(function(v){ return v > 0 }).length
   var s6Cars = Object.values(_ensbEditorState.stage6).filter(function(v){ return v > 0 }).length
+  var accountName = (_nsbData && _nsbData.ensb && _nsbData.ensb.name) || ''
+  var playerName = (_ensbFullData && _ensbFullData.playerName) || ''
   var rows = [
     ['💵 Cash', fmtN(c.cash || 0)],
     ['🪙 Gold', fmtN(c.gold || 0)],
     ['🔑 Bronze Keys', fmtN(c.bronzeKeys || 0)],
-    ['🗝 Silver Keys', fmtN(c.silverKeys || 0)],
+    ['🗝️ Silver Keys', fmtN(c.silverKeys || 0)],
     ['✨ Gold Keys', fmtN(c.goldKeys || 0)],
     ['⛽ Fuel', fmtN(c.fuel || 0)],
-    ['🟢 Green Tk', fmtN(c.fusionGreen || 0)],
-    ['🔵 Blue Tk', fmtN(c.fusionBlue || 0)],
-    ['🔴 Red Tk', fmtN(c.fusionRed || 0)],
-    ['🟡 Yellow Tk', fmtN(c.fusionYellow || 0)],
+    ['🟢 Green Tokens', fmtN(c.fusionGreen || 0)],
+    ['🔵 Blue Tokens', fmtN(c.fusionBlue || 0)],
+    ['🔴 Red Tokens', fmtN(c.fusionRed || 0)],
+    ['🟡 Yellow Tokens', fmtN(c.fusionYellow || 0)],
     null,
     ['🚗 Cars', carCount],
     ['⭐ Legends', legendCount],
-    ['⚗ Fusions', fusionBrands + ' brands'],
-    ['6️⃣ Stage 6', s6Cars + ' cars'],
+    ['⚗️ Fusion Brands', fusionBrands],
+    ['6️⃣ Stage 6 Cars', s6Cars],
   ]
-  var html = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px">Account Stats</div>'
+  var html = ''
+  if (accountName) {
+    html += '<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
+    html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Save File</div>'
+    html += '<div style="font-size:13px;font-weight:600;word-break:break-all;line-height:1.3">' + escH(accountName) + '</div>'
+    if (playerName) html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escH(playerName) + '</div>'
+    html += '</div>'
+  }
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px">Account Stats</div>'
   for (var i = 0; i < rows.length; i++) {
-    if (!rows[i]) { html += '<div style="height:1px;background:var(--border);margin:8px 0"></div>'; continue }
-    html += '<div style="padding:4px 0"><div style="font-size:10px;color:var(--muted)">' + rows[i][0] + '</div>'
-    html += '<div style="font-size:13px;font-weight:600">' + rows[i][1] + '</div></div>'
+    if (!rows[i]) { html += '<div style="height:1px;background:var(--border);margin:10px 0"></div>'; continue }
+    html += '<div style="padding:5px 0;display:flex;flex-direction:column;gap:1px">'
+    html += '<div style="font-size:10px;color:var(--muted);line-height:1.2">' + rows[i][0] + '</div>'
+    html += '<div style="font-size:13px;font-weight:600;line-height:1.3">' + rows[i][1] + '</div>'
+    html += '</div>'
   }
   var panel = document.getElementById('ensb-left-panel')
   if (panel) panel.innerHTML = html
@@ -6766,6 +6778,7 @@ const server = http.createServer(async (req, res) => {
       }
       return json(res, 200, {
         currencies,
+        playerName: data.pnam || data.prfn || '',
         garage: { carCount: ownedCrdbs.length, ownedCrdbs },
         legends: { owned: legendsOwned, available: legendsAvailable },
         fusions: { brands: Array.from(fusSeen.values()) },
