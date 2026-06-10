@@ -5965,7 +5965,7 @@ function renderEnsbCurrencyTab() {
     var f = fields[i]
     html += '<div class="ensb-row"><span class="ensb-label">' + f.label + '</span>'
     html += '<input type="number" class="ensb-input" id="' + f.id + '" value="' + (c[f.key] || 0) + '" min="0" '
-    html += 'oninput="ensbCurrencyChange(\'' + f.key + '\',this.value)"></div>'
+    html += 'oninput="ensbCurrencyChange(\\'' + f.key + '\\',this.value)"></div>'
   }
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
@@ -5994,12 +5994,12 @@ function renderEnsbGarageTab() {
   var show = filtered.slice(0, 80)
   for (var i = 0; i < show.length; i++) {
     var car = show[i]
-    var safecrdb = car.crdb.replace(/'/g,"\\'")
-    var safename = (car.name||car.crdb).replace(/'/g,"\\'").replace(/"/g,'&quot;')
+    var safecrdb = car.crdb.replace(/'/g,"\\\\'")
+    var safename = (car.name||car.crdb).replace(/'/g,"\\\\'").replace(/"/g,'&quot;')
     html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px">'
     html += '<span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(car.name || car.crdb) + '</span>'
-    html += '<button onclick="ensbAddCarToQueue(\'' + safecrdb + '\',\'' + safename + '\',false)" style="background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--text);white-space:nowrap">Stock</button>'
-    html += '<button onclick="ensbAddCarToQueue(\'' + safecrdb + '\',\'' + safename + '\',true)" style="background:rgba(126,101,81,.15);border:1px solid var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">Max</button>'
+    html += '<button onclick="ensbAddCarToQueue(\\'' + safecrdb + '\\',\\'' + safename + '\\',false)" style="background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--text);white-space:nowrap">Stock</button>'
+    html += '<button onclick="ensbAddCarToQueue(\\'' + safecrdb + '\\',\\'' + safename + '\\',true)" style="background:rgba(126,101,81,.15);border:1px solid var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">Max</button>'
     html += '</div>'
   }
   if (filtered.length > 80) html += '<div style="font-size:11px;color:var(--muted);padding:6px;text-align:center">+' + (filtered.length - 80) + ' more — search to filter</div>'
@@ -6048,9 +6048,9 @@ function renderEnsbLegendsTab() {
     html += '<span style="flex:1;font-size:13px">' + escH(lc.name) + '</span>'
     html += '<span style="font-size:11px;color:var(--muted)">max ' + fmtN(lc.amount) + '</span>'
     html += '<input type="number" value="' + amt + '" min="0" max="' + lc.amount + '" '
-    html += 'oninput="ensbLegendChange(\'' + lc.crdb + '\',this.value)" '
+    html += 'oninput="ensbLegendChange(\\'' + lc.crdb + '\\',this.value)" '
     html += 'style="width:90px;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;outline:none;text-align:right">'
-    html += '<button onclick="ensbRemoveLegend(\'' + lc.crdb + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">×</button>'
+    html += '<button onclick="ensbRemoveLegend(\\'' + lc.crdb + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">×</button>'
     html += '</div>'
   }
   var available = LEGEND_CARS.filter(function(lc){ return !ownedSet.has(lc.crdb) })
@@ -6060,7 +6060,7 @@ function renderEnsbLegendsTab() {
     html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;margin-bottom:4px">'
     html += '<span style="flex:1;font-size:13px">' + escH(lc2.name) + '</span>'
     html += '<span style="font-size:11px;color:var(--muted)">max ' + fmtN(lc2.amount) + '</span>'
-    html += '<button onclick="ensbAddLegend(\'' + lc2.crdb + '\')" '
+    html += '<button onclick="ensbAddLegend(\\'' + lc2.crdb + '\\')" '
     html += 'style="background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;color:var(--accent)">Add</button>'
     html += '</div>'
   }
@@ -6101,7 +6101,7 @@ function renderEnsbFusionsTab() {
     var amt = _ensbEditorState.fusions[b.id] !== undefined ? _ensbEditorState.fusions[b.id] : b.amount
     html += '<div class="ensb-row"><span class="ensb-label">' + escH(b.name || b.id) + '</span>'
     html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
-    html += 'oninput="ensbFusionChange(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)"></div>'
+    html += 'oninput="ensbFusionChange(\\'' + b.id.replace(/'/g,"\\\\'") + '\\',this.value)"></div>'
   }
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
@@ -6125,7 +6125,7 @@ function renderEnsbStage6Tab() {
     var amt = _ensbEditorState.stage6[car.id] !== undefined ? _ensbEditorState.stage6[car.id] : car.amount
     html += '<div class="ensb-row"><span class="ensb-label">' + escH(car.name || car.id) + '</span>'
     html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
-    html += 'oninput="ensbStage6Change(\'' + car.id.replace(/'/g,"\\'") + '\',this.value)"></div>'
+    html += 'oninput="ensbStage6Change(\\'' + car.id.replace(/'/g,"\\\\'") + '\\',this.value)"></div>'
   }
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
