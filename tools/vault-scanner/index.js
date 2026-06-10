@@ -5965,7 +5965,7 @@ function renderEnsbCurrencyTab() {
     var f = fields[i]
     html += '<div class="ensb-row"><span class="ensb-label">' + f.label + '</span>'
     html += '<input type="number" class="ensb-input" id="' + f.id + '" value="' + (c[f.key] || 0) + '" min="0" '
-    html += 'oninput="ensbCurrencyChange(\\'' + f.key + '\\',this.value)"></div>'
+    html += 'oninput="ensbCurrencyChange(\'' + f.key + '\',this.value)"></div>'
   }
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
@@ -6048,7 +6048,7 @@ function renderEnsbLegendsTab() {
     html += '<span style="flex:1;font-size:13px">' + escH(lc.name) + '</span>'
     html += '<span style="font-size:11px;color:var(--muted)">max ' + fmtN(lc.amount) + '</span>'
     html += '<input type="number" value="' + amt + '" min="0" max="' + lc.amount + '" '
-    html += 'oninput="ensbLegendChange(\'' + lc.crdb + '\\',this.value)" '
+    html += 'oninput="ensbLegendChange(\'' + lc.crdb + '\',this.value)" '
     html += 'style="width:90px;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;outline:none;text-align:right">'
     html += '<button onclick="ensbRemoveLegend(\'' + lc.crdb + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">×</button>'
     html += '</div>'
@@ -6101,7 +6101,7 @@ function renderEnsbFusionsTab() {
     var amt = _ensbEditorState.fusions[b.id] !== undefined ? _ensbEditorState.fusions[b.id] : b.amount
     html += '<div class="ensb-row"><span class="ensb-label">' + escH(b.name || b.id) + '</span>'
     html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
-    html += 'oninput="ensbFusionChange(\'' + b.id.replace(/'/g,"\\'") + '\\',this.value)"></div>'
+    html += 'oninput="ensbFusionChange(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)"></div>'
   }
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
@@ -6125,7 +6125,7 @@ function renderEnsbStage6Tab() {
     var amt = _ensbEditorState.stage6[car.id] !== undefined ? _ensbEditorState.stage6[car.id] : car.amount
     html += '<div class="ensb-row"><span class="ensb-label">' + escH(car.name || car.id) + '</span>'
     html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
-    html += 'oninput="ensbStage6Change(\'' + car.id.replace(/'/g,"\\'") + '\\',this.value)"></div>'
+    html += 'oninput="ensbStage6Change(\'' + car.id.replace(/'/g,"\\'") + '\',this.value)"></div>'
   }
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
