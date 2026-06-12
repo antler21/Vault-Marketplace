@@ -1816,6 +1816,9 @@ input.car-search-input:focus{border-color:var(--accent)}
 .cars-update-bar{background:var(--surf2);border-radius:4px;height:6px;margin:10px 0;overflow:hidden}
 .cars-update-bar-fill{background:var(--accent);height:100%;width:0%;transition:width .4s}
 .allow-dup-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--muted)}
+input[type=checkbox].chk-themed{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;flex-shrink:0;margin:0}
+.comp-after{color:var(--green)!important;font-weight:600}
+.prev-sect-hdr{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:8px;margin-bottom:4px}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:.3;filter:invert(1)}
 </style>
 </head>
@@ -2304,7 +2307,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <!-- Left: car search -->
       <div class="cpp-left">
         <div class="allow-dup-row" style="margin-bottom:10px">
-          <label class="toggle" style="flex-shrink:0"><input type="checkbox" id="cpp-allow-dup" onchange="_cppAllowDupes=this.checked;searchCppCars(document.getElementById('cpp-car-search').value);updateCppSubtitle()"><span class="tslider"></span></label>
+          <input type="checkbox" class="chk-themed" id="cpp-allow-dup" onchange="_cppAllowDupes=this.checked;searchCppCars(document.getElementById('cpp-car-search').value);updateCppSubtitle()">
           <span style="color:var(--text)">Allow Duplicates</span>
         </div>
         <div class="car-search-wrap" style="margin-bottom:8px">
@@ -2527,7 +2530,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <div id="ap-cars-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
         <div id="ap-partial-toggle-row" style="display:none;margin-bottom:10px">
           <div class="allow-dup-row">
-            <label class="toggle" style="flex-shrink:0"><input type="checkbox" id="ap-partial-sel" onchange="togglePartialSelection(this.checked)"><span class="tslider"></span></label>
+            <input type="checkbox" class="chk-themed" id="ap-partial-sel" onchange="togglePartialSelection(this.checked)">
             <span style="color:var(--text)">Partial Selection — pick specific cars instead of random</span>
           </div>
         </div>
@@ -2541,7 +2544,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
           </div>
           <div id="ansb-car-locked" style="font-size:12px;color:var(--muted);padding:6px 0;display:none">📂 Upload an NSB file on the Pack Preview tab first.</div>
           <div id="ansb-car-controls" style="display:none">
-            <label class="allow-dup-row"><input type="checkbox" id="ansb-allow-dup" onchange="toggleAllowDuplicates()"> Allow Duplicates (show owned cars)</label>
+            <div class="allow-dup-row">
+              <input type="checkbox" class="chk-themed" id="ansb-allow-dup" onchange="toggleAllowDuplicates()">
+              <span style="color:var(--text)">Allow Duplicates (show owned cars)</span>
+            </div>
             <div class="car-filter-bar" id="ansb-tier-filters"></div>
             <div class="car-filter-bar" id="ansb-star-filters"></div>
             <div id="ansb-brand-filters" style="margin-bottom:4px"></div>
@@ -2567,11 +2573,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
         <input type="text" class="car-search-input" id="ap-legends-search" placeholder="Search legend cars..." oninput="searchLegends(this.value)">
       </div>
-      <div id="ap-legends-list" style="max-height:190px;overflow-y:auto;margin-bottom:12px"></div>
+      <div id="ap-legends-list" style="margin-bottom:12px"></div>
       <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
         <span>Selected</span><span id="ap-legends-sel-count">0 / 0</span>
       </div>
-      <div id="ap-legends-selected" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto"></div>
+      <div id="ap-legends-selected" style="display:flex;flex-direction:column;gap:4px"></div>
     </div>
     <!-- Fusions tab (brand picker) -->
     <div class="ap-body" id="ap-panel-fusions" style="display:none">
@@ -2580,11 +2586,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <span class="car-search-icon">🔍</span>
         <input type="text" class="car-search-input" id="ap-brands-search" placeholder="Search brands..." oninput="searchBrands(this.value)">
       </div>
-      <div id="ap-brands-list" style="max-height:180px;overflow-y:auto;margin-bottom:10px"></div>
+      <div id="ap-brands-list" style="margin-bottom:10px"></div>
       <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
         <span>Selected Brands</span><span id="ap-brands-sel-count">0 / 0</span>
       </div>
-      <div id="ap-brands-selected" style="display:flex;flex-wrap:wrap;gap:6px;max-height:90px;overflow-y:auto"></div>
+      <div id="ap-brands-selected" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
     <!-- Stage 6 tab (car picker) -->
     <div class="ap-body" id="ap-panel-stage6" style="display:none">
@@ -2593,11 +2599,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <span class="car-search-icon">🔍</span>
         <input type="text" class="car-search-input" id="ap-s6-search" placeholder="Search cars..." oninput="searchS6Cars(this.value)">
       </div>
-      <div id="ap-s6-list" style="max-height:180px;overflow-y:auto;margin-bottom:10px"></div>
+      <div id="ap-s6-list" style="margin-bottom:10px"></div>
       <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;justify-content:space-between">
         <span>Selected Cars</span><span id="ap-s6-sel-count">0 / 0</span>
       </div>
-      <div id="ap-s6-selected" style="display:flex;flex-wrap:wrap;gap:6px;max-height:90px;overflow-y:auto"></div>
+      <div id="ap-s6-selected" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     </div>
     <!-- Footer -->
     <div class="ap-footer">
@@ -3784,6 +3790,8 @@ function cpSwitchTab(tab) {
     if (btn) btn.classList.toggle('active', tabs[i] === tab)
     if (body) body.style.display = tabs[i] === tab ? '' : 'none'
   }
+  if (tab === 'fusions') refreshFusionsDataStatus()
+  if (tab === 'stage6') refreshStage6DataStatus()
 }
 
 function cpOnToggle(tab, on) {
@@ -4732,25 +4740,8 @@ function renderPackInfoInModal(pack) {
   if (c.goldKeys)   chips.push({val: fmtN(c.goldKeys),   lbl: 'Gold Keys',   em: '✨'})
   if (c.fuel)       chips.push({val: fmtN(c.fuel),       lbl: 'Fuel',        em: '⛽'})
 
-  var html = '<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px">' + escH(pack.name || 'Pack Contents') + '</div>'
-
-  if (chips.length) {
-    html += '<div class="pack-stat-grid">'
-    for (var i = 0; i < chips.length; i++) {
-      html += '<div class="pack-stat-chip"><span class="psc-val">' + chips[i].em + ' ' + escH(chips[i].val) + '</span><span class="psc-lbl">' + escH(chips[i].lbl) + '</span></div>'
-    }
-    html += '</div>'
-  }
-
-  if (c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow) {
-    html += '<div class="pack-stat-grid" style="margin-top:4px">'
-    if (c.fusionGreen)  html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#4caf50;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionGreen) + '</span><span class="psc-lbl">Green Tokens</span></div>'
-    if (c.fusionBlue)   html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#2196F3;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionBlue) + '</span><span class="psc-lbl">Blue Tokens</span></div>'
-    if (c.fusionRed)    html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#e05252;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionRed) + '</span><span class="psc-lbl">Red Tokens</span></div>'
-    if (c.fusionYellow) html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#FFC107;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionYellow) + '</span><span class="psc-lbl">Yellow Tokens</span></div>'
-    html += '</div>'
-  }
-
+  var hasCurr = chips.length > 0
+  var hasFusionTok = !!(c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow)
   var extraChips = []
   if (pack.cars && (pack.cars.count || pack.cars.carMode === 'all')) {
     var carsVal = pack.cars.carMode === 'all' ? 'All' : fmtN(pack.cars.count)
@@ -4768,7 +4759,32 @@ function renderPackInfoInModal(pack) {
   if (pack.stage6 && pack.stage6.mode === 'all') {
     extraChips.push('<div class="pack-stat-chip"><span class="psc-val">6️⃣ All</span><span class="psc-lbl">Stage 6' + (pack.stage6.amount ? ' · ' + fmtN(pack.stage6.amount) + '/part' : '') + '</span></div>')
   }
-  if (extraChips.length) html += '<div class="pack-stat-grid" style="margin-top:4px">' + extraChips.join('') + '</div>'
+
+  var html = ''
+
+  if (hasCurr || hasFusionTok) {
+    html += '<div class="prev-sect-hdr">💰 Currencies</div>'
+    if (hasCurr) {
+      html += '<div class="pack-stat-grid">'
+      for (var i = 0; i < chips.length; i++) {
+        html += '<div class="pack-stat-chip"><span class="psc-val">' + chips[i].em + ' ' + escH(chips[i].val) + '</span><span class="psc-lbl">' + escH(chips[i].lbl) + '</span></div>'
+      }
+      html += '</div>'
+    }
+    if (hasFusionTok) {
+      html += '<div class="prev-sect-hdr" style="margin-top:6px">⚡ Elite Tokens</div><div class="pack-stat-grid">'
+      if (c.fusionGreen)  html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#4caf50;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionGreen) + '</span><span class="psc-lbl">Green</span></div>'
+      if (c.fusionBlue)   html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#2196F3;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionBlue) + '</span><span class="psc-lbl">Blue</span></div>'
+      if (c.fusionRed)    html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#e05252;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionRed) + '</span><span class="psc-lbl">Red</span></div>'
+      if (c.fusionYellow) html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#FFC107;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionYellow) + '</span><span class="psc-lbl">Yellow</span></div>'
+      html += '</div>'
+    }
+  }
+
+  if (extraChips.length) {
+    html += '<div class="prev-sect-hdr"' + ((hasCurr || hasFusionTok) ? ' style="margin-top:10px"' : '') + '>🚗 Cars &amp; Upgrades</div>'
+    html += '<div class="pack-stat-grid">' + extraChips.join('') + '</div>'
+  }
 
   box.innerHTML = html
   _renderApplyTabs(pack)
@@ -4975,7 +4991,7 @@ function renderCurrencyTab(pack, nsbData) {
       var cur = nsbData[r.ck.k] || 0
       html += '<td class="comp-delta" style="text-align:right">' + fmtN(cur) + '</td>'
       html += '<td class="comp-delta" style="text-align:right;' + addStyle + '">+' + fmtN(r.effectiveVal) + '</td>'
-      html += '<td class="comp-arrow" style="text-align:right">' + fmtN(cur + r.effectiveVal) + '</td>'
+      html += '<td class="comp-arrow comp-after" style="text-align:right">' + fmtN(cur + r.effectiveVal) + '</td>'
     } else {
       html += '<td class="comp-delta" style="text-align:right;' + addStyle + '">' + fmtN(r.effectiveVal) + '</td>'
     }
