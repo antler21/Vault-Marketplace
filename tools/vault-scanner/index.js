@@ -4280,7 +4280,7 @@ async function savePack() {
     summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">🚗 Cars</div><div style="font-size:13px">' + escH(carsDesc) + '</div></div>'
   }
   if (legends) {
-    var legendDesc = legends.mode === 'all' ? 'All 26 classic legend cars' : fmtN(legends.count) + ' classic cars (User\'s Choice)'
+    var legendDesc = legends.mode === 'all' ? 'All 26 classic legend cars' : fmtN(legends.count) + " classic cars (User's Choice)"
     summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">⭐ Legend Tokens</div><div style="font-size:13px">' + escH(legendDesc) + '</div></div>'
   }
   if (fusions) {
@@ -4760,7 +4760,7 @@ function renderPackInfoInModal(pack) {
   if (pack.legends && pack.legends.mode === 'all') {
     extraChips.push('<div class="pack-stat-chip"><span class="psc-val">⭐ All 26</span><span class="psc-lbl">Legend Tokens</span></div>')
   } else if (pack.legends && pack.legends.mode === 'customizable') {
-    extraChips.push('<div class="pack-stat-chip"><span class="psc-val">⭐ ' + (pack.legends.count || 0) + '</span><span class="psc-lbl">Legends · User\'s Choice</span></div>')
+    extraChips.push('<div class="pack-stat-chip"><span class="psc-val">⭐ ' + (pack.legends.count || 0) + '</span><span class="psc-lbl">Legends · User\\'s Choice</span></div>')
   }
   if (pack.fusions && pack.fusions.mode === 'all') {
     extraChips.push('<div class="pack-stat-chip"><span class="psc-val">⚗️ All</span><span class="psc-lbl">Fusions' + (pack.fusions.amount ? ' · ' + fmtN(pack.fusions.amount) + '/part' : '') + '</span></div>')
