@@ -33,28 +33,28 @@ const LEGEND_CARS = [
   { crdb: 'AstonMartin_DB5Classic_1964',            name: 'Aston Martin DB5',               amount: 17400 },
   { crdb: 'MercedesBenz_300SLClassic_1954',         name: 'Mercedes-Benz 300SL',            amount: 17400 },
   { crdb: 'Shelby_Cobra427SCClassic_1965',          name: 'Shelby Cobra',                   amount: 25800 },
-  { crdb: 'Chevrolet_CorvetteZR1Classic_1970',      name: 'Chevy Corvette C3',              amount: 25800 },
+  { crdb: 'Chevrolet_CorvetteZR1Classic_1970',      name: 'Chevy Corvette C3',              amount: 25800, tier: 3 },
   { crdb: 'Pontiac_GTOTheJudgeClassic_1969',        name: 'Pontiac GTO',                    amount: 29600 },
   { crdb: 'Honda_NSXRClassic_1992',                 name: 'Honda NSX-R',                    amount: 36000 },
   { crdb: 'Plymouth_HemiCudaClassic_1971',          name: 'Plymouth Hemi Cuda',             amount: 38200 },
-  { crdb: 'Ford_GT40MkII_1966',                     name: 'Ford GT40',                      amount: 40400 },
+  { crdb: 'Ford_GT40MkII_1966',                     name: 'Ford GT40',                      amount: 40400, tier: 4 },
   { crdb: 'Lamborghini_CountachClassic_1988',       name: 'Lamborghini Countach',           amount: 40400 },
-  { crdb: 'Porsche_CarreraGTClassic_2003',          name: 'Porsche Carrera GT',             amount: 50000 },
-  { crdb: 'Lamborghini_MiuraSVLPClassic_1971',      name: 'Lamborghini Miura SVL',          amount: 50000 },
+  { crdb: 'Porsche_CarreraGTClassic_2003',          name: 'Porsche Carrera GT',             amount: 50000, tier: 5 },
+  { crdb: 'Lamborghini_MiuraSVLPClassic_1971',      name: 'Lamborghini Miura SVL',          amount: 50000, tier: 5 },
   { crdb: 'Bugatti_EB110SSClassic_1992',            name: 'Bugatti EB110',                  amount: 50000 },
   { crdb: 'Jaguar_XJ220Classic_1993',               name: 'Jaguar XJ220',                   amount: 53400 },
-  { crdb: 'Ford_MustangShelbyGT350LPClassic_1965',  name: 'Ford Mustang Shelby GT350LP',    amount: 56000 },
+  { crdb: 'Ford_MustangShelbyGT350LPClassic_1965',  name: 'Ford Mustang Shelby GT350LP',    amount: 56000, tier: 5 },
   { crdb: 'Saleen_S7Classic_2004',                  name: 'Saleen S7',                      amount: 56400 },
-  { crdb: 'Plymouth_SuperbirdLPClassic_1970',       name: 'Plymouth Superbird LP',          amount: 65000 },
+  { crdb: 'Plymouth_SuperbirdLPClassic_1970',       name: 'Plymouth Superbird LP',          amount: 65000, tier: 5 },
   { crdb: 'Porsche_911CarreraRS27LPClassic_1973',   name: 'Porsche 911 Carrera RS27 LP',    amount: 65000 },
   { crdb: 'Datsun_240ZLPClassic_1972',              name: 'Datsun 240Z LP',                 amount: 65000 },
   { crdb: 'Dodge_ChallengerRTLPClassic_1970',       name: 'Dodge Challenger R/T Classic',   amount: 64000 },
   { crdb: 'Chevrolet_CorvetteC1LPClassic_1958',     name: 'Chevrolet Corvette C1',          amount: 70000 },
-  { crdb: 'Chevrolet_NovaSSLPClassic_1970',         name: 'Chevy Nova SS Classic',          amount: 70000 },
+  { crdb: 'Chevrolet_NovaSSLPClassic_1970',         name: 'Chevy Nova SS Classic',          amount: 70000, tier: 5 },
   { crdb: 'Ford_EscortMk1RS2000LPClassic_1973',     name: 'Ford Escort Mk1 RS2000 Classic', amount: 70000 },
-  { crdb: 'Dodge_ViperSR1LPClassic_1995',           name: 'Dodge Viper SR1 LP',             amount: 75000 },
-  { crdb: 'Ford_MustangSVTCobraRLPClassic_1993',    name: 'Ford Mustang SVT Cobra R',       amount: 75000 },
-  { crdb: 'Porsche_911Turbo930LPClassic_1977',      name: 'Porsche 911 Turbo (930)',        amount: 75000 },
+  { crdb: 'Dodge_ViperSR1LPClassic_1995',           name: 'Dodge Viper SR1 LP',             amount: 75000, tier: 5 },
+  { crdb: 'Ford_MustangSVTCobraRLPClassic_1993',    name: 'Ford Mustang SVT Cobra R',       amount: 75000, tier: 5 },
+  { crdb: 'Porsche_911Turbo930LPClassic_1977',      name: 'Porsche 911 Turbo (930)',        amount: 75000, tier: 5 },
 ]
 
 function ensureDataDir() {
@@ -1758,7 +1758,8 @@ input.car-search-input:focus{border-color:var(--accent)}
 .cp-tabs{display:flex;gap:1px;flex-wrap:nowrap;flex:1}
 .cp-tab{background:none;border:none;border-bottom:2px solid transparent;padding:7px 13px 8px;border-radius:6px 6px 0 0;color:var(--muted);cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.3px;transition:color .12s,background .12s;white-space:nowrap}
 .cp-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:rgba(126,101,81,.09)}
-.cp-tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,.04)}
+.cp-tab:hover:not(.active):not(.nsb-locked){color:var(--text);background:rgba(255,255,255,.04)}
+.cp-tab.nsb-locked{opacity:.35;pointer-events:none;cursor:default}
 .cp-hdr-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px 8px;border-radius:4px;line-height:1;flex-shrink:0;margin-bottom:3px}
 .cp-hdr-close:hover{color:var(--text);background:rgba(255,255,255,.07)}
 .cp-divider{height:1px;background:var(--border);flex-shrink:0;margin:0}
@@ -1772,7 +1773,7 @@ input.car-search-input:focus{border-color:var(--accent)}
 .cp-pack-card.selected{border-color:var(--accent);background:rgba(126,101,81,.12);box-shadow:0 0 0 1px var(--accent)}
 .cp-pack-card-name{font-size:13px;font-weight:600;padding-right:52px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cp-pack-card-meta{font-size:11px;color:var(--muted);margin-top:2px}
-.cp-pack-card-btns{position:absolute;top:8px;right:8px;display:flex;gap:3px}
+.cp-pack-card-btns{position:absolute;top:50%;right:8px;transform:translateY(-50%);display:flex;gap:3px}
 .cp-pack-card-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:3px 5px;border-radius:4px;font-size:13px;line-height:1}
 .cp-pack-card-btn:hover{color:var(--text);background:rgba(255,255,255,.08)}
 .cpp-modal{display:flex;flex-direction:column;max-height:90vh;overflow:hidden;padding:0!important}
@@ -1814,8 +1815,8 @@ input.car-search-input:focus{border-color:var(--accent)}
 .selected-car-info .scar-color{font-size:10px;color:var(--muted)}
 .cars-update-bar{background:var(--surf2);border-radius:4px;height:6px;margin:10px 0;overflow:hidden}
 .cars-update-bar-fill{background:var(--accent);height:100%;width:0%;transition:width .4s}
-.allow-dup-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--muted);cursor:pointer}
-.allow-dup-row input{cursor:pointer}
+.allow-dup-row{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px;color:var(--muted)}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:.3;filter:invert(1)}
 </style>
 </head>
 <body>
@@ -1862,7 +1863,7 @@ input.car-search-input:focus{border-color:var(--accent)}
         <span class="main-title">CSR2 Services</span>
         <div class="spacer"></div>
         <button class="btn btn-sm" onclick="openUnban()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#ef4444">🚫 Unban</button>
-        <button class="btn btn-secondary btn-sm" id="cars-update-btn" onclick="openCarsUpdate()">↺ Car DB <span id="cars-db-count" style="font-size:10px;opacity:.6"></span></button>
+        <button class="btn btn-secondary btn-sm" id="cars-update-btn" onclick="openCarsUpdate()" style="display:flex;align-items:center;gap:5px">↺ Car DB <span id="cars-db-count" style="font-size:10px;opacity:.6"></span><span id="cars-update-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span></button>
         <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
         <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
         <button class="btn btn-secondary btn-sm" id="sync-all-packs-btn" onclick="syncAllPacks()">↑ Sync All</button>
@@ -2014,7 +2015,7 @@ input.car-search-input:focus{border-color:var(--accent)}
 
 <!-- Create Pack Modal -->
 <div class="modal-bg" id="create-pack-modal">
-  <div class="modal cp-modal" style="width:max-content;max-width:92vw">
+  <div class="modal cp-modal" style="width:560px;max-width:92vw">
     <div class="cp-tab-bar">
       <div class="cp-tabs">
         <button class="cp-tab active" id="cp-tab-general" onclick="cpSwitchTab('general')">General</button>
@@ -2023,7 +2024,6 @@ input.car-search-input:focus{border-color:var(--accent)}
         <button class="cp-tab" id="cp-tab-legends" onclick="cpSwitchTab('legends')" style="display:none">Legends</button>
         <button class="cp-tab" id="cp-tab-fusions" onclick="cpSwitchTab('fusions')" style="display:none">Fusions</button>
         <button class="cp-tab" id="cp-tab-stage6" onclick="cpSwitchTab('stage6')" style="display:none">Stage 6</button>
-        <button class="cp-tab" id="cp-tab-gifts" onclick="cpSwitchTab('gifts')" style="display:none">Gifts</button>
       </div>
       <button class="cp-hdr-close" onclick="confirmClosePack()" title="Close">✕</button>
     </div>
@@ -2056,20 +2056,16 @@ input.car-search-input:focus{border-color:var(--accent)}
           <label class="toggle"><input type="checkbox" id="cp-toggle-stage6" onchange="cpOnToggle('stage6',this.checked)"><span class="tslider"></span></label>
           <span>6️⃣ Stage 6</span>
         </div>
-        <div class="cp-toggle-row">
-          <label class="toggle"><input type="checkbox" id="cp-toggle-gifts" onchange="cpOnToggle('gifts',this.checked)"><span class="tslider"></span></label>
-          <span>🎁 Gifts</span>
-        </div>
       </div>
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
         <div class="section-title" style="margin-bottom:8px">Fusions &amp; Stage 6 Options</div>
-        <label class="allow-dup-row" style="cursor:pointer;align-items:flex-start;gap:8px">
-          <input type="checkbox" id="cp-fusion-s6-choose-one" style="margin-top:2px;flex-shrink:0">
+        <div class="allow-dup-row" style="align-items:flex-start;gap:10px">
+          <label class="toggle" style="flex-shrink:0;margin-top:1px"><input type="checkbox" id="cp-fusion-s6-choose-one"><span class="tslider"></span></label>
           <div>
-            <div style="font-size:13px">Buyer picks Fusions <strong>or</strong> Stage 6 — not both</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px">Only applies when both are set to Customizable. Buyer chooses one on the Pack Preview tab.</div>
+            <div style="font-size:13px;color:var(--text)">User picks Fusions <strong>or</strong> Stage 6 — not both</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Only applies when both are set to Customizable. User chooses one on the Pack Preview tab.</div>
           </div>
-        </label>
+        </div>
       </div>
     </div>
 
@@ -2078,10 +2074,10 @@ input.car-search-input:focus{border-color:var(--accent)}
     </div>
 
     <div class="cp-body" id="cp-content-currencies" style="display:none">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-title" style="margin:0">Currencies</div>
         <button class="btn btn-secondary btn-sm" onclick="cpClearCurrencies()">Clear All</button>
       </div>
-      <div class="section-title">Currencies</div>
       <div class="curr-grid" style="margin-bottom:16px">
         <div class="field"><label>💵 Cash</label><div class="field-wrap"><input type="text" id="cp-cash" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">$</span></div></div>
         <div class="field"><label>🪙 Gold</label><div class="field-wrap"><input type="text" id="cp-gold" placeholder="0" onblur="fmtInput(this)" onfocus="unfmtInput(this)"><span class="field-unit">G</span></div></div>
@@ -2104,7 +2100,7 @@ input.car-search-input:focus{border-color:var(--accent)}
         <label>Selection Mode</label>
         <select id="cp-car-mode" onchange="onCarModeChange()">
           <option value="random">Random</option>
-          <option value="customizable">Customizable (buyer picks)</option>
+          <option value="customizable">Customizable (User Picks)</option>
           <option value="all">All available</option>
         </select>
       </div>
@@ -2116,10 +2112,10 @@ input.car-search-input:focus{border-color:var(--accent)}
           <div class="field"><label>Count</label><input type="number" id="cp-car-count" placeholder="e.g. 60" min="1"></div>
           <div class="field"><label>Condition</label><select id="cp-car-condition"><option value="stock">Stock</option><option value="maxed">Maxed</option></select></div>
         </div>
-        <label class="allow-dup-row" style="cursor:pointer;margin-bottom:0">
-          <input type="checkbox" id="cp-partial-toggle" onchange="onPartialToggle()">
-          <span style="font-weight:500">Allow Partial Selection</span>
-        </label>
+        <div class="allow-dup-row" style="margin-bottom:0">
+          <label class="toggle" style="flex-shrink:0"><input type="checkbox" id="cp-partial-toggle" onchange="onPartialToggle()"><span class="tslider"></span></label>
+          <span style="font-weight:500;color:var(--text)">Allow Partial Selection</span>
+        </div>
         <div id="cp-partial-section" style="display:none;margin-top:12px">
           <div class="cp-or-sep">OR</div>
           <div class="section-title" style="margin-bottom:8px">Partial Selection</div>
@@ -2222,7 +2218,7 @@ input.car-search-input:focus{border-color:var(--accent)}
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Fusion Data</div>
             <div id="cp-fusions-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="openFusionsUpdate()">Update</button>
+          <button class="btn btn-secondary btn-sm" id="fusions-update-btn" onclick="openFusionsUpdate()" style="display:flex;align-items:center;gap:5px">Update <span id="fusions-update-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span></button>
         </div>
       </div>
     </div>
@@ -2252,7 +2248,7 @@ input.car-search-input:focus{border-color:var(--accent)}
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Stage 6 Data</div>
             <div id="cp-stage6-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="openStage6Update()">Update</button>
+          <button class="btn btn-secondary btn-sm" id="stage6-update-btn" onclick="openStage6Update()" style="display:flex;align-items:center;gap:5px">Update <span id="stage6-update-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span></button>
         </div>
       </div>
     </div>
@@ -2299,7 +2295,7 @@ input.car-search-input:focus{border-color:var(--accent)}
     <div class="cp-tab-bar" style="padding-bottom:12px">
       <div>
         <div style="font-size:15px;font-weight:600" id="cpp-modal-title">Create Car Pack</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">Select cars to include · all duplicates allowed</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px" id="cpp-subtitle">Select cars to include</div>
       </div>
       <button class="cp-hdr-close" onclick="closeCreateCarPack()" title="Close">✕</button>
     </div>
@@ -2307,10 +2303,10 @@ input.car-search-input:focus{border-color:var(--accent)}
     <div class="cpp-body">
       <!-- Left: car search -->
       <div class="cpp-left">
-        <label class="allow-dup-row" style="cursor:pointer;margin-bottom:10px">
-          <input type="checkbox" id="cpp-allow-dup" onchange="_cppAllowDupes=this.checked;searchCppCars(document.getElementById('cpp-car-search').value)">
-          <span>Allow Duplicates</span>
-        </label>
+        <div class="allow-dup-row" style="margin-bottom:10px">
+          <label class="toggle" style="flex-shrink:0"><input type="checkbox" id="cpp-allow-dup" onchange="_cppAllowDupes=this.checked;searchCppCars(document.getElementById('cpp-car-search').value);updateCppSubtitle()"><span class="tslider"></span></label>
+          <span style="color:var(--text)">Allow Duplicates</span>
+        </div>
         <div class="car-search-wrap" style="margin-bottom:8px">
           <span class="car-search-icon" style="font-size:13px;top:50%;transform:translateY(-50%);left:10px">🔍</span>
           <input type="text" class="car-search-input" id="cpp-car-search" placeholder="Search by name or brand..." oninput="searchCppCars(this.value)">
@@ -2530,7 +2526,10 @@ input.car-search-input:focus{border-color:var(--accent)}
       <div class="ap-cars-left">
         <div id="ap-cars-header" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
         <div id="ap-partial-toggle-row" style="display:none;margin-bottom:10px">
-          <label class="allow-dup-row"><input type="checkbox" id="ap-partial-sel" onchange="togglePartialSelection(this.checked)"> Partial Selection — pick specific cars instead of random</label>
+          <div class="allow-dup-row">
+            <label class="toggle" style="flex-shrink:0"><input type="checkbox" id="ap-partial-sel" onchange="togglePartialSelection(this.checked)"><span class="tslider"></span></label>
+            <span style="color:var(--text)">Partial Selection — pick specific cars instead of random</span>
+          </div>
         </div>
         <div id="ap-cars-picker" style="display:none">
           <div class="section-title" style="margin-bottom:6px;font-size:11px">Select Cars <span id="ansb-car-count-badge" style="font-weight:400;color:var(--muted);text-transform:none;font-size:11px;letter-spacing:0">(0 selected)</span></div>
@@ -2742,28 +2741,28 @@ var LEGEND_CARS = [
   { crdb: 'AstonMartin_DB5Classic_1964',            name: 'Aston Martin DB5',               amount: 17400 },
   { crdb: 'MercedesBenz_300SLClassic_1954',         name: 'Mercedes-Benz 300SL',            amount: 17400 },
   { crdb: 'Shelby_Cobra427SCClassic_1965',          name: 'Shelby Cobra',                   amount: 25800 },
-  { crdb: 'Chevrolet_CorvetteZR1Classic_1970',      name: 'Chevy Corvette C3',              amount: 25800 },
+  { crdb: 'Chevrolet_CorvetteZR1Classic_1970',      name: 'Chevy Corvette C3',              amount: 25800, tier: 3 },
   { crdb: 'Pontiac_GTOTheJudgeClassic_1969',        name: 'Pontiac GTO',                    amount: 29600 },
   { crdb: 'Honda_NSXRClassic_1992',                 name: 'Honda NSX-R',                    amount: 36000 },
   { crdb: 'Plymouth_HemiCudaClassic_1971',          name: 'Plymouth Hemi Cuda',             amount: 38200 },
-  { crdb: 'Ford_GT40MkII_1966',                     name: 'Ford GT40',                      amount: 40400 },
+  { crdb: 'Ford_GT40MkII_1966',                     name: 'Ford GT40',                      amount: 40400, tier: 4 },
   { crdb: 'Lamborghini_CountachClassic_1988',       name: 'Lamborghini Countach',           amount: 40400 },
-  { crdb: 'Porsche_CarreraGTClassic_2003',          name: 'Porsche Carrera GT',             amount: 50000 },
-  { crdb: 'Lamborghini_MiuraSVLPClassic_1971',      name: 'Lamborghini Miura SVL',          amount: 50000 },
+  { crdb: 'Porsche_CarreraGTClassic_2003',          name: 'Porsche Carrera GT',             amount: 50000, tier: 5 },
+  { crdb: 'Lamborghini_MiuraSVLPClassic_1971',      name: 'Lamborghini Miura SVL',          amount: 50000, tier: 5 },
   { crdb: 'Bugatti_EB110SSClassic_1992',            name: 'Bugatti EB110',                  amount: 50000 },
   { crdb: 'Jaguar_XJ220Classic_1993',               name: 'Jaguar XJ220',                   amount: 53400 },
-  { crdb: 'Ford_MustangShelbyGT350LPClassic_1965',  name: 'Ford Mustang Shelby GT350LP',    amount: 56000 },
+  { crdb: 'Ford_MustangShelbyGT350LPClassic_1965',  name: 'Ford Mustang Shelby GT350LP',    amount: 56000, tier: 5 },
   { crdb: 'Saleen_S7Classic_2004',                  name: 'Saleen S7',                      amount: 56400 },
-  { crdb: 'Plymouth_SuperbirdLPClassic_1970',       name: 'Plymouth Superbird LP',          amount: 65000 },
+  { crdb: 'Plymouth_SuperbirdLPClassic_1970',       name: 'Plymouth Superbird LP',          amount: 65000, tier: 5 },
   { crdb: 'Porsche_911CarreraRS27LPClassic_1973',   name: 'Porsche 911 Carrera RS27 LP',    amount: 65000 },
   { crdb: 'Datsun_240ZLPClassic_1972',              name: 'Datsun 240Z LP',                 amount: 65000 },
   { crdb: 'Dodge_ChallengerRTLPClassic_1970',       name: 'Dodge Challenger R/T Classic',   amount: 64000 },
   { crdb: 'Chevrolet_CorvetteC1LPClassic_1958',     name: 'Chevrolet Corvette C1',          amount: 70000 },
-  { crdb: 'Chevrolet_NovaSSLPClassic_1970',         name: 'Chevy Nova SS Classic',          amount: 70000 },
+  { crdb: 'Chevrolet_NovaSSLPClassic_1970',         name: 'Chevy Nova SS Classic',          amount: 70000, tier: 5 },
   { crdb: 'Ford_EscortMk1RS2000LPClassic_1973',     name: 'Ford Escort Mk1 RS2000 Classic', amount: 70000 },
-  { crdb: 'Dodge_ViperSR1LPClassic_1995',           name: 'Dodge Viper SR1 LP',             amount: 75000 },
-  { crdb: 'Ford_MustangSVTCobraRLPClassic_1993',    name: 'Ford Mustang SVT Cobra R',       amount: 75000 },
-  { crdb: 'Porsche_911Turbo930LPClassic_1977',      name: 'Porsche 911 Turbo (930)',        amount: 75000 },
+  { crdb: 'Dodge_ViperSR1LPClassic_1995',           name: 'Dodge Viper SR1 LP',             amount: 75000, tier: 5 },
+  { crdb: 'Ford_MustangSVTCobraRLPClassic_1993',    name: 'Ford Mustang SVT Cobra R',       amount: 75000, tier: 5 },
+  { crdb: 'Porsche_911Turbo930LPClassic_1977',      name: 'Porsche 911 Turbo (930)',        amount: 75000, tier: 5 },
 ]
 var _debugOpen = false, _pollInterval = null
 var _scanAbort = false, _multiAbort = false, _multiRunId = 0
@@ -2790,7 +2789,9 @@ async function init() {
   startPoll()
   // Silently check for car DB updates and remote data updates after UI is ready
   setTimeout(checkCsr2CarsUpdate, 3000)
-  setTimeout(checkForDataUpdates, 6000)
+  setTimeout(checkFusionsUpdate, 4500)
+  setTimeout(checkStage6Update, 6000)
+  setTimeout(checkForDataUpdates, 7500)
   setTimeout(checkToolVersion, 9000)
 }
 
@@ -3963,6 +3964,8 @@ async function doFusionsUpdate() {
     } else {
       document.getElementById('fusions-update-status').textContent = 'Done! ' + res.count + ' entries loaded.'
       document.getElementById('fusions-update-close-btn').textContent = 'Close'
+      var fdot = document.getElementById('fusions-update-dot')
+      if (fdot) fdot.style.display = 'none'
       showNotice('fusions-update-notice', 'success', res.count + ' car fusions ready.')
       refreshFusionsDataStatus()
     }
@@ -4024,6 +4027,8 @@ async function doStage6Update() {
     } else {
       document.getElementById('stage6-update-status').textContent = 'Done! ' + res.count + ' entries loaded.'
       document.getElementById('stage6-update-close-btn').textContent = 'Close'
+      var s6dot = document.getElementById('stage6-update-dot')
+      if (s6dot) s6dot.style.display = 'none'
       showNotice('stage6-update-notice', 'success', res.count + ' Stage 6 entries ready.')
       refreshStage6DataStatus()
     }
@@ -4275,7 +4280,7 @@ async function savePack() {
     summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">🚗 Cars</div><div style="font-size:13px">' + escH(carsDesc) + '</div></div>'
   }
   if (legends) {
-    var legendDesc = legends.mode === 'all' ? 'All 26 classic legend cars' : fmtN(legends.count) + ' classic cars (buyer picks)'
+    var legendDesc = legends.mode === 'all' ? 'All 26 classic legend cars' : fmtN(legends.count) + ' classic cars (User\'s Choice)'
     summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">⭐ Legend Tokens</div><div style="font-size:13px">' + escH(legendDesc) + '</div></div>'
   }
   if (fusions) {
@@ -4287,7 +4292,7 @@ async function savePack() {
   if (stage6) {
     var s6Desc = stage6.mode === 'all'
       ? 'All Stage 6' + (stage6.amount ? ' · ' + fmtN(stage6.amount) + ' per part' : ' · max')
-      : 'Customizable · buyer picks up to ' + (stage6.count || 0) + ' car(s)'
+      : 'Customizable · User picks up to ' + (stage6.count || 0) + ' car(s)'
     summaryHtml += '<div class="pack-sect"><div class="pack-sect-hdr">6️⃣ Stage 6</div><div style="font-size:13px">' + escH(s6Desc) + '</div></div>'
   }
   document.getElementById('cp-saved-name').textContent = name
@@ -4322,7 +4327,7 @@ function renderCarPackCards() {
     var carCount = Array.isArray(p.cars) ? p.cars.length : 0
     html += '<div class="cp-pack-card' + (sel ? ' selected' : '') + '" onclick="toggleCarPackSelection(\\'' + p.id + '\\')" data-id="' + p.id + '">'
     html += '<div class="cp-pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div>'
-    html += '<div class="cp-pack-card-meta">' + carCount + ' car' + (carCount !== 1 ? 's' : '') + '</div>'
+    html += '<div class="cp-pack-card-meta">' + carCount + ' Car' + (carCount !== 1 ? 's' : '') + '</div>'
     html += '<div class="cp-pack-card-btns">'
     html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openViewCarPack(\\'' + p.id + '\\')" title="View">👁</button>'
     html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openEditCarPack(\\'' + p.id + '\\')" title="Edit">✏️</button>'
@@ -4341,6 +4346,11 @@ function toggleCarPackSelection(id) {
   renderCarPackCards()
 }
 
+function updateCppSubtitle() {
+  var el = document.getElementById('cpp-subtitle')
+  if (el) el.textContent = _cppAllowDupes ? 'Select cars to include · duplicates allowed' : 'Select cars to include'
+}
+
 function openCreateCarPack() {
   _carPackEditId = null
   _carPackCars = []
@@ -4349,6 +4359,7 @@ function openCreateCarPack() {
   document.getElementById('cpp-allow-dup').checked = false
   document.getElementById('cpp-car-search').value = ''
   document.getElementById('cpp-modal-title').textContent = 'Create Car Pack'
+  updateCppSubtitle()
   hideNotice('cpp-notice')
   renderCppSelectedCars()
   searchCppCars('')
@@ -4365,6 +4376,7 @@ function openEditCarPack(id) {
   document.getElementById('cpp-allow-dup').checked = false
   document.getElementById('cpp-car-search').value = ''
   document.getElementById('cpp-modal-title').textContent = 'Edit Car Pack'
+  updateCppSubtitle()
   hideNotice('cpp-notice')
   renderCppSelectedCars()
   searchCppCars('')
@@ -4587,6 +4599,8 @@ async function doCarsUpdate() {
     document.getElementById('cars-update-bar-fill').style.width = '100%'
     document.getElementById('cars-update-status').textContent = 'Done! ' + res.count + ' cars loaded.'
     document.getElementById('cars-update-close-btn').textContent = 'Close'
+    var dot = document.getElementById('cars-update-dot')
+    if (dot) dot.style.display = 'none'
     // Reload car DB
     var carsData = await fetch('/csr2/cars').then(function(r){ return r.json() }).catch(function(){ return [] })
     _csr2CarsDb = Array.isArray(carsData) ? carsData : []
@@ -4599,13 +4613,27 @@ async function doCarsUpdate() {
 }
 
 async function checkCsr2CarsUpdate() {
-  if (_csr2CarsDb.length === 0) return  // already empty — user will notice the badge
+  if (_csr2CarsDb.length === 0) return
   try {
     var res = await fetch('/csr2/cars-check').then(function(r){ return r.json() })
-    if (res.hasUpdate) {
-      var btn = document.getElementById('cars-update-btn')
-      if (btn) btn.style.borderColor = 'var(--accent)'
-    }
+    var dot = document.getElementById('cars-update-dot')
+    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
+  } catch {}
+}
+
+async function checkFusionsUpdate() {
+  try {
+    var res = await fetch('/csr2/fusions-check').then(function(r){ return r.json() })
+    var dot = document.getElementById('fusions-update-dot')
+    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
+  } catch {}
+}
+
+async function checkStage6Update() {
+  try {
+    var res = await fetch('/csr2/stage6-check').then(function(r){ return r.json() })
+    var dot = document.getElementById('stage6-update-dot')
+    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
   } catch {}
 }
 
@@ -4714,32 +4742,33 @@ function renderPackInfoInModal(pack) {
     html += '</div>'
   }
 
-  var fusion = []
-  if (c.fusionGreen)  fusion.push('<span class="token-dot" style="background:#4caf50"></span><span>' + fmtN(c.fusionGreen) + ' Green</span>')
-  if (c.fusionBlue)   fusion.push('<span class="token-dot" style="background:#2196F3"></span><span>' + fmtN(c.fusionBlue) + ' Blue</span>')
-  if (c.fusionRed)    fusion.push('<span class="token-dot" style="background:#e05252"></span><span>' + fmtN(c.fusionRed) + ' Red</span>')
-  if (c.fusionYellow) fusion.push('<span class="token-dot" style="background:#FFC107"></span><span>' + fmtN(c.fusionYellow) + ' Yellow</span>')
-  if (fusion.length) {
-    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:.5px">Elite:</span>' + fusion.join('') + '</div>'
+  if (c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow) {
+    html += '<div class="pack-stat-grid" style="margin-top:4px">'
+    if (c.fusionGreen)  html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#4caf50;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionGreen) + '</span><span class="psc-lbl">Green Tokens</span></div>'
+    if (c.fusionBlue)   html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#2196F3;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionBlue) + '</span><span class="psc-lbl">Blue Tokens</span></div>'
+    if (c.fusionRed)    html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#e05252;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionRed) + '</span><span class="psc-lbl">Red Tokens</span></div>'
+    if (c.fusionYellow) html += '<div class="pack-stat-chip"><span class="psc-val"><span class="token-dot" style="background:#FFC107;display:inline-block;vertical-align:middle;margin-right:3px"></span>' + fmtN(c.fusionYellow) + '</span><span class="psc-lbl">Yellow Tokens</span></div>'
+    html += '</div>'
   }
 
+  var extraChips = []
   if (pack.cars && (pack.cars.count || pack.cars.carMode === 'all')) {
-    var modalCarsLabel = pack.cars.carMode === 'all'
-      ? 'All available cars' + (pack.cars.condition === 'maxed' ? ' &middot; maxed' : '')
-      : fmtN(pack.cars.count) + ' cars &middot; ' + escH(pack.cars.carMode || 'random') + (pack.cars.condition === 'maxed' ? ' &middot; maxed' : '')
-    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">🚗 ' + modalCarsLabel + '</div>'
+    var carsVal = pack.cars.carMode === 'all' ? 'All' : fmtN(pack.cars.count)
+    var carsMeta = pack.cars.carMode === 'all' ? 'Cars' + (pack.cars.condition === 'maxed' ? ' · Maxed' : '') : (pack.cars.carMode === 'customizable' ? 'Cars · User Picks' : 'Cars · Random') + (pack.cars.condition === 'maxed' ? ' · Maxed' : '')
+    extraChips.push('<div class="pack-stat-chip"><span class="psc-val">🚗 ' + escH(carsVal) + '</span><span class="psc-lbl">' + escH(carsMeta) + '</span></div>')
   }
   if (pack.legends && pack.legends.mode === 'all') {
-    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">⭐ All 26 legend restoration tokens</div>'
+    extraChips.push('<div class="pack-stat-chip"><span class="psc-val">⭐ All 26</span><span class="psc-lbl">Legend Tokens</span></div>')
   } else if (pack.legends && pack.legends.mode === 'customizable') {
-    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">⭐ ' + (pack.legends.count || 0) + ' legend tokens (buyer picks)</div>'
+    extraChips.push('<div class="pack-stat-chip"><span class="psc-val">⭐ ' + (pack.legends.count || 0) + '</span><span class="psc-lbl">Legends · User\'s Choice</span></div>')
   }
   if (pack.fusions && pack.fusions.mode === 'all') {
-    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">⚗️ All fusions' + (pack.fusions.amount ? ' &middot; ' + fmtN(pack.fusions.amount) + ' per part' : '') + '</div>'
+    extraChips.push('<div class="pack-stat-chip"><span class="psc-val">⚗️ All</span><span class="psc-lbl">Fusions' + (pack.fusions.amount ? ' · ' + fmtN(pack.fusions.amount) + '/part' : '') + '</span></div>')
   }
   if (pack.stage6 && pack.stage6.mode === 'all') {
-    html += '<div style="font-size:12px;color:var(--muted);margin-top:4px">6️⃣ All Stage 6' + (pack.stage6.amount ? ' &middot; ' + fmtN(pack.stage6.amount) + ' per part' : '') + '</div>'
+    extraChips.push('<div class="pack-stat-chip"><span class="psc-val">6️⃣ All</span><span class="psc-lbl">Stage 6' + (pack.stage6.amount ? ' · ' + fmtN(pack.stage6.amount) + '/part' : '') + '</span></div>')
   }
+  if (extraChips.length) html += '<div class="pack-stat-grid" style="margin-top:4px">' + extraChips.join('') + '</div>'
 
   box.innerHTML = html
   _renderApplyTabs(pack)
@@ -4749,7 +4778,7 @@ function _renderApplyTabs(pack) {
   var extraTabs = ['currencies','cars','legends','fusions','stage6']
   for (var i = 0; i < extraTabs.length; i++) {
     var btn = document.getElementById('ap-tab-' + extraTabs[i])
-    if (btn) btn.style.display = 'none'
+    if (btn) { btn.style.display = 'none'; btn.classList.remove('nsb-locked') }
   }
   if (!pack) return
 
@@ -4851,6 +4880,8 @@ function _renderApplyTabs(pack) {
       loadAndSearchS6Cars('')
     }
   }
+  // Lock non-preview tabs until NSB file is uploaded
+  _updateApplyTabsNsbState(!!_nsbData.ansb)
 }
 
 function onFusionS6Choice(choice) {
@@ -4873,24 +4904,22 @@ function onFusionS6Choice(choice) {
   var wS6  = document.getElementById('ap-choice-stage6-wrap')
   if (wFus) wFus.style.borderColor = choice === 'fusions' ? 'var(--accent)' : 'var(--border)'
   if (wS6)  wS6.style.borderColor  = choice === 'stage6'  ? 'var(--accent)' : 'var(--border)'
-  // Show only the chosen tab
+  // Enable only the chosen tab (don't auto-switch — user navigates manually)
   var fusBtn = document.getElementById('ap-tab-fusions')
   var s6Btn  = document.getElementById('ap-tab-stage6')
   if (fusBtn) fusBtn.style.display = choice === 'fusions' ? '' : 'none'
   if (s6Btn)  s6Btn.style.display  = choice === 'stage6'  ? '' : 'none'
-  // Initialize the chosen picker
+  // Pre-initialize the chosen picker so it's ready when user switches
   if (choice === 'fusions' && pack && pack.fusions) {
     var fusHdr = document.getElementById('ap-fusions-header')
     if (fusHdr) fusHdr.textContent = 'Select up to ' + (pack.fusions.brandAmount || 1) + ' brand(s) to include fusions for.'
     renderSelectedBrands(pack)
     searchBrands(document.getElementById('ap-brands-search') ? document.getElementById('ap-brands-search').value : '')
-    apSwitchTab('fusions')
   } else if (choice === 'stage6' && pack && pack.stage6) {
     var s6Hdr = document.getElementById('ap-s6-header')
     if (s6Hdr) s6Hdr.textContent = 'Select up to ' + (pack.stage6.count || 0) + ' car(s) to include Stage 6 upgrades for.'
     renderSelectedS6Cars(pack)
     searchS6Cars(document.getElementById('ap-s6-search') ? document.getElementById('ap-s6-search').value : '')
-    apSwitchTab('stage6')
   }
 }
 
@@ -5043,8 +5072,11 @@ function togglePartialSelection(enabled) {
 
 function buildLegendTierMap() {
   var m = {}
-  for (var i = 0; i < _csr2CarsDb.length; i++) {
-    if (_csr2CarsDb[i].crdb) m[_csr2CarsDb[i].crdb] = _csr2CarsDb[i].tier
+  for (var i = 0; i < LEGEND_CARS.length; i++) {
+    if (LEGEND_CARS[i].tier) m[LEGEND_CARS[i].crdb] = LEGEND_CARS[i].tier
+  }
+  for (var j = 0; j < _csr2CarsDb.length; j++) {
+    if (_csr2CarsDb[j].crdb && _csr2CarsDb[j].tier) m[_csr2CarsDb[j].crdb] = _csr2CarsDb[j].tier
   }
   return m
 }
@@ -5127,6 +5159,27 @@ function renderSelectedLegends(pack) {
 
 // ─── Brands Tab (Fusions & S6) ────────────────────────────────────────────────
 
+function formatBrandId(id) {
+  if (!id) return id
+  var idx = id.indexOf('_')
+  if (idx !== -1 && idx < id.length - 1) {
+    var brand = id.slice(idx + 1)
+    return brand.charAt(0).toUpperCase() + brand.slice(1)
+  }
+  return id.charAt(0).toUpperCase() + id.slice(1)
+}
+
+function _updateApplyTabsNsbState(hasNsb) {
+  var tabs = ['currencies','cars','legends','fusions','stage6']
+  for (var i = 0; i < tabs.length; i++) {
+    var btn = document.getElementById('ap-tab-' + tabs[i])
+    if (btn && btn.style.display !== 'none') {
+      if (hasNsb) btn.classList.remove('nsb-locked')
+      else btn.classList.add('nsb-locked')
+    }
+  }
+}
+
 async function loadAndSearchBrands(query) {
   if (!_brandsList.length) {
     try {
@@ -5152,13 +5205,13 @@ function searchBrands(query) {
   var shown = 0
   for (var i = 0; i < _brandsList.length; i++) {
     var b = _brandsList[i]
-    var displayName = b.name || b.id || ''
+    var rawId = b.id || ''
+    var displayName = formatBrandId(rawId) || b.name || rawId
     if (q && displayName.toLowerCase().indexOf(q) === -1) continue
     var added = selIds.has(b.id)
     var atCap = _selectedBrands.length >= maxCount
     html += '<div class="car-result-item">'
     html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(displayName) + '</span>'
-    if (b.id && b.id !== b.name) html += '<span style="font-size:10px;color:var(--muted);margin-right:8px">' + escH(b.id) + '</span>'
     if (added) {
       html += '<span class="car-result-added">Added</span>'
     } else if (atCap) {
@@ -5204,7 +5257,7 @@ function renderSelectedBrands(pack) {
     return
   }
   selEl.innerHTML = _selectedBrands.map(function(b) {
-    var displayName = b.name || b.id || ''
+    var displayName = formatBrandId(b.id) || b.name || b.id || ''
     return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:16px;font-size:12px">' +
       escH(displayName) +
       '<button onclick="removeBrand(\\'' + b.id + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 0 0 2px">×</button>' +
@@ -5488,6 +5541,7 @@ function readNsbFile(file, which) {
     if (which === 'ansb') {
       loadNsbComparison()
       document.getElementById('ansb-apply-btn').disabled = false
+      _updateApplyTabsNsbState(true)
     } else if (which === 'ensb') {
       loadEnsbCurrent()
     } else {
@@ -5520,6 +5574,7 @@ function clearNsbFile(which) {
     setCarSectionLocked(true)
     renderSelectedCars()
     searchCars('')
+    _updateApplyTabsNsbState(false)
   } else if (which === 'ensb') {
     document.getElementById('ensb-apply-btn').disabled = true
     document.getElementById('ensb-unban-btn').disabled = true
