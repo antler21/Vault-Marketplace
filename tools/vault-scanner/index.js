@@ -1818,6 +1818,7 @@ input.car-search-input:focus{border-color:var(--accent)}
 input[type=checkbox].chk-themed{accent-color:var(--accent);width:14px;height:14px;cursor:pointer;flex-shrink:0;margin:0}
 .comp-after{color:var(--green)!important;font-weight:600}
 .prev-sect-hdr{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-top:8px;margin-bottom:4px}
+.upd-badge{position:absolute;top:-8px;right:-8px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;white-space:nowrap;pointer-events:none;z-index:1;letter-spacing:.2px}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{opacity:.3;filter:invert(1)}
 </style>
 </head>
@@ -1865,7 +1866,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <span class="main-title">CSR2 Services</span>
         <div class="spacer"></div>
         <button class="btn btn-sm" onclick="openUnban()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#ef4444">🚫 Unban</button>
-        <button class="btn btn-secondary btn-sm" id="cars-update-btn" onclick="openCarsUpdate()" style="display:flex;align-items:center;gap:5px">↺ Car DB <span id="cars-db-count" style="font-size:10px;opacity:.6"></span><span id="cars-update-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span></button>
+        <button class="btn btn-secondary btn-sm" id="cars-update-btn" onclick="openCarsUpdate()" style="display:flex;align-items:center;gap:5px;position:relative">↺ Car DB <span id="cars-db-count" style="font-size:10px;opacity:.6"></span><span class="upd-badge" id="cars-update-dot" style="display:none">Update</span></button>
         <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
         <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
         <button class="btn btn-secondary btn-sm" id="sync-all-packs-btn" onclick="syncAllPacks()">↑ Sync All</button>
@@ -2220,7 +2221,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Fusion Data</div>
             <div id="cp-fusions-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
           </div>
-          <button class="btn btn-secondary btn-sm" id="fusions-update-btn" onclick="openFusionsUpdate()" style="display:flex;align-items:center;gap:5px">Update <span id="fusions-update-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span></button>
+          <button class="btn btn-secondary btn-sm" id="fusions-update-btn" onclick="openFusionsUpdate()" style="position:relative">Update<span class="upd-badge" id="fusions-update-dot" style="display:none">Update</span></button>
         </div>
       </div>
     </div>
@@ -2250,7 +2251,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Stage 6 Data</div>
             <div id="cp-stage6-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
           </div>
-          <button class="btn btn-secondary btn-sm" id="stage6-update-btn" onclick="openStage6Update()" style="display:flex;align-items:center;gap:5px">Update <span id="stage6-update-dot" style="display:none;width:7px;height:7px;border-radius:50%;background:#ef4444;flex-shrink:0"></span></button>
+          <button class="btn btn-secondary btn-sm" id="stage6-update-btn" onclick="openStage6Update()" style="position:relative">Update<span class="upd-badge" id="stage6-update-dot" style="display:none">Update</span></button>
         </div>
       </div>
     </div>
