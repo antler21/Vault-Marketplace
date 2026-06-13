@@ -80,7 +80,6 @@ function loadCarPacks() { return loadJson(CAR_PACKS_FILE, []) }
 function saveCarPacks(p){ saveJson(CAR_PACKS_FILE, p) }
 function loadCsr2Cars() { return loadJson(CSR2_CARS_FILE, []) }
 function saveCsr2Cars(d) { saveJson(CSR2_CARS_FILE, d) }
-function loadCsr2Sha() { return loadJson(CSR2_SHA_FILE, {}) }
 function saveCsr2Sha(d) { saveJson(CSR2_SHA_FILE, d) }
 function loadFusionData() { return loadJson(CSR2_FUSIONS_FILE, {}) }
 function saveFusionData(d) { saveJson(CSR2_FUSIONS_FILE, d) }
@@ -7079,16 +7078,31 @@ const server = http.createServer(async (req, res) => {
   // CSR2 car database — check if GitHub has newer commit
   if (req.method === 'GET' && pathname === '/csr2/cars-check') {
     try {
-      const stored = loadCsr2Sha()
-      const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/Everything')
-      const remoteSha = commit.sha || ''
+      const ALL_CRDBS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/1.Cars/%23AllCarCRDBs.txt'
+      log('[csr2/cars-check] Fetching #AllCarCRDBs.txt from GitHub...')
+      const rawTxt = await fetchRawGithub(ALL_CRDBS_URL)
+      log('[csr2/cars-check] Raw response length: ' + rawTxt.length + ' chars')
+      log('[csr2/cars-check] First 300 chars: ' + rawTxt.slice(0, 300))
+
+      const remoteNames = rawTxt.split('\n').map(l => l.trim()).filter(Boolean)
+      log('[csr2/cars-check] Remote CRDB count: ' + remoteNames.length)
+
+      const localCars = loadCsr2Cars()
+      const localCrdbSet = new Set(localCars.map(c => c.crdb).filter(Boolean))
+      log('[csr2/cars-check] Local car DB count: ' + localCars.length + ', unique CRDBs: ' + localCrdbSet.size)
+
+      const missing = remoteNames.filter(n => !localCrdbSet.has(n))
+      log('[csr2/cars-check] Missing from local DB: ' + missing.length + (missing.length ? ' — first few: ' + missing.slice(0, 5).join(', ') : ''))
+
       return json(res, 200, {
-        hasUpdate: remoteSha !== (stored.sha || ''),
-        storedSha: stored.sha || '',
-        remoteSha,
-        carCount: loadCsr2Cars().length,
+        hasUpdate: missing.length > 0,
+        remoteCount: remoteNames.length,
+        localCount: localCars.length,
+        missingCount: missing.length,
+        missingPreview: missing.slice(0, 10),
       })
     } catch (e) {
+      log('[csr2/cars-check] Error: ' + e.message)
       return json(res, 200, { hasUpdate: false, error: e.message, carCount: loadCsr2Cars().length })
     }
   }
@@ -7111,15 +7125,26 @@ const server = http.createServer(async (req, res) => {
       const rawBase = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/'
       const rawUrl = (parts) => rawBase + parts.map(enc).join('/')
 
-      // Group Stock .txt files by brand+model+starType
+      // Group Stock .txt files by brand+model+starType — covers root and Update X.Y.Z subfolders
       const carMap = new Map()
+      const stockFoldersSeen = new Set()
       for (const item of tree) {
         if (item.type !== 'blob') continue
-        if (!item.path.startsWith('1.Cars/1.Stock/') || !item.path.endsWith('.txt')) continue
+        if (!item.path.startsWith('1.Cars/') || !item.path.includes('/1.Stock/') || !item.path.endsWith('.txt')) continue
         const parts = item.path.split('/')
-        if (parts.length < 6) continue
-        const starRaw = parts[2], brand = parts[3], model = parts[4]
-        const colorName = parts[5].replace(/\.txt$/, '')
+        // parts: ['1.Cars', <maybe 'Update X'>, '1.Stock', <starType>, brand, model, color.txt]
+        // stock index within parts array
+        const stockIdx = parts.indexOf('1.Stock')
+        if (stockIdx < 0 || parts.length < stockIdx + 5) {
+          log('[csr2/cars-update] Stock path too short, skipping: ' + item.path); continue
+        }
+        const starRaw = parts[stockIdx + 1], brand = parts[stockIdx + 2], model = parts[stockIdx + 3]
+        const colorName = parts[stockIdx + 4].replace(/\.txt$/, '')
+        const folder = parts.slice(0, stockIdx + 1).join('/')
+        if (!stockFoldersSeen.has(folder)) {
+          stockFoldersSeen.add(folder)
+          log('[csr2/cars-update] Stock folder: ' + folder)
+        }
         const starType = /gold/i.test(starRaw) ? 'Gold' : /purple/i.test(starRaw) ? 'Purple' : /legend/i.test(starRaw) ? 'Legends' : 'Other'
         const key = brand + '|' + model + '|' + starType
         const sUrl = rawUrl(parts)
@@ -7129,21 +7154,29 @@ const server = http.createServer(async (req, res) => {
         }
         carMap.get(key).colors.push({ name: colorName, photoUrl: pUrl, stockTxtUrl: sUrl, maxedTxtUrl: null })
       }
+      log('[csr2/cars-update] Stock folders found: ' + [...stockFoldersSeen].join(' | '))
 
-      // Map maxed .txt files by brand+model+colorName
+      // Map maxed .txt files by brand+model+colorName — covers root and Update X.Y.Z subfolders
       const maxedIdx = new Map()
+      const maxedFoldersSeen = new Set()
       for (const item of tree) {
         if (item.type !== 'blob') continue
-        if (!item.path.startsWith('1.Cars/2.Maxed/') || !item.path.endsWith('.txt')) continue
+        if (!item.path.startsWith('1.Cars/') || !item.path.includes('/2.Maxed/') || !item.path.endsWith('.txt')) continue
         const parts = item.path.split('/')
-        // Handle with or without starType subfolder (depth 5 or 6)
-        let brand, model, colorName
-        if (parts.length >= 6) {
-          brand = parts[parts.length - 3]; model = parts[parts.length - 2]
-          colorName = parts[parts.length - 1].replace(/\.txt$/, '')
-        } else continue
+        const maxedIdx2 = parts.indexOf('2.Maxed')
+        if (maxedIdx2 < 0 || parts.length < maxedIdx2 + 4) {
+          log('[csr2/cars-update] Maxed path too short, skipping: ' + item.path); continue
+        }
+        const folder = parts.slice(0, maxedIdx2 + 1).join('/')
+        if (!maxedFoldersSeen.has(folder)) {
+          maxedFoldersSeen.add(folder)
+          log('[csr2/cars-update] Maxed folder: ' + folder)
+        }
+        const brand = parts[parts.length - 3], model = parts[parts.length - 2]
+        const colorName = parts[parts.length - 1].replace(/\.txt$/, '')
         maxedIdx.set(brand + '|' + model + '|' + colorName, rawUrl(parts))
       }
+      log('[csr2/cars-update] Maxed folders found: ' + [...maxedFoldersSeen].join(' | '))
 
       for (const car of carMap.values()) {
         for (const c of car.colors) {
