@@ -6313,7 +6313,7 @@ function renderEnsbFusionsTab() {
   var ownedBrands = allBrands.filter(function(b){ return (_ensbEditorState.fusions[b.id] || 0) > 0 })
   var filteredOwned = sq ? ownedBrands.filter(function(b){ return (formatBrandId(b.id)||b.id||'').toLowerCase().includes(sq) }) : ownedBrands
   var selCount = _ensbFusionSelected.size
-  var inputStyle = 'width:80px;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
+  var inputStyle = 'width:80px;height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
   var html = '<div style="display:flex;flex-direction:column;gap:0;height:100%">'
   // Search bar spanning both
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
@@ -6353,7 +6353,7 @@ function renderEnsbFusionsTab() {
     var safeid2 = rb.id.replace(/'/g,"\\\\'")
     html += '<div onclick="ensbFusionToggle(\\'' + safeid2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf2)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;cursor:pointer">'
     html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(formatBrandId(rb.id)||rb.id) + '</span>'
-    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:3px 6px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">+Add</button>'
+    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">+Add</button>'
     html += '</div>'
   }
   html += '</div></div>'
@@ -6412,7 +6412,7 @@ function renderEnsbStage6Tab() {
     if (!sq || (bc.name||bc.id||'').toLowerCase().includes(sq) || brand.toLowerCase().includes(sq)) brandMap[brand].push(bc)
   }
   var selCount = _ensbS6Selected.size
-  var inputStyle = 'width:75px;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
+  var inputStyle = 'width:75px;height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
   var html = '<div style="display:flex;flex-direction:column;gap:0;height:100%">'
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
   html += '<input placeholder="Search cars..." value="' + escH(_ensbS6Search) + '" '
@@ -6449,7 +6449,7 @@ function renderEnsbStage6Tab() {
     if (!bcars || bcars.length === 0) continue
     var isExp = _ensbS6Expanded.has(bname)
     var safebname = bname.replace(/'/g,"\\\\'")
-    html += '<div onclick="ensbS6ToggleBrand(\\'' + safebname + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">'
+    html += '<div onclick="ensbS6ToggleBrand(\\'' + safebname + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;min-height:36px;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">'
     html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(bname) + ' <span style="font-size:10px;color:var(--muted)">(' + bcars.length + ')</span></span>'
     html += '<span style="color:var(--muted);font-size:11px;flex-shrink:0">' + (isExp ? '▲' : '▼') + '</span>'
     html += '</div>'
