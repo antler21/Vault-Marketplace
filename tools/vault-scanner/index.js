@@ -2452,8 +2452,24 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <!-- Footer -->
       <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-shrink:0">
         <button class="btn btn-secondary" onclick="hideModal('ensb-editor-modal')">Cancel</button>
-        <button class="btn btn-primary" onclick="downloadEnsbFull()">⬇ Apply &amp; Download</button>
+        <button class="btn btn-primary" onclick="downloadEnsbFull()">⬇ Download</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- NSB Editor Toast -->
+<div id="ensb-toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#22c55e;color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,.3)">✅ Updated!</div>
+
+<!-- NSB Add-Amount Modal -->
+<div class="modal-bg" id="ensb-add-modal" style="display:none">
+  <div class="modal" style="max-width:340px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:14px" id="ensb-add-modal-title">Add</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">How many?</div>
+    <input type="text" id="ensb-add-modal-input" placeholder="e.g. 100" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;color:var(--text);font-size:14px;outline:none" oninput="ensbIntInput(this)">
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="btn btn-secondary btn-sm" onclick="hideModal('ensb-add-modal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="confirmEnsbAddModal()">Add</button>
     </div>
   </div>
 </div>
@@ -2737,7 +2753,10 @@ var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackId
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _ensbFullData = null
-var _ensbEditorState = { currency: {}, garageQueue: [], legends: {}, fusions: {}, stage6: {} }
+var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], legends: {}, fusions: {}, stage6: {} }
+var _ensbGarageAllowDup = false, _ensbFusionSearch = '', _ensbS6Search = ''
+var _ensbFusionSelected = new Set(), _ensbS6Selected = new Set(), _ensbS6Expanded = new Set()
+var _ensbAddModalCb = null
 var _ensbActiveTab = 'currency'
 var _currencyOverride = {}, _partialSelectionEnabled = false, _selectedLegends = []
 var _nsbCurrentData = null, _applyPackRef = null, _currencyEditMode = false
@@ -4937,6 +4956,7 @@ function onFusionS6Choice(choice) {
     renderSelectedS6Cars(pack)
     searchS6Cars(document.getElementById('ap-s6-search') ? document.getElementById('ap-s6-search').value : '')
   }
+  _updateApplyTabsNsbState(!!_nsbData.ansb)
 }
 
 // ─── Currencies Tab ───────────────────────────────────────────────────────────
@@ -5953,10 +5973,14 @@ async function openEnsbEditor() {
       fusionRed: c.fusionRed || 0, fusionYellow: c.fusionYellow || 0,
     },
     garageQueue: [],
+    garageAdded: [],
     legends: {},
     fusions: {},
     stage6: {},
   }
+  _ensbGarageAllowDup = false
+  _ensbFusionSearch = ''; _ensbS6Search = ''
+  _ensbFusionSelected = new Set(); _ensbS6Selected = new Set(); _ensbS6Expanded = new Set()
   var owned = (res.legends && res.legends.owned) || []
   for (var i = 0; i < owned.length; i++) _ensbEditorState.legends[owned[i].crdb] = owned[i].amount
   var brands = (res.fusions && res.fusions.brands) || []
@@ -5986,73 +6010,90 @@ function switchEnsbTab(tab) {
 function renderEnsbLeftPanel() {
   var c = _ensbEditorState.currency
   var baseCarCount = _ensbFullData ? (_ensbFullData.garage && _ensbFullData.garage.carCount || 0) : 0
-  var carCount = baseCarCount + _ensbEditorState.garageQueue.length
+  var carCount = baseCarCount + _ensbEditorState.garageAdded.length
   var legendCount = Object.keys(_ensbEditorState.legends).length
-  var fusionBrands = Object.values(_ensbEditorState.fusions).filter(function(v){ return v > 0 }).length
-  var s6Cars = Object.values(_ensbEditorState.stage6).filter(function(v){ return v > 0 }).length
-  var accountName = (_nsbData && _nsbData.ensb && _nsbData.ensb.name) || ''
   var playerName = (_ensbFullData && _ensbFullData.playerName) || ''
-  var rows = [
-    ['💵 Cash', fmtN(c.cash || 0)],
-    ['🪙 Gold', fmtN(c.gold || 0)],
-    ['🔑 Bronze Keys', fmtN(c.bronzeKeys || 0)],
-    ['🗝️ Silver Keys', fmtN(c.silverKeys || 0)],
-    ['✨ Gold Keys', fmtN(c.goldKeys || 0)],
-    ['⛽ Fuel', fmtN(c.fuel || 0)],
-    ['🟢 Green Tokens', fmtN(c.fusionGreen || 0)],
-    ['🔵 Blue Tokens', fmtN(c.fusionBlue || 0)],
-    ['🔴 Red Tokens', fmtN(c.fusionRed || 0)],
-    ['🟡 Yellow Tokens', fmtN(c.fusionYellow || 0)],
-    null,
-    ['🚗 Cars', carCount],
-    ['⭐ Legends', legendCount],
-    ['⚗️ Fusion Brands', fusionBrands],
-    ['6️⃣ Stage 6 Cars', s6Cars],
-  ]
   var html = ''
-  if (accountName) {
+  if (playerName) {
     html += '<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
-    html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Save File</div>'
-    html += '<div style="font-size:13px;font-weight:600;word-break:break-all;line-height:1.3">' + escH(accountName) + '</div>'
-    if (playerName) html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + escH(playerName) + '</div>'
+    html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Account Name</div>'
+    html += '<div style="font-size:13px;font-weight:600;word-break:break-all;line-height:1.3">' + escH(playerName) + '</div>'
     html += '</div>'
   }
-  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:10px">Account Stats</div>'
-  for (var i = 0; i < rows.length; i++) {
-    if (!rows[i]) { html += '<div style="height:1px;background:var(--border);margin:10px 0"></div>'; continue }
-    html += '<div style="padding:5px 0;display:flex;flex-direction:column;gap:1px">'
-    html += '<div style="font-size:10px;color:var(--muted);line-height:1.2">' + rows[i][0] + '</div>'
-    html += '<div style="font-size:13px;font-weight:600;line-height:1.3">' + rows[i][1] + '</div>'
-    html += '</div>'
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px">Account Stats</div>'
+  var chipStyle = 'flex:1;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:5px 4px;text-align:center;min-width:0'
+  var chipRow = 'display:flex;gap:5px;margin-bottom:6px'
+  function mkChip(icon, lbl, val) {
+    return '<div style="' + chipStyle + '"><div style="font-size:11px">' + icon + '</div>'
+      + '<div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + val + '</div>'
+      + '<div style="font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.3px">' + lbl + '</div></div>'
   }
+  html += '<div style="' + chipRow + '">'
+  html += mkChip('⛽','Fuel', fmtN(c.fuel||0)) + mkChip('💵','Cash', fmtN(c.cash||0)) + mkChip('🪙','Gold', fmtN(c.gold||0))
+  html += '</div>'
+  html += '<div style="' + chipRow + '">'
+  html += mkChip('🔑','B.Keys', fmtN(c.bronzeKeys||0)) + mkChip('🗝️','S.Keys', fmtN(c.silverKeys||0)) + mkChip('✨','G.Keys', fmtN(c.goldKeys||0))
+  html += '</div>'
+  html += '<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px">Elite Tokens</div>'
+  var tks = [['🟢','GRN',c.fusionGreen||0,'#4caf50'],['🔵','BLU',c.fusionBlue||0,'#2196F3'],['🔴','RED',c.fusionRed||0,'#e05252'],['🟡','YLW',c.fusionYellow||0,'#FFC107']]
+  html += '<div style="display:flex;gap:5px;margin-bottom:6px">'
+  for (var ti = 0; ti < tks.length; ti++) {
+    html += '<div style="flex:1;background:var(--surf);border:1px solid rgba(128,128,128,.2);border-radius:6px;padding:4px 2px;text-align:center">'
+    html += '<div style="font-size:10px">' + tks[ti][0] + '</div>'
+    html += '<div style="font-size:10px;font-weight:700">' + fmtN(tks[ti][2]) + '</div>'
+    html += '<div style="font-size:7px;color:' + tks[ti][3] + ';text-transform:uppercase;letter-spacing:.3px">' + tks[ti][1] + '</div></div>'
+  }
+  html += '</div>'
+  html += '<div style="height:1px;background:var(--border);margin:8px 0"></div>'
+  html += '<div style="display:flex;gap:5px">'
+  html += mkChip('🚗','Cars', carCount) + mkChip('⭐','Legends', legendCount)
+  html += '</div>'
   var panel = document.getElementById('ensb-left-panel')
   if (panel) panel.innerHTML = html
 }
 
 function renderEnsbCurrencyTab() {
   var c = _ensbEditorState.currency
-  var fields = [
-    { key:'cash',         label:'💵 Cash',          id:'ensbe-cash' },
-    { key:'gold',         label:'🪙 Gold',           id:'ensbe-gold' },
-    { key:'bronzeKeys',   label:'🔑 Bronze Keys',    id:'ensbe-bkeys' },
-    { key:'silverKeys',   label:'🗝 Silver Keys',    id:'ensbe-skeys' },
-    { key:'goldKeys',     label:'✨ Gold Keys',      id:'ensbe-gkeys' },
-    { key:'fuel',         label:'⛽ Fuel',            id:'ensbe-fuel' },
-    { key:'fusionGreen',  label:'🟢 Green Tokens',   id:'ensbe-fgreen' },
-    { key:'fusionBlue',   label:'🔵 Blue Tokens',    id:'ensbe-fblue' },
-    { key:'fusionRed',    label:'🔴 Red Tokens',     id:'ensbe-fred' },
-    { key:'fusionYellow', label:'🟡 Yellow Tokens',  id:'ensbe-fyellow' },
+  var html = '<div style="max-width:500px">'
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+  html += '<div class="section-title" style="margin:0">Currencies</div></div>'
+  html += '<div class="curr-grid" style="margin-bottom:16px">'
+  var cFields = [
+    { key:'cash',       label:'💵 Cash',       id:'ensbe-cash',  unit:'$'  },
+    { key:'gold',       label:'🪙 Gold',        id:'ensbe-gold',  unit:'G'  },
+    { key:'bronzeKeys', label:'🔑 Bronze Keys', id:'ensbe-bkeys', unit:'Bk' },
+    { key:'silverKeys', label:'🗝 Silver Keys', id:'ensbe-skeys', unit:'Sk' },
+    { key:'goldKeys',   label:'✨ Gold Keys',   id:'ensbe-gkeys', unit:'Gk' },
+    { key:'fuel',       label:'⛽ Fuel',         id:'ensbe-fuel',  unit:'F'  },
   ]
-  var html = '<div style="display:flex;flex-direction:column;gap:8px;max-width:420px">'
-  for (var i = 0; i < fields.length; i++) {
-    var f = fields[i]
-    html += '<div class="ensb-row"><span class="ensb-label">' + f.label + '</span>'
-    html += '<input type="number" class="ensb-input" id="' + f.id + '" value="' + (c[f.key] || 0) + '" min="0" '
-    html += 'oninput="ensbCurrencyChange(\\'' + f.key + '\\',this.value)"></div>'
+  for (var i = 0; i < cFields.length; i++) {
+    var f = cFields[i]
+    html += '<div class="field"><label>' + f.label + '</label>'
+    html += '<div class="field-wrap"><input type="text" id="' + f.id + '" value="' + (c[f.key] || 0) + '" '
+    html += 'oninput="ensbIntInput(this);ensbCurrencyChange(\\'' + f.key + '\\',this.value)">'
+    html += '<span class="field-unit">' + f.unit + '</span></div></div>'
   }
   html += '</div>'
+  html += '<div class="section-title">Elite Tokens</div>'
+  html += '<div class="curr-grid">'
+  var tFields = [
+    { key:'fusionGreen',  label:'Green',  id:'ensbe-fgreen',  dot:'#4caf50' },
+    { key:'fusionBlue',   label:'Blue',   id:'ensbe-fblue',   dot:'#2196F3' },
+    { key:'fusionRed',    label:'Red',    id:'ensbe-fred',    dot:'#e05252' },
+    { key:'fusionYellow', label:'Yellow', id:'ensbe-fyellow', dot:'#FFC107' },
+  ]
+  for (var j = 0; j < tFields.length; j++) {
+    var t = tFields[j]
+    html += '<div class="field"><label><span class="token-dot" style="background:' + t.dot + '"></span>' + t.label + '</label>'
+    html += '<div class="field-wrap"><input type="text" id="' + t.id + '" value="' + (c[t.key] || 0) + '" '
+    html += 'oninput="ensbIntInput(this);ensbCurrencyChange(\\'' + t.key + '\\',this.value)">'
+    html += '<span class="field-unit">Tk</span></div></div>'
+  }
+  html += '</div></div>'
   document.getElementById('ensb-tab-content').innerHTML = html
 }
+
+function ensbIntInput(el) { el.value = el.value.replace(/[^0-9]/g, '') }
 
 function ensbCurrencyChange(key, val) {
   _ensbEditorState.currency[key] = Math.max(0, parseInt(val) || 0)
@@ -6062,92 +6103,166 @@ function ensbCurrencyChange(key, val) {
 var _ensbGarageSearch = ''
 
 function renderEnsbGarageTab() {
-  var q = _ensbGarageSearch.toLowerCase()
-  var ownedSet = new Set(_ensbFullData ? (_ensbFullData.garage && _ensbFullData.garage.ownedCrdbs || []) : [])
+  var sq = _ensbGarageSearch.toLowerCase()
+  var ownedCrdbs = (_ensbFullData && _ensbFullData.garage && _ensbFullData.garage.ownedCrdbs) || []
+  var ownedSet = new Set(ownedCrdbs)
+  var addedSet = new Set(_ensbEditorState.garageAdded.map(function(c){ return c.crdb }))
   var queueSet = new Set(_ensbEditorState.garageQueue.map(function(c){ return c.crdb }))
-  var available = _csr2CarsDb.filter(function(car){ return car.crdb && !ownedSet.has(car.crdb) && !queueSet.has(car.crdb) })
-  var filtered = q ? available.filter(function(car){ return (car.name||'').toLowerCase().includes(q) || (car.crdb||'').toLowerCase().includes(q) }) : available
-  var html = '<div style="display:flex;gap:16px;height:calc(100% - 0px)">'
-  html += '<div style="flex:1;display:flex;flex-direction:column;gap:8px;min-width:0">'
-  html += '<input id="ensb-garage-search" placeholder="Search cars..." value="' + escH(_ensbGarageSearch) + '" '
-  html += 'style="background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none;width:100%;box-sizing:border-box" '
+  var nameMap = {}
+  for (var nm = 0; nm < _csr2CarsDb.length; nm++) { if (_csr2CarsDb[nm].crdb) nameMap[_csr2CarsDb[nm].crdb] = _csr2CarsDb[nm].name || _csr2CarsDb[nm].crdb }
+  var available = _csr2CarsDb.filter(function(car) {
+    if (!car.crdb) return false
+    if (queueSet.has(car.crdb)) return false
+    if (!_ensbGarageAllowDup && (ownedSet.has(car.crdb) || addedSet.has(car.crdb))) return false
+    return true
+  })
+  var filtered = sq ? available.filter(function(car){ return (car.name||'').toLowerCase().includes(sq) || (car.crdb||'').toLowerCase().includes(sq) }) : available
+
+  var html = '<div style="display:flex;flex-direction:column;gap:0">'
+  // Search + allow-dup
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
+  html += '<input id="ensb-garage-search" placeholder="Search available cars..." value="' + escH(_ensbGarageSearch) + '" '
+  html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
   html += 'oninput="_ensbGarageSearch=this.value;renderEnsbGarageTab()">'
-  html += '<div style="font-size:12px;color:var(--muted)">' + filtered.length + ' available</div>'
-  html += '<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px">'
+  html += '<div class="allow-dup-row" style="flex-shrink:0">'
+  html += '<input type="checkbox" class="chk-themed" id="ensb-garage-dup" ' + (_ensbGarageAllowDup ? 'checked' : '') + ' onchange="_ensbGarageAllowDup=this.checked;renderEnsbGarageTab()">'
+  html += '<span style="font-size:12px;color:var(--text)">Allow Duplicates</span></div></div>'
+  // Top half: available + queue
+  html += '<div style="display:flex;gap:12px;margin-bottom:10px">'
+  // Left: available list
+  html += '<div style="flex:1;display:flex;flex-direction:column;gap:4px;min-width:0;max-height:260px;overflow-y:auto">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:2px;flex-shrink:0">' + filtered.length + ' available</div>'
   var show = filtered.slice(0, 80)
   for (var i = 0; i < show.length; i++) {
     var car = show[i]
     var safecrdb = car.crdb.replace(/'/g,"\\\\'")
     var safename = (car.name||car.crdb).replace(/'/g,"\\\\'").replace(/"/g,'&quot;')
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px">'
-    html += '<span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(car.name || car.crdb) + '</span>'
-    html += '<button onclick="ensbAddCarToQueue(\\'' + safecrdb + '\\',\\'' + safename + '\\',false)" style="background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--text);white-space:nowrap">Stock</button>'
-    html += '<button onclick="ensbAddCarToQueue(\\'' + safecrdb + '\\',\\'' + safename + '\\',true)" style="background:rgba(126,101,81,.15);border:1px solid var(--accent);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">Max</button>'
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(car.name || car.crdb) + '</span>'
+    html += '<button onclick="ensbAddCarToQueue(\\'' + safecrdb + '\\',\\'' + safename + '\\',false)" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px;color:var(--text)">Stock</button>'
+    html += '<button onclick="ensbAddCarToQueue(\\'' + safecrdb + '\\',\\'' + safename + '\\',true)" style="background:rgba(126,101,81,.15);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px;color:var(--accent)">Max</button>'
     html += '</div>'
   }
-  if (filtered.length > 80) html += '<div style="font-size:11px;color:var(--muted);padding:6px;text-align:center">+' + (filtered.length - 80) + ' more — search to filter</div>'
-  if (filtered.length === 0) html += '<div style="color:var(--muted);font-size:13px;padding:8px 0">No cars found.</div>'
-  html += '</div></div>'
-  html += '<div style="width:220px;min-width:220px;display:flex;flex-direction:column;gap:8px">'
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Queue (' + _ensbEditorState.garageQueue.length + ')</div>'
-  html += '<div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:4px">'
+  if (filtered.length > 80) html += '<div style="font-size:11px;color:var(--muted);padding:4px;text-align:center">+' + (filtered.length - 80) + ' more — search to filter</div>'
+  if (filtered.length === 0) html += '<div style="color:var(--muted);font-size:12px;padding:8px 0">No cars found.</div>'
+  html += '</div>'
+  // Right: queue + confirm button
+  var qLen = _ensbEditorState.garageQueue.length
+  html += '<div style="width:195px;min-width:195px;display:flex;flex-direction:column;gap:6px">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted)">Queue (' + qLen + ')</div>'
+  html += '<div style="flex:1;max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
   for (var j = 0; j < _ensbEditorState.garageQueue.length; j++) {
     var qcar = _ensbEditorState.garageQueue[j]
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px">'
-    html += '<span style="flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(qcar.name) + '</span>'
-    html += '<span style="font-size:11px;color:var(--muted);white-space:nowrap">' + (qcar.maxed ? 'Max' : 'Stock') + '</span>'
-    html += '<button onclick="ensbRemoveCarFromQueue(' + j + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">×</button>'
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(qcar.name) + '</span>'
+    html += '<span style="font-size:10px;color:var(--muted)">' + (qcar.maxed ? 'Max' : 'Stk') + '</span>'
+    html += '<button onclick="ensbRemoveCarFromQueue(' + j + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
     html += '</div>'
   }
-  if (_ensbEditorState.garageQueue.length === 0) {
-    html += '<div style="color:var(--muted);font-size:13px;line-height:1.5">No cars queued.<br><small>Click Stock or Max to add.</small></div>'
+  if (qLen === 0) html += '<div style="color:var(--muted);font-size:12px;line-height:1.5">Empty.<br><small>Click Stock or Max.</small></div>'
+  html += '</div>'
+  html += '<button onclick="ensbConfirmGarageQueue()" '
+  html += 'style="background:var(--accent);border:none;border-radius:6px;padding:7px 10px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;' + (qLen === 0 ? 'opacity:.5;pointer-events:none' : '') + '">'
+  html += '+ Add to Garage (' + qLen + ')</button>'
+  html += '</div>'
+  html += '</div>' // end top half
+  // Separator
+  html += '<div style="height:1px;background:var(--border);margin:4px 0 10px"></div>'
+  // Bottom: owned (caow) + garageAdded
+  var allOwned = []
+  for (var ci = 0; ci < ownedCrdbs.length; ci++) allOwned.push({ crdb: ownedCrdbs[ci], name: nameMap[ownedCrdbs[ci]] || ownedCrdbs[ci], added: false })
+  for (var ai = 0; ai < _ensbEditorState.garageAdded.length; ai++) allOwned.push({ crdb: _ensbEditorState.garageAdded[ai].crdb, name: _ensbEditorState.garageAdded[ai].name, added: true, idx: ai })
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Owned (' + allOwned.length + ')</div>'
+  html += '<div style="display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto">'
+  for (var oi = 0; oi < allOwned.length; oi++) {
+    var oc = allOwned[oi]
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 10px;background:' + (oc.added ? 'rgba(59,130,246,.08)' : 'var(--surf2)') + ';border:1px solid ' + (oc.added ? 'rgba(59,130,246,.3)' : 'var(--border)') + ';border-radius:6px">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(oc.name) + '</span>'
+    if (oc.added) {
+      html += '<span style="font-size:10px;color:#60a5fa;white-space:nowrap">New</span>'
+      html += '<button onclick="ensbRemoveFromGarageAdded(' + oc.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 2px">×</button>'
+    }
+    html += '</div>'
   }
-  html += '</div></div></div>'
+  if (allOwned.length === 0) html += '<div style="color:var(--muted);font-size:12px">No cars in garage.</div>'
+  html += '</div>'
+  html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
 }
 
 function ensbAddCarToQueue(crdb, name, maxed) {
   _ensbEditorState.garageQueue.push({ crdb: crdb, name: name, maxed: maxed })
   renderEnsbGarageTab()
-  renderEnsbLeftPanel()
 }
 
 function ensbRemoveCarFromQueue(idx) {
   _ensbEditorState.garageQueue.splice(idx, 1)
   renderEnsbGarageTab()
+}
+
+function ensbConfirmGarageQueue() {
+  for (var i = 0; i < _ensbEditorState.garageQueue.length; i++) _ensbEditorState.garageAdded.push(_ensbEditorState.garageQueue[i])
+  _ensbEditorState.garageQueue = []
+  renderEnsbGarageTab()
   renderEnsbLeftPanel()
 }
 
+function ensbRemoveFromGarageAdded(idx) {
+  _ensbEditorState.garageAdded.splice(idx, 1)
+  renderEnsbGarageTab()
+  renderEnsbLeftPanel()
+}
+
+var LEGEND_COLORS = ['#e84040','#1a9d63','#a0a0c0','#1b5cbf','#e87030','#9b48c8','#cc3333','#8b4513','#1f75b3','#d4a016','#8b8b00','#d4601a','#1b2f80','#184d27','#0a7c46','#6b1f9a','#b52a2a','#888800','#cc7700','#cc4400','#0066cc','#aa2200','#0055aa','#b81c1c','#006b2f','#b0750d']
+
 function renderEnsbLegendsTab() {
   var ownedSet = new Set(Object.keys(_ensbEditorState.legends))
-  var html = '<div style="max-width:520px">'
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Owned (' + ownedSet.size + ')</div>'
-  if (ownedSet.size === 0) html += '<div style="color:var(--muted);font-size:13px;margin-bottom:12px">No legend cars owned. Add from below.</div>'
-  for (var i = 0; i < LEGEND_CARS.length; i++) {
-    var lc = LEGEND_CARS[i]
-    if (!ownedSet.has(lc.crdb)) continue
+  var available = LEGEND_CARS.filter(function(lc){ return !ownedSet.has(lc.crdb) })
+  var ownedList = LEGEND_CARS.filter(function(lc){ return ownedSet.has(lc.crdb) })
+  var cardStyle = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border-radius:7px;margin-bottom:4px;border-left:3px solid '
+  var inputStyle = 'width:90px;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:4px 7px;color:var(--text);font-size:12px;outline:none;text-align:right'
+  var btnStyle = 'background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap'
+  var html = '<div style="display:flex;gap:14px;min-height:0">'
+  // Left: Owned
+  html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">Owned (' + ownedList.length + ')</div>'
+  html += '<button onclick="ensbMaxAllLegends()" style="' + btnStyle + '">Max All</button>'
+  html += '</div>'
+  html += '<div style="overflow-y:auto;display:flex;flex-direction:column">'
+  if (ownedList.length === 0) html += '<div style="color:var(--muted);font-size:13px;padding:8px 0">None owned. Add from the right.</div>'
+  for (var i = 0; i < ownedList.length; i++) {
+    var lc = ownedList[i]
+    var col = LEGEND_COLORS[LEGEND_CARS.indexOf(lc) % LEGEND_COLORS.length]
     var amt = _ensbEditorState.legends[lc.crdb] || 0
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;margin-bottom:4px">'
-    html += '<span style="flex:1;font-size:13px">' + escH(lc.name) + '</span>'
-    html += '<span style="font-size:11px;color:var(--muted)">max ' + fmtN(lc.amount) + '</span>'
-    html += '<input type="number" value="' + amt + '" min="0" max="' + lc.amount + '" '
-    html += 'oninput="ensbLegendChange(\\'' + lc.crdb + '\\',this.value)" '
-    html += 'style="width:90px;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:13px;outline:none;text-align:right">'
-    html += '<button onclick="ensbRemoveLegend(\\'' + lc.crdb + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 2px" title="Remove">×</button>'
+    var safecrdb = lc.crdb.replace(/'/g,"\\\\'")
+    html += '<div style="' + cardStyle + col + ';border-top:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escH(lc.name) + '">' + escH(lc.name) + '</span>'
+    html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbLegendChange(\\'' + safecrdb + '\\',this.value)" style="' + inputStyle + '">'
+    html += '<button onclick="ensbLegendMaxOut(\\'' + safecrdb + '\\')" style="' + btnStyle + '">Max</button>'
+    html += '<button onclick="ensbRemoveLegend(\\'' + safecrdb + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
     html += '</div>'
   }
-  var available = LEGEND_CARS.filter(function(lc){ return !ownedSet.has(lc.crdb) })
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:16px 0 8px">Available (' + available.length + ')</div>'
+  html += '</div></div>'
+  // Right: Available
+  html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-shrink:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">Available (' + available.length + ')</div>'
+  html += '<button onclick="ensbAddAllLegends()" style="' + btnStyle + '">Add All</button>'
+  html += '</div>'
+  html += '<div style="overflow-y:auto;display:flex;flex-direction:column">'
+  if (available.length === 0) html += '<div style="color:var(--muted);font-size:13px;padding:8px 0">All legends owned.</div>'
   for (var j = 0; j < available.length; j++) {
     var lc2 = available[j]
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;margin-bottom:4px">'
-    html += '<span style="flex:1;font-size:13px">' + escH(lc2.name) + '</span>'
-    html += '<span style="font-size:11px;color:var(--muted)">max ' + fmtN(lc2.amount) + '</span>'
-    html += '<button onclick="ensbAddLegend(\\'' + lc2.crdb + '\\')" '
-    html += 'style="background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:4px 12px;cursor:pointer;font-size:12px;color:var(--accent)">Add</button>'
+    var col2 = LEGEND_COLORS[LEGEND_CARS.indexOf(lc2) % LEGEND_COLORS.length]
+    var safecrdb2 = lc2.crdb.replace(/'/g,"\\\\'")
+    html += '<div style="' + cardStyle + col2 + ';border-top:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escH(lc2.name) + '">' + escH(lc2.name) + '</span>'
+    html += '<span style="font-size:10px;color:var(--muted);white-space:nowrap;margin-right:4px">req. ' + fmtN(lc2.amount) + '</span>'
+    html += '<button onclick="ensbAddLegend(\\'' + safecrdb2 + '\\')" style="' + btnStyle + '">Add</button>'
     html += '</div>'
   }
-  if (available.length === 0) html += '<div style="color:var(--muted);font-size:13px">All legend cars are already owned.</div>'
+  html += '</div></div>'
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
 }
@@ -6156,67 +6271,243 @@ function ensbAddLegend(crdb) {
   var lc = LEGEND_CARS.find(function(l){ return l.crdb === crdb })
   if (!lc) return
   _ensbEditorState.legends[crdb] = lc.amount
-  renderEnsbLegendsTab()
-  renderEnsbLeftPanel()
+  renderEnsbLegendsTab(); renderEnsbLeftPanel(); showEnsbToast()
 }
 
 function ensbRemoveLegend(crdb) {
   delete _ensbEditorState.legends[crdb]
-  renderEnsbLegendsTab()
-  renderEnsbLeftPanel()
+  renderEnsbLegendsTab(); renderEnsbLeftPanel()
 }
 
 function ensbLegendChange(crdb, val) {
   _ensbEditorState.legends[crdb] = Math.max(0, parseInt(val) || 0)
-  renderEnsbLeftPanel()
+  renderEnsbLeftPanel(); showEnsbToast()
+}
+
+function ensbLegendMaxOut(crdb) {
+  var lc = LEGEND_CARS.find(function(l){ return l.crdb === crdb })
+  if (lc) { _ensbEditorState.legends[crdb] = lc.amount; renderEnsbLegendsTab(); renderEnsbLeftPanel(); showEnsbToast() }
+}
+
+function ensbMaxAllLegends() {
+  for (var crdb in _ensbEditorState.legends) {
+    var lc = LEGEND_CARS.find(function(l){ return l.crdb === crdb })
+    if (lc) _ensbEditorState.legends[crdb] = lc.amount
+  }
+  renderEnsbLegendsTab(); renderEnsbLeftPanel(); showEnsbToast()
+}
+
+function ensbAddAllLegends() {
+  for (var i = 0; i < LEGEND_CARS.length; i++) {
+    if (!_ensbEditorState.legends[LEGEND_CARS[i].crdb]) _ensbEditorState.legends[LEGEND_CARS[i].crdb] = LEGEND_CARS[i].amount
+  }
+  renderEnsbLegendsTab(); renderEnsbLeftPanel(); showEnsbToast()
 }
 
 function renderEnsbFusionsTab() {
-  var brands = (_ensbFullData && _ensbFullData.fusions && _ensbFullData.fusions.brands) || []
-  if (brands.length === 0) {
+  var allBrands = (_ensbFullData && _ensbFullData.fusions && _ensbFullData.fusions.brands) || []
+  if (allBrands.length === 0) {
     document.getElementById('ensb-tab-content').innerHTML = '<div style="color:var(--muted);font-size:13px">No fusion data — download car database first.</div>'
     return
   }
-  var html = '<div style="display:flex;flex-direction:column;gap:6px;max-width:460px">'
-  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + brands.length + ' brands</div>'
-  for (var i = 0; i < brands.length; i++) {
-    var b = brands[i]
-    var amt = _ensbEditorState.fusions[b.id] !== undefined ? _ensbEditorState.fusions[b.id] : b.amount
-    html += '<div class="ensb-row"><span class="ensb-label">' + escH(b.name || b.id) + '</span>'
-    html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
-    html += 'oninput="ensbFusionChange(\\'' + b.id.replace(/'/g,"\\\\'") + '\\',this.value)"></div>'
+  var sq = _ensbFusionSearch.toLowerCase()
+  var filteredAll = sq ? allBrands.filter(function(b){ return (formatBrandId(b.id)||b.id||'').toLowerCase().includes(sq) }) : allBrands
+  var ownedBrands = allBrands.filter(function(b){ return (_ensbEditorState.fusions[b.id] || 0) > 0 })
+  var filteredOwned = sq ? ownedBrands.filter(function(b){ return (formatBrandId(b.id)||b.id||'').toLowerCase().includes(sq) }) : ownedBrands
+  var selCount = _ensbFusionSelected.size
+  var inputStyle = 'width:80px;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
+  var html = '<div style="display:flex;flex-direction:column;gap:0;height:100%">'
+  // Search bar spanning both
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
+  html += '<input placeholder="Search brands..." value="' + escH(_ensbFusionSearch) + '" '
+  html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
+  html += 'oninput="_ensbFusionSearch=this.value;renderEnsbFusionsTab()">'
+  if (selCount > 0) {
+    html += '<button onclick="ensbFusionAddSelected()" style="background:var(--accent);border:none;border-radius:6px;padding:6px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add Selected (' + selCount + ')</button>'
   }
   html += '</div>'
+  // Two columns
+  html += '<div style="display:flex;gap:14px;flex:1;overflow:hidden">'
+  // Left: owned
+  html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;flex-shrink:0">Owned (' + filteredOwned.length + ')</div>'
+  html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
+  if (filteredOwned.length === 0) html += '<div style="color:var(--muted);font-size:12px">None owned.</div>'
+  for (var i = 0; i < filteredOwned.length; i++) {
+    var b = filteredOwned[i]
+    var amt = _ensbEditorState.fusions[b.id] || 0
+    var safeid = b.id.replace(/'/g,"\\\\'")
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(formatBrandId(b.id)||b.id) + '</span>'
+    html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbFusionChange(\\'' + safeid + '\\',this.value)" style="' + inputStyle + '">'
+    html += '<button onclick="ensbFusionRemove(\\'' + safeid + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
+    html += '</div>'
+  }
+  html += '</div></div>'
+  // Right: all brands
+  html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;flex-shrink:0">All Brands (' + filteredAll.length + ')</div>'
+  html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
+  if (filteredAll.length === 0) html += '<div style="color:var(--muted);font-size:12px">No brands found.</div>'
+  for (var j = 0; j < filteredAll.length; j++) {
+    var rb = filteredAll[j]
+    var isSel = _ensbFusionSelected.has(rb.id)
+    var safeid2 = rb.id.replace(/'/g,"\\\\'")
+    html += '<div onclick="ensbFusionToggle(\\'' + safeid2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf2)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;cursor:pointer">'
+    html += '<input type="checkbox" class="chk-themed" ' + (isSel ? 'checked' : '') + ' onclick="event.stopPropagation();ensbFusionToggle(\\'' + safeid2 + '\\')" style="flex-shrink:0">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(formatBrandId(rb.id)||rb.id) + '</span>'
+    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">+Add</button>'
+    html += '</div>'
+  }
+  html += '</div></div>'
+  html += '</div></div>'
   document.getElementById('ensb-tab-content').innerHTML = html
 }
 
-function ensbFusionChange(brandId, val) {
-  _ensbEditorState.fusions[brandId] = Math.max(0, parseInt(val) || 0)
-  renderEnsbLeftPanel()
+function ensbFusionToggle(id) {
+  if (_ensbFusionSelected.has(id)) _ensbFusionSelected.delete(id); else _ensbFusionSelected.add(id)
+  renderEnsbFusionsTab()
 }
 
+function ensbFusionAddOne(id) {
+  _ensbFusionSelected.clear(); _ensbFusionSelected.add(id)
+  ensbFusionAddSelected()
+}
+
+function ensbFusionAddSelected() {
+  var ids = Array.from(_ensbFusionSelected)
+  if (!ids.length) return
+  var title = ids.length === 1 ? ('Add: ' + (formatBrandId(ids[0]) || ids[0])) : ('Add ' + ids.length + ' Brands')
+  showEnsbAddModal(title, ids, function(amount) {
+    for (var i = 0; i < ids.length; i++) _ensbEditorState.fusions[ids[i]] = Math.max(0, amount)
+    _ensbFusionSelected.clear()
+    renderEnsbFusionsTab(); renderEnsbLeftPanel(); showEnsbToast()
+  })
+}
+
+function ensbFusionRemove(id) {
+  _ensbEditorState.fusions[id] = 0
+  renderEnsbFusionsTab(); renderEnsbLeftPanel()
+}
+
+function ensbFusionChange(id, val) {
+  _ensbEditorState.fusions[id] = Math.max(0, parseInt(val) || 0)
+  renderEnsbLeftPanel(); showEnsbToast()
+}
+
+function ensbS6GetBrand(id) { var idx = id ? id.indexOf('_') : -1; return idx !== -1 ? id.slice(0, idx) : (id || '') }
+
 function renderEnsbStage6Tab() {
-  var cars = (_ensbFullData && _ensbFullData.stage6 && _ensbFullData.stage6.cars) || []
-  if (cars.length === 0) {
+  var allCars = (_ensbFullData && _ensbFullData.stage6 && _ensbFullData.stage6.cars) || []
+  if (allCars.length === 0) {
     document.getElementById('ensb-tab-content').innerHTML = '<div style="color:var(--muted);font-size:13px">No stage 6 data — download car database first.</div>'
     return
   }
-  var html = '<div style="display:flex;flex-direction:column;gap:6px;max-width:460px">'
-  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + cars.length + ' cars</div>'
-  for (var i = 0; i < cars.length; i++) {
-    var car = cars[i]
-    var amt = _ensbEditorState.stage6[car.id] !== undefined ? _ensbEditorState.stage6[car.id] : car.amount
-    html += '<div class="ensb-row"><span class="ensb-label">' + escH(car.name || car.id) + '</span>'
-    html += '<input type="number" class="ensb-input" value="' + amt + '" min="0" '
-    html += 'oninput="ensbStage6Change(\\'' + car.id.replace(/'/g,"\\\\'") + '\\',this.value)"></div>'
+  var sq = _ensbS6Search.toLowerCase()
+  var ownedCars = allCars.filter(function(c){ return (_ensbEditorState.stage6[c.id] || 0) > 0 })
+  var filteredOwned = sq ? ownedCars.filter(function(c){ return (c.name||c.id||'').toLowerCase().includes(sq) }) : ownedCars
+  // Group all cars by brand
+  var brandMap = {}, brandOrder = []
+  for (var bi = 0; bi < allCars.length; bi++) {
+    var bc = allCars[bi]
+    var brand = ensbS6GetBrand(bc.id)
+    if (!brandMap[brand]) { brandMap[brand] = []; brandOrder.push(brand) }
+    if (!sq || (bc.name||bc.id||'').toLowerCase().includes(sq) || brand.toLowerCase().includes(sq)) brandMap[brand].push(bc)
+  }
+  var selCount = _ensbS6Selected.size
+  var inputStyle = 'width:75px;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
+  var html = '<div style="display:flex;flex-direction:column;gap:0;height:100%">'
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
+  html += '<input placeholder="Search cars..." value="' + escH(_ensbS6Search) + '" '
+  html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
+  html += 'oninput="_ensbS6Search=this.value;renderEnsbStage6Tab()">'
+  if (selCount > 0) {
+    html += '<button onclick="ensbS6AddSelected()" style="background:var(--accent);border:none;border-radius:6px;padding:6px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add Selected (' + selCount + ')</button>'
   }
   html += '</div>'
+  html += '<div style="display:flex;gap:14px;flex:1;overflow:hidden">'
+  // Left: owned
+  html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;flex-shrink:0">Owned (' + filteredOwned.length + ')</div>'
+  html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
+  if (filteredOwned.length === 0) html += '<div style="color:var(--muted);font-size:12px">None owned.</div>'
+  for (var i = 0; i < filteredOwned.length; i++) {
+    var oc = filteredOwned[i]
+    var amt = _ensbEditorState.stage6[oc.id] || 0
+    var safeid = oc.id.replace(/'/g,"\\\\'")
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(oc.name||oc.id) + '</span>'
+    html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbS6Change(\\'' + safeid + '\\',this.value)" style="' + inputStyle + '">'
+    html += '<button onclick="ensbS6Remove(\\'' + safeid + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
+    html += '</div>'
+  }
+  html += '</div></div>'
+  // Right: brand-grouped all cars
+  html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;flex-shrink:0">All Cars (' + allCars.length + ')</div>'
+  html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
+  for (var bi2 = 0; bi2 < brandOrder.length; bi2++) {
+    var bname = brandOrder[bi2]
+    var bcars = brandMap[bname]
+    if (!bcars || bcars.length === 0) continue
+    var isExp = _ensbS6Expanded.has(bname)
+    var safebname = bname.replace(/'/g,"\\\\'")
+    html += '<div onclick="ensbS6ToggleBrand(\\'' + safebname + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">'
+    html += '<span style="flex:1">' + escH(bname) + ' <span style="font-size:10px;font-weight:400;color:var(--muted)">(' + bcars.length + ')</span></span>'
+    html += '<span style="color:var(--muted);font-size:11px">' + (isExp ? '▲' : '▼') + '</span>'
+    html += '</div>'
+    if (isExp) {
+      for (var ci = 0; ci < bcars.length; ci++) {
+        var rc = bcars[ci]
+        var isSel = _ensbS6Selected.has(rc.id)
+        var safercid = rc.id.replace(/'/g,"\\\\'")
+        html += '<div onclick="ensbS6Toggle(\\'' + safercid + '\\')" style="display:flex;align-items:center;gap:6px;padding:4px 8px 4px 18px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:5px;cursor:pointer;margin-top:2px">'
+        html += '<input type="checkbox" class="chk-themed" ' + (isSel ? 'checked' : '') + ' onclick="event.stopPropagation();ensbS6Toggle(\\'' + safercid + '\\')" style="flex-shrink:0">'
+        html += '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(rc.name||rc.id) + '</span>'
+        html += '<button onclick="event.stopPropagation();ensbS6AddOne(\\'' + safercid + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;color:var(--accent);white-space:nowrap">+Add</button>'
+        html += '</div>'
+      }
+    }
+  }
+  html += '</div></div>'
+  html += '</div></div>'
   document.getElementById('ensb-tab-content').innerHTML = html
 }
 
-function ensbStage6Change(carId, val) {
-  _ensbEditorState.stage6[carId] = Math.max(0, parseInt(val) || 0)
-  renderEnsbLeftPanel()
+function ensbS6ToggleBrand(brand) {
+  if (_ensbS6Expanded.has(brand)) _ensbS6Expanded.delete(brand); else _ensbS6Expanded.add(brand)
+  renderEnsbStage6Tab()
+}
+
+function ensbS6Toggle(id) {
+  if (_ensbS6Selected.has(id)) _ensbS6Selected.delete(id); else _ensbS6Selected.add(id)
+  renderEnsbStage6Tab()
+}
+
+function ensbS6AddOne(id) {
+  _ensbS6Selected.clear(); _ensbS6Selected.add(id)
+  ensbS6AddSelected()
+}
+
+function ensbS6AddSelected() {
+  var ids = Array.from(_ensbS6Selected)
+  if (!ids.length) return
+  var title = ids.length === 1 ? ('Add Stage 6 for 1 car') : ('Add Stage 6 for ' + ids.length + ' cars')
+  showEnsbAddModal(title, ids, function(amount) {
+    for (var i = 0; i < ids.length; i++) _ensbEditorState.stage6[ids[i]] = Math.max(0, amount)
+    _ensbS6Selected.clear()
+    renderEnsbStage6Tab(); renderEnsbLeftPanel(); showEnsbToast()
+  })
+}
+
+function ensbS6Remove(id) {
+  _ensbEditorState.stage6[id] = 0
+  renderEnsbStage6Tab(); renderEnsbLeftPanel()
+}
+
+function ensbS6Change(id, val) {
+  _ensbEditorState.stage6[id] = Math.max(0, parseInt(val) || 0)
+  renderEnsbLeftPanel(); showEnsbToast()
 }
 
 async function downloadEnsbFull() {
@@ -6228,7 +6519,7 @@ async function downloadEnsbFull() {
     body: JSON.stringify({
       nsbBase64: _nsbData.ensb.base64,
       currency: _ensbEditorState.currency,
-      garageQueue: _ensbEditorState.garageQueue,
+      garageAdded: _ensbEditorState.garageAdded,
       legends: _ensbEditorState.legends,
       fusions: _ensbEditorState.fusions,
       stage6: _ensbEditorState.stage6,
@@ -6258,6 +6549,32 @@ async function downloadEnsbFull() {
     hideModal('ensb-editor-modal')
     showApplyResult(true, 'Edits Applied!', result.note || 'The modified save file has been downloaded.', false, 'ensb')
   }
+}
+
+function showEnsbToast() {
+  var t = document.getElementById('ensb-toast')
+  if (!t) return
+  t.style.display = 'block'
+  clearTimeout(t._tid)
+  t._tid = setTimeout(function(){ t.style.display = 'none' }, 3000)
+}
+
+function showEnsbAddModal(title, ids, cb) {
+  _ensbAddModalCb = { ids: ids, cb: cb }
+  var titleEl = document.getElementById('ensb-add-modal-title')
+  if (titleEl) titleEl.textContent = title
+  var inp = document.getElementById('ensb-add-modal-input')
+  if (inp) inp.value = ''
+  showModal('ensb-add-modal')
+  setTimeout(function(){ var el = document.getElementById('ensb-add-modal-input'); if (el) el.focus() }, 50)
+}
+
+function confirmEnsbAddModal() {
+  if (!_ensbAddModalCb) return
+  var val = parseInt(document.getElementById('ensb-add-modal-input').value) || 0
+  hideModal('ensb-add-modal')
+  _ensbAddModalCb.cb(Math.max(0, val))
+  _ensbAddModalCb = null
 }
 
 function showApplyResult(ok, title, desc, folderMode, whichNsb) {
@@ -6810,8 +7127,25 @@ const server = http.createServer(async (req, res) => {
         fusionYellow: (data.afme && data.afme.Yellow) || 0,
       }
       const ownedCrdbs = Array.isArray(data.caow) ? data.caow.map(c => c.crdb).filter(Boolean) : []
-      const crpe = data.crpe || {}
       const lcMap = LEGEND_CARS.reduce((m, lc) => { m[lc.crdb] = lc; return m }, {})
+      // Deep-search for the crpe with the most LEGEND_CARS matches (correct crpe has CRDB string keys)
+      function findBestCrpe(obj, depth) {
+        if (depth <= 0 || typeof obj !== 'object' || obj === null || Array.isArray(obj)) return { score: 0, data: {} }
+        let best = { score: 0, data: {} }
+        for (const k of Object.keys(obj)) {
+          if (k === 'crpe' && typeof obj[k] === 'object' && obj[k] !== null && !Array.isArray(obj[k])) {
+            let cnt = 0; for (const ck in obj[k]) { if (lcMap[ck]) cnt++ }
+            if (cnt > best.score) { best = { score: cnt, data: obj[k] } }
+          }
+          if (typeof obj[k] === 'object' && obj[k] !== null) {
+            const sub = findBestCrpe(obj[k], depth - 1)
+            if (sub.score > best.score) best = sub
+          }
+        }
+        return best
+      }
+      const crpe = findBestCrpe(data, 5).data
+      log('[csr2/read-nsb-full] crpe keys: ' + Object.keys(crpe).length + ', legend matches: ' + Object.keys(crpe).filter(k => lcMap[k]).length)
       const legendsOwned = []
       for (const [crdb, amount] of Object.entries(crpe)) {
         const lc = lcMap[crdb]; if (lc) legendsOwned.push({ crdb, name: lc.name, amount, maxAmount: lc.amount })
@@ -6849,7 +7183,7 @@ const server = http.createServer(async (req, res) => {
       }
       return json(res, 200, {
         currencies,
-        playerName: data.pnam || data.prfn || '',
+        playerName: data.name || data.pnam || data.prfn || '',
         garage: { carCount: ownedCrdbs.length, ownedCrdbs },
         legends: { owned: legendsOwned, available: legendsAvailable },
         fusions: { brands: Array.from(fusSeen.values()) },
@@ -6923,9 +7257,9 @@ const server = http.createServer(async (req, res) => {
             data.cues = newCues
           }
         }
-        // Garage — add queued cars
+        // Garage — add confirmed cars
         let note = null
-        const garageQueue = Array.isArray(body.garageQueue) ? body.garageQueue : []
+        const garageQueue = Array.isArray(body.garageAdded) ? body.garageAdded : []
         if (garageQueue.length > 0) {
           if (!Array.isArray(data.caow)) data.caow = []
           if (typeof data.ncui !== 'number' || data.ncui < data.caow.length) data.ncui = data.caow.length
