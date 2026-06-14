@@ -2459,10 +2459,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 </div>
 
 <!-- NSB Editor Toast -->
-<div id="ensb-toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#22c55e;color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,.3)">✅ Updated!</div>
+<div id="ensb-toast" style="display:none;position:fixed;top:24px;right:24px;background:#22c55e;color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,.3)">✅ Updated!</div>
 
 <!-- NSB Add-Amount Modal -->
-<div class="modal-bg" id="ensb-add-modal" style="display:none">
+<div class="modal-bg" id="ensb-add-modal">
   <div class="modal" style="max-width:340px">
     <div style="font-size:15px;font-weight:700;margin-bottom:14px" id="ensb-add-modal-title">Add</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:10px">How many?</div>
@@ -6382,7 +6382,7 @@ function renderEnsbFusionsTab() {
     var safeid2 = rb.id.replace(/'/g,"\\\\'")
     html += '<div onclick="ensbFusionToggle(\\'' + safeid2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf2)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;cursor:pointer">'
     html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(formatBrandId(rb.id)||rb.id) + '</span>'
-    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">+Add</button>'
+    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">Add</button>'
     html += '</div>'
   }
   html += '</div></div>'
@@ -6508,7 +6508,7 @@ function renderEnsbStage6Tab() {
         html += '<div onclick="ensbS6Toggle(\\'' + safercid + '\\')" style="display:flex;align-items:center;gap:6px;padding:4px 8px 4px 18px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:5px;cursor:pointer;margin-top:2px">'
         html += '<input type="checkbox" class="chk-themed" ' + (isSel ? 'checked' : '') + ' onclick="event.stopPropagation();ensbS6Toggle(\\'' + safercid + '\\')" style="flex-shrink:0">'
         html += '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(rc.name||rc.id) + '</span>'
-        html += '<button onclick="event.stopPropagation();ensbS6AddOne(\\'' + safercid + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;color:var(--accent);white-space:nowrap">+Add</button>'
+        html += '<button onclick="event.stopPropagation();ensbS6AddOne(\\'' + safercid + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;color:var(--accent);white-space:nowrap">Add</button>'
         html += '</div>'
       }
     }
