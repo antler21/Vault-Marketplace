@@ -6054,7 +6054,7 @@ function renderEnsbLeftPanel() {
 
 function renderEnsbCurrencyTab() {
   var c = _ensbEditorState.currency
-  var html = '<div style="max-width:500px">'
+  var html = '<div>'
   html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
   html += '<div class="section-title" style="margin:0">Currencies</div></div>'
   html += '<div class="curr-grid" style="margin-bottom:16px">'
@@ -6219,7 +6219,7 @@ function renderEnsbLegendsTab() {
   var ownedSet = new Set(Object.keys(_ensbEditorState.legends))
   var available = LEGEND_CARS.filter(function(lc){ return !ownedSet.has(lc.crdb) })
   var ownedList = LEGEND_CARS.filter(function(lc){ return ownedSet.has(lc.crdb) })
-  var cardStyle = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border-radius:7px;margin-bottom:4px;border-left:3px solid '
+  var cardStyle = 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px;margin-bottom:4px'
   var inputStyle = 'width:90px;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:4px 7px;color:var(--text);font-size:12px;outline:none;text-align:right'
   var btnStyle = 'background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 10px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap'
   var html = '<div style="display:flex;gap:14px;min-height:0">'
@@ -6233,10 +6233,9 @@ function renderEnsbLegendsTab() {
   if (ownedList.length === 0) html += '<div style="color:var(--muted);font-size:13px;padding:8px 0">None owned. Add from the right.</div>'
   for (var i = 0; i < ownedList.length; i++) {
     var lc = ownedList[i]
-    var col = LEGEND_COLORS[LEGEND_CARS.indexOf(lc) % LEGEND_COLORS.length]
     var amt = _ensbEditorState.legends[lc.crdb] || 0
     var safecrdb = lc.crdb.replace(/'/g,"\\\\'")
-    html += '<div style="' + cardStyle + col + ';border-top:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)">'
+    html += '<div style="' + cardStyle + '">'
     html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escH(lc.name) + '">' + escH(lc.name) + '</span>'
     html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbLegendChange(\\'' + safecrdb + '\\',this.value)" style="' + inputStyle + '">'
     html += '<button onclick="ensbLegendMaxOut(\\'' + safecrdb + '\\')" style="' + btnStyle + '">Max</button>'
@@ -6254,9 +6253,8 @@ function renderEnsbLegendsTab() {
   if (available.length === 0) html += '<div style="color:var(--muted);font-size:13px;padding:8px 0">All legends owned.</div>'
   for (var j = 0; j < available.length; j++) {
     var lc2 = available[j]
-    var col2 = LEGEND_COLORS[LEGEND_CARS.indexOf(lc2) % LEGEND_COLORS.length]
     var safecrdb2 = lc2.crdb.replace(/'/g,"\\\\'")
-    html += '<div style="' + cardStyle + col2 + ';border-top:1px solid rgba(255,255,255,.06);border-right:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)">'
+    html += '<div style="' + cardStyle + '">'
     html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escH(lc2.name) + '">' + escH(lc2.name) + '</span>'
     html += '<span style="font-size:10px;color:var(--muted);white-space:nowrap;margin-right:4px">req. ' + fmtN(lc2.amount) + '</span>'
     html += '<button onclick="ensbAddLegend(\\'' + safecrdb2 + '\\')" style="' + btnStyle + '">Add</button>'
@@ -6354,9 +6352,8 @@ function renderEnsbFusionsTab() {
     var isSel = _ensbFusionSelected.has(rb.id)
     var safeid2 = rb.id.replace(/'/g,"\\\\'")
     html += '<div onclick="ensbFusionToggle(\\'' + safeid2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf2)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;cursor:pointer">'
-    html += '<input type="checkbox" class="chk-themed" ' + (isSel ? 'checked' : '') + ' onclick="event.stopPropagation();ensbFusionToggle(\\'' + safeid2 + '\\')" style="flex-shrink:0">'
     html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(formatBrandId(rb.id)||rb.id) + '</span>'
-    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">+Add</button>'
+    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:3px 6px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">+Add</button>'
     html += '</div>'
   }
   html += '</div></div>'
@@ -6452,9 +6449,9 @@ function renderEnsbStage6Tab() {
     if (!bcars || bcars.length === 0) continue
     var isExp = _ensbS6Expanded.has(bname)
     var safebname = bname.replace(/'/g,"\\\\'")
-    html += '<div onclick="ensbS6ToggleBrand(\\'' + safebname + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">'
-    html += '<span style="flex:1">' + escH(bname) + ' <span style="font-size:10px;font-weight:400;color:var(--muted)">(' + bcars.length + ')</span></span>'
-    html += '<span style="color:var(--muted);font-size:11px">' + (isExp ? '▲' : '▼') + '</span>'
+    html += '<div onclick="ensbS6ToggleBrand(\\'' + safebname + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px">'
+    html += '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(bname) + ' <span style="font-size:10px;color:var(--muted)">(' + bcars.length + ')</span></span>'
+    html += '<span style="color:var(--muted);font-size:11px;flex-shrink:0">' + (isExp ? '▲' : '▼') + '</span>'
     html += '</div>'
     if (isExp) {
       for (var ci = 0; ci < bcars.length; ci++) {
