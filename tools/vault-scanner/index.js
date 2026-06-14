@@ -2794,6 +2794,7 @@ var _scanAbort = false, _multiAbort = false, _multiRunId = 0
 var _previewAcct = null, _importAcct = null, _afterImportId = null
 var _csr2CarsDb = [], _ownedCrdbs = new Set(), _allowDuplicates = false
 var _colorPickerCar = null, _colorPickerCarIdx = -1, _selectingColor = false
+var _ensbGarageColorMaxed = false
 var _selectedBrands = [], _brandsList = [], _selectedS6Cars = [], _s6CarsList = []
 var _pendingCarPackId = null, _fusionS6Choice = null
 
@@ -4537,6 +4538,13 @@ function selectCppColor(carIdx, colorIdx) {
   if (!car || !car.colors) return
   var color = car.colors[colorIdx]
   if (!color) return
+  var mode = document.getElementById('cp2-car-name').dataset.cppMode
+  if (mode === 'ensb-garage') {
+    _ensbEditorState.garageQueue.push({ crdb: car.crdb, name: car.name, maxed: _ensbGarageColorMaxed, colorName: color.name })
+    hideModal('color-picker-modal')
+    renderEnsbGarageTab()
+    return
+  }
   if (!_cppAllowDupes && _carPackCars.find(function(c){ return c.crdb === car.crdb && c.colorName === color.name })) {
     showNotice('cp2-notice', 'info', 'This color is already in the pack.')
     return
@@ -6191,8 +6199,29 @@ function renderEnsbGarageTab() {
 }
 
 function ensbAddCarToQueue(crdb, name, maxed) {
-  _ensbEditorState.garageQueue.push({ crdb: crdb, name: name, maxed: maxed })
-  renderEnsbGarageTab()
+  var car = _csr2CarsDb.find(function(c){ return c.crdb === crdb })
+  if (car && car.colors && car.colors.length > 1) {
+    _ensbGarageColorMaxed = maxed
+    var carIdx = _csr2CarsDb.indexOf(car)
+    var html = ''
+    for (var i = 0; i < car.colors.length; i++) {
+      var col = car.colors[i]
+      html += '<div class="color-swatch" onclick="selectCppColor(' + carIdx + ',' + i + ')" title="' + escH(col.name) + '">'
+      html += '<img src="' + escH(col.photoUrl || '') + '" onerror="this.style.display=\\'none\\'" loading="lazy">'
+      html += '<div class="color-swatch-name">' + escH(col.name) + '</div>'
+      html += '</div>'
+    }
+    document.getElementById('cp2-car-name').textContent = name + ' (' + (maxed ? 'Max' : 'Stock') + ')'
+    document.getElementById('cp2-colors-grid').innerHTML = html
+    hideNotice('cp2-notice')
+    document.getElementById('cp2-car-name').dataset.cppMode = 'ensb-garage'
+    document.getElementById('cp2-car-name').dataset.cppIdx = carIdx
+    showModal('color-picker-modal')
+  } else {
+    var colorName = (car && car.colors && car.colors[0]) ? car.colors[0].name : ''
+    _ensbEditorState.garageQueue.push({ crdb: crdb, name: name, maxed: maxed, colorName: colorName })
+    renderEnsbGarageTab()
+  }
 }
 
 function ensbRemoveCarFromQueue(idx) {
@@ -6319,7 +6348,7 @@ function renderEnsbFusionsTab() {
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
   html += '<input placeholder="Search brands..." value="' + escH(_ensbFusionSearch) + '" '
   html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
-  html += 'oninput="_ensbFusionSearch=this.value;renderEnsbFusionsTab()">'
+  html += 'oninput="onEnsbFusionSearch(this.value)">'
   if (selCount > 0) {
     html += '<button onclick="ensbFusionAddSelected()" style="background:var(--accent);border:none;border-radius:6px;padding:6px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add Selected (' + selCount + ')</button>'
   }
@@ -6359,6 +6388,24 @@ function renderEnsbFusionsTab() {
   html += '</div></div>'
   html += '</div></div>'
   document.getElementById('ensb-tab-content').innerHTML = html
+}
+
+function onEnsbFusionSearch(val) {
+  _ensbFusionSearch = val
+  renderEnsbFusionsTab()
+  setTimeout(function() {
+    var inp = document.querySelector('#ensb-tab-content input[placeholder="Search brands..."]')
+    if (inp) { inp.focus(); var n = inp.value.length; inp.setSelectionRange(n, n) }
+  }, 0)
+}
+
+function onEnsbS6Search(val) {
+  _ensbS6Search = val
+  renderEnsbStage6Tab()
+  setTimeout(function() {
+    var inp = document.querySelector('#ensb-tab-content input[placeholder="Search cars..."]')
+    if (inp) { inp.focus(); var n = inp.value.length; inp.setSelectionRange(n, n) }
+  }, 0)
 }
 
 function ensbFusionToggle(id) {
@@ -6417,7 +6464,7 @@ function renderEnsbStage6Tab() {
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
   html += '<input placeholder="Search cars..." value="' + escH(_ensbS6Search) + '" '
   html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
-  html += 'oninput="_ensbS6Search=this.value;renderEnsbStage6Tab()">'
+  html += 'oninput="onEnsbS6Search(this.value)">'
   if (selCount > 0) {
     html += '<button onclick="ensbS6AddSelected()" style="background:var(--accent);border:none;border-radius:6px;padding:6px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add Selected (' + selCount + ')</button>'
   }
@@ -7272,7 +7319,8 @@ const server = http.createServer(async (req, res) => {
             const dbCar = dbMap[q.crdb]
             if (!dbCar) { failed++; continue }
             try {
-              const col = (dbCar.colors && dbCar.colors[0]) || {}
+              const col = (q.colorName && dbCar.colors && dbCar.colors.find(c => c.name === q.colorName))
+                       || (dbCar.colors && dbCar.colors[0]) || {}
               const txtUrl = q.maxed ? (col.maxedTxtUrl || col.stockTxtUrl) : col.stockTxtUrl
               if (!txtUrl) { failed++; continue }
               const txt = await fetchRawGithub(txtUrl)
@@ -7407,32 +7455,17 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, loadCsr2Cars())
   }
 
-  // CSR2 car database — check if GitHub has newer commit
+  // CSR2 car database — check if GitHub has newer version (ETag comparison)
   if (req.method === 'GET' && pathname === '/csr2/cars-check') {
     try {
       const ALL_CRDBS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/1.Cars/%23AllCarCRDBs.txt'
-      log('[csr2/cars-check] Fetching #AllCarCRDBs.txt from GitHub...')
-      const rawTxt = await fetchRawGithub(ALL_CRDBS_URL)
-      log('[csr2/cars-check] Raw response length: ' + rawTxt.length + ' chars')
-      log('[csr2/cars-check] First 300 chars: ' + rawTxt.slice(0, 300))
-
-      const remoteNames = rawTxt.split('\n').map(l => l.trim()).filter(Boolean)
-      log('[csr2/cars-check] Remote CRDB count: ' + remoteNames.length)
-
-      const localCars = loadCsr2Cars()
-      const localCrdbSet = new Set(localCars.map(c => c.crdb).filter(Boolean))
-      log('[csr2/cars-check] Local car DB count: ' + localCars.length + ', unique CRDBs: ' + localCrdbSet.size)
-
-      const missing = remoteNames.filter(n => !localCrdbSet.has(n))
-      log('[csr2/cars-check] Missing from local DB: ' + missing.length + (missing.length ? ' — first few: ' + missing.slice(0, 5).join(', ') : ''))
-
-      return json(res, 200, {
-        hasUpdate: missing.length > 0,
-        remoteCount: remoteNames.length,
-        localCount: localCars.length,
-        missingCount: missing.length,
-        missingPreview: missing.slice(0, 10),
-      })
+      const remoteEtag = await headEtagCheck(ALL_CRDBS_URL)
+      const stored = loadJson(CSR2_SHA_FILE, {})
+      const storedEtag = stored.crdbsEtag || ''
+      const carCount = loadCsr2Cars().length
+      const hasUpdate = !storedEtag || (remoteEtag !== '' && remoteEtag !== storedEtag)
+      log('[csr2/cars-check] storedEtag=' + storedEtag + ' remoteEtag=' + remoteEtag + ' hasUpdate=' + hasUpdate)
+      return json(res, 200, { hasUpdate, carCount })
     } catch (e) {
       log('[csr2/cars-check] Error: ' + e.message)
       return json(res, 200, { hasUpdate: false, error: e.message, carCount: loadCsr2Cars().length })
@@ -7549,8 +7582,9 @@ const server = http.createServer(async (req, res) => {
       }))
 
       saveCsr2Cars(result)
-      saveCsr2Sha({ sha, updatedAt: new Date().toISOString() })
-      log('[csr2/cars-update] Done — ' + result.length + ' cars saved.')
+      const crdbsEtag = await headEtagCheck('https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/1.Cars/%23AllCarCRDBs.txt')
+      saveCsr2Sha({ sha, crdbsEtag: crdbsEtag || '', updatedAt: new Date().toISOString() })
+      log('[csr2/cars-update] Done — ' + result.length + ' cars saved, crdbsEtag=' + crdbsEtag)
       return json(res, 200, { ok: true, count: result.length })
     } catch (e) {
       log('[csr2/cars-update] Error: ' + e.message)
