@@ -6423,7 +6423,7 @@ function ensbFusionAddSelected() {
   if (!ids.length) return
   var title = ids.length === 1 ? ('Add: ' + (formatBrandId(ids[0]) || ids[0])) : ('Add ' + ids.length + ' Brands')
   showEnsbAddModal(title, ids, function(amount) {
-    for (var i = 0; i < ids.length; i++) _ensbEditorState.fusions[ids[i]] = Math.max(0, amount)
+    for (var i = 0; i < ids.length; i++) _ensbEditorState.fusions[ids[i]] = Math.max(0, (_ensbEditorState.fusions[ids[i]] || 0) + amount)
     _ensbFusionSelected.clear()
     renderEnsbFusionsTab(); renderEnsbLeftPanel(); showEnsbToast()
   })
@@ -6538,7 +6538,7 @@ function ensbS6AddSelected() {
   if (!ids.length) return
   var title = ids.length === 1 ? ('Add Stage 6 for 1 car') : ('Add Stage 6 for ' + ids.length + ' cars')
   showEnsbAddModal(title, ids, function(amount) {
-    for (var i = 0; i < ids.length; i++) _ensbEditorState.stage6[ids[i]] = Math.max(0, amount)
+    for (var i = 0; i < ids.length; i++) _ensbEditorState.stage6[ids[i]] = Math.max(0, (_ensbEditorState.stage6[ids[i]] || 0) + amount)
     _ensbS6Selected.clear()
     renderEnsbStage6Tab(); renderEnsbLeftPanel(); showEnsbToast()
   })
