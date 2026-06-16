@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.18'
+const VERSION = '0.7.19'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -6462,7 +6462,7 @@ function renderEnsbFusionsTab() {
   var allBrands = (_ensbFullData && _ensbFullData.fusions && _ensbFullData.fusions.brands) || []
   var el = document.getElementById('ensb-tab-content')
   if (allBrands.length === 0) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:13px">No fusion brand list — open Fusions Data settings and click Update Brand List.</div>'
+    el.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><span style="color:var(--muted);font-size:13px">No fusion brand list cached yet.</span><button onclick="openFusionBrandsUpdate()" style="background:var(--accent);border:none;border-radius:6px;padding:7px 14px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Update Brand List</button></div>'
     return
   }
   // Build name lookup from brand list
@@ -6516,6 +6516,7 @@ function renderEnsbFusionsTab() {
   html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
   html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-shrink:0">'
   html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">All Brands (' + filteredAll.length + ')</div>'
+  html += '<button onclick="openFusionBrandsUpdate()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap">Update List</button>'
   html += '<button onclick="ensbAddAllFusions()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">Add All</button>'
   html += '</div>'
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
@@ -6589,7 +6590,7 @@ function renderEnsbStage6Tab() {
   var carList = (_ensbFullData && _ensbFullData.stage6 && _ensbFullData.stage6.carList) || []
   var el = document.getElementById('ensb-tab-content')
   if (carList.length === 0) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:13px">No stage 6 car list — open Stage 6 Data settings and click Update Car List.</div>'
+    el.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><span style="color:var(--muted);font-size:13px">No stage 6 car list cached yet.</span><button onclick="openS6CarListUpdate()" style="background:var(--accent);border:none;border-radius:6px;padding:7px 14px;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Update Car List</button></div>'
     return
   }
   // Build name lookup
@@ -6651,6 +6652,7 @@ function renderEnsbStage6Tab() {
   html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
   html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-shrink:0">'
   html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">All Cars (' + totalCount + ')</div>'
+  html += '<button onclick="openS6CarListUpdate()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap">Update List</button>'
   html += '<button onclick="ensbAddAllS6()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">Add All</button>'
   html += '</div>'
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
@@ -7918,16 +7920,17 @@ const server = http.createServer(async (req, res) => {
       const REPO = 'Nitro4CSR/CSR2-DataBase'
       const BRANCH = 'Everything'
       const EXCLUDED = new Set(['##AllFusions.txt', '#AllBrandIDs.txt', '#GeneratorPreset1Brand.txt', 'Placeholder Mystery.txt'])
-      log('[csr2/fusion-brands-update] Fetching GitHub tree...')
-      const tree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH + '?recursive=1')
-      if (!tree.tree) return json(res, 500, { error: 'GitHub API returned no tree' })
-      const brandFiles = tree.tree.filter(f => {
-        if (f.type !== 'blob') return false
-        const parts = f.path.split('/')
-        if (parts.length !== 2 || parts[0] !== '3.Fusions') return false
-        const fname = parts[1]
-        return fname.endsWith('.txt') && !fname.startsWith('#') && !EXCLUDED.has(fname)
-      })
+      log('[csr2/fusion-brands-update] Fetching root tree...')
+      const rootTree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH)
+      if (!rootTree.tree) return json(res, 500, { error: 'GitHub API returned no root tree' })
+      const fusionsEntry = rootTree.tree.find(e => e.path === '3.Fusions' && e.type === 'tree')
+      if (!fusionsEntry) return json(res, 500, { error: 'Could not find 3.Fusions directory in repo' })
+      log('[csr2/fusion-brands-update] Fetching 3.Fusions subtree...')
+      const fusionsTree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + fusionsEntry.sha)
+      if (!fusionsTree.tree) return json(res, 500, { error: 'GitHub API returned no tree for 3.Fusions' })
+      const brandFiles = fusionsTree.tree.filter(f => {
+        return f.type === 'blob' && f.path.endsWith('.txt') && !f.path.startsWith('#') && !EXCLUDED.has(f.path)
+      }).map(f => ({ ...f, path: '3.Fusions/' + f.path }))
       log('[csr2/fusion-brands-update] Found ' + brandFiles.length + ' brand files')
       const brands = []
       const BATCH = 15
@@ -7969,13 +7972,18 @@ const server = http.createServer(async (req, res) => {
       const BRANCH = 'Everything'
       const GOLD_PREFIX   = "4.Stage6's/1.Gold Star/"
       const PURPLE_PREFIX = "4.Stage6's/2.Purple Star/"
-      log('[csr2/s6-car-list-update] Fetching GitHub tree...')
-      const tree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH + '?recursive=1')
-      if (!tree.tree) return json(res, 500, { error: 'GitHub API returned no tree' })
-      const carFiles = tree.tree.filter(f => {
+      log("[csr2/s6-car-list-update] Fetching root tree...")
+      const rootTree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH)
+      if (!rootTree.tree) return json(res, 500, { error: 'GitHub API returned no root tree' })
+      const s6Entry = rootTree.tree.find(e => e.path === "4.Stage6's" && e.type === 'tree')
+      if (!s6Entry) return json(res, 500, { error: "Could not find 4.Stage6's directory in repo" })
+      log("[csr2/s6-car-list-update] Fetching 4.Stage6's subtree (recursive)...")
+      const s6Tree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + s6Entry.sha + '?recursive=1')
+      if (!s6Tree.tree) return json(res, 500, { error: "GitHub API returned no tree for 4.Stage6's" })
+      const carFiles = s6Tree.tree.filter(f => {
         if (f.type !== 'blob' || !f.path.endsWith('.txt')) return false
-        return f.path.startsWith(GOLD_PREFIX) || f.path.startsWith(PURPLE_PREFIX)
-      })
+        return f.path.startsWith('1.Gold Star/') || f.path.startsWith('2.Purple Star/')
+      }).map(f => ({ ...f, path: "4.Stage6's/" + f.path }))
       log('[csr2/s6-car-list-update] Found ' + carFiles.length + ' car files')
       const carsDb = loadCsr2Cars()
       const nameMap = {}; for (const car of carsDb) { if (car.crdb) nameMap[car.crdb] = car.name }
