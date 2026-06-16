@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.20'
+const VERSION = '0.7.21'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -7940,8 +7940,10 @@ const server = http.createServer(async (req, res) => {
           const encodedPath = f.path.split('/').map(s => encodeURIComponent(s)).join('/')
           const rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + encodedPath
           try {
-            const raw = await fetchRawGithub(rawUrl)
-            const arr = JSON.parse(raw.replace(/\bAMOUNT\b/g, '0'))
+            let raw = await fetchRawGithub(rawUrl)
+            raw = raw.replace(/\bAMOUNT\b/g, '0').trim()
+            if (raw.endsWith(',')) raw = raw.slice(0, -1)
+            const arr = JSON.parse('[' + raw + ']')
             const firstObj = arr.find(e => typeof e === 'object' && e !== null && e.upma)
             if (!firstObj) return null
             const name = f.path.split('/').pop().replace(/\.txt$/i, '')
