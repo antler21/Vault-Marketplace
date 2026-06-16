@@ -23,8 +23,10 @@ const CSR2_FUSIONS_FILE = path.join(DATA_DIR, 'csr2-fusions.json')
 const CSR2_FUSIONS_SHA  = path.join(DATA_DIR, 'csr2-fusions-sha.json')
 const CSR2_STAGE6_FILE  = path.join(DATA_DIR, 'csr2-stage6.json')
 const CSR2_STAGE6_SHA   = path.join(DATA_DIR, 'csr2-stage6-sha.json')
-const CSR2_BRANDS_FILE  = path.join(DATA_DIR, 'csr2-brands.json')
-const CSR2_BRANDS_SHA   = path.join(DATA_DIR, 'csr2-brands-sha.json')
+const CSR2_BRANDS_FILE        = path.join(DATA_DIR, 'csr2-brands.json')
+const CSR2_BRANDS_SHA         = path.join(DATA_DIR, 'csr2-brands-sha.json')
+const CSR2_FUSION_BRANDS_FILE = path.join(DATA_DIR, 'csr2-fusion-brands.json')
+const CSR2_S6_CAR_LIST_FILE   = path.join(DATA_DIR, 'csr2-s6-car-list.json')
 const INT32_MAX = 2147483647
 const applyJobs = new Map()
 
@@ -87,6 +89,10 @@ function loadFusionsSha() { return loadJson(CSR2_FUSIONS_SHA, {}) }
 function saveFusionsSha(d) { saveJson(CSR2_FUSIONS_SHA, d) }
 function loadStage6Data() { return loadJson(CSR2_STAGE6_FILE, {}) }
 function saveStage6Data(d) { saveJson(CSR2_STAGE6_FILE, d) }
+function loadFusionBrands() { return loadJson(CSR2_FUSION_BRANDS_FILE, []) }
+function saveFusionBrands(d) { saveJson(CSR2_FUSION_BRANDS_FILE, d) }
+function loadS6CarList() { return loadJson(CSR2_S6_CAR_LIST_FILE, []) }
+function saveS6CarList(d) { saveJson(CSR2_S6_CAR_LIST_FILE, d) }
 function loadStage6Sha() { return loadJson(CSR2_STAGE6_SHA, {}) }
 function saveStage6Sha(d) { saveJson(CSR2_STAGE6_SHA, d) }
 function loadBrandData() { return loadJson(CSR2_BRANDS_FILE, []) }
@@ -1119,6 +1125,19 @@ function fetchRawGithubWithEtag(rawUrl) {
       }).on('error', reject)
     }
     get(rawUrl)
+  })
+}
+
+function fetchGithubApi(apiUrl) {
+  return new Promise((resolve, reject) => {
+    const get = (url) => {
+      https.get(url, { headers: { 'User-Agent': 'aio-tool-v' + VERSION, 'Accept': 'application/vnd.github.v3+json' } }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) return get(res.headers.location)
+        let d = ''; res.on('data', c => d += c)
+        res.on('end', () => { try { resolve(JSON.parse(d)) } catch(e) { reject(e) } })
+      }).on('error', reject)
+    }
+    get(apiUrl)
   })
 }
 
@@ -2696,8 +2715,9 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div id="stage6-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load Stage 6 data.</div>
     <div class="cars-update-bar" style="display:none" id="stage6-update-bar"><div class="cars-update-bar-fill" id="stage6-update-bar-fill"></div></div>
     <div id="stage6-update-notice" style="display:none"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
       <button class="btn btn-secondary" onclick="hideModal('stage6-update-modal')" id="stage6-update-close-btn">Cancel</button>
+      <button class="btn btn-secondary" onclick="hideModal('stage6-update-modal');openS6CarListUpdate()">Update Car List</button>
       <button class="btn btn-primary" onclick="doStage6Update()" id="stage6-update-go-btn">Fetch & Cache</button>
     </div>
   </div>
@@ -2711,9 +2731,40 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div id="fusions-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load fusion data.</div>
     <div class="cars-update-bar" style="display:none" id="fusions-update-bar"><div class="cars-update-bar-fill" id="fusions-update-bar-fill"></div></div>
     <div id="fusions-update-notice" style="display:none"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
       <button class="btn btn-secondary" onclick="hideModal('fusions-update-modal')" id="fusions-update-close-btn">Cancel</button>
+      <button class="btn btn-secondary" onclick="hideModal('fusions-update-modal');openFusionBrandsUpdate()">Update Brand List</button>
       <button class="btn btn-primary" onclick="doFusionsUpdate()" id="fusions-update-go-btn">Fetch & Cache</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fusion Brand List Modal -->
+<div class="modal-bg" id="fusion-brands-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">Fusion Brand List</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Source: CSR2-DataBase / 3.Fusions/ directory</div>
+    <div id="fusion-brands-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load brand list.</div>
+    <div class="cars-update-bar" style="display:none" id="fusion-brands-bar"><div class="cars-update-bar-fill" id="fusion-brands-bar-fill"></div></div>
+    <div id="fusion-brands-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('fusion-brands-modal')" id="fusion-brands-close-btn">Cancel</button>
+      <button class="btn btn-primary" onclick="doFusionBrandsUpdate()" id="fusion-brands-go-btn">Fetch & Cache</button>
+    </div>
+  </div>
+</div>
+
+<!-- S6 Car List Modal -->
+<div class="modal-bg" id="s6-car-list-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">Stage 6 Car List</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Source: CSR2-DataBase / 4.Stage6's/1.Gold Star + 2.Purple Star</div>
+    <div id="s6-car-list-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load car list.</div>
+    <div class="cars-update-bar" style="display:none" id="s6-car-list-bar"><div class="cars-update-bar-fill" id="s6-car-list-bar-fill"></div></div>
+    <div id="s6-car-list-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('s6-car-list-modal')" id="s6-car-list-close-btn">Cancel</button>
+      <button class="btn btn-primary" onclick="doS6CarListUpdate()" id="s6-car-list-go-btn">Fetch & Cache</button>
     </div>
   </div>
 </div>
@@ -2753,7 +2804,7 @@ var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackId
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _ensbFullData = null
-var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], legends: {}, fusions: {}, stage6: {} }
+var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], legends: {}, fusions: {}, stage6: {}, fusionsAll: null, s6All: null }
 var _ensbGarageAllowDup = false, _ensbFusionSearch = '', _ensbS6Search = ''
 var _ensbFusionSelected = new Set(), _ensbS6Selected = new Set(), _ensbS6Expanded = new Set()
 var _ensbAddModalCb = null
@@ -4063,6 +4114,78 @@ async function doStage6Update() {
   } catch (e) {
     showNotice('stage6-update-notice', 'error', 'Failed: ' + e.message)
     document.getElementById('stage6-update-go-btn').style.display = ''
+  }
+}
+
+async function openFusionBrandsUpdate() {
+  var stored = await apiFetch('/csr2/fusion-brands', { count: 0 })
+  document.getElementById('fusion-brands-status').textContent = stored.count > 0
+    ? stored.count + ' brands cached. Click Fetch to refresh.'
+    : 'No brand list cached yet. Click Fetch to load.'
+  document.getElementById('fusion-brands-status').style.color = 'var(--muted)'
+  document.getElementById('fusion-brands-bar').style.display = 'none'
+  hideNotice('fusion-brands-notice')
+  document.getElementById('fusion-brands-close-btn').textContent = 'Cancel'
+  document.getElementById('fusion-brands-go-btn').style.display = ''
+  showModal('fusion-brands-modal')
+}
+
+async function doFusionBrandsUpdate() {
+  document.getElementById('fusion-brands-go-btn').style.display = 'none'
+  document.getElementById('fusion-brands-bar').style.display = ''
+  document.getElementById('fusion-brands-bar-fill').style.width = '30%'
+  document.getElementById('fusion-brands-status').textContent = 'Fetching brand list from GitHub...'
+  hideNotice('fusion-brands-notice')
+  try {
+    var res = await fetch('/csr2/fusion-brands-update', { method: 'POST' }).then(function(r){ return r.json() })
+    document.getElementById('fusion-brands-bar-fill').style.width = '100%'
+    if (res.error) {
+      showNotice('fusion-brands-notice', 'error', res.error)
+      document.getElementById('fusion-brands-go-btn').style.display = ''
+    } else {
+      document.getElementById('fusion-brands-status').textContent = 'Done! ' + res.count + ' brands loaded.'
+      document.getElementById('fusion-brands-close-btn').textContent = 'Close'
+      showNotice('fusion-brands-notice', 'success', res.count + ' fusion brands ready.')
+    }
+  } catch (e) {
+    showNotice('fusion-brands-notice', 'error', 'Failed: ' + e.message)
+    document.getElementById('fusion-brands-go-btn').style.display = ''
+  }
+}
+
+async function openS6CarListUpdate() {
+  var stored = await apiFetch('/csr2/s6-car-list', { count: 0 })
+  document.getElementById('s6-car-list-status').textContent = stored.count > 0
+    ? stored.count + ' cars cached. Click Fetch to refresh.'
+    : 'No car list cached yet. Click Fetch to load.'
+  document.getElementById('s6-car-list-status').style.color = 'var(--muted)'
+  document.getElementById('s6-car-list-bar').style.display = 'none'
+  hideNotice('s6-car-list-notice')
+  document.getElementById('s6-car-list-close-btn').textContent = 'Cancel'
+  document.getElementById('s6-car-list-go-btn').style.display = ''
+  showModal('s6-car-list-modal')
+}
+
+async function doS6CarListUpdate() {
+  document.getElementById('s6-car-list-go-btn').style.display = 'none'
+  document.getElementById('s6-car-list-bar').style.display = ''
+  document.getElementById('s6-car-list-bar-fill').style.width = '10%'
+  document.getElementById('s6-car-list-status').textContent = 'Fetching car list from GitHub (this may take a minute)...'
+  hideNotice('s6-car-list-notice')
+  try {
+    var res = await fetch('/csr2/s6-car-list-update', { method: 'POST' }).then(function(r){ return r.json() })
+    document.getElementById('s6-car-list-bar-fill').style.width = '100%'
+    if (res.error) {
+      showNotice('s6-car-list-notice', 'error', res.error)
+      document.getElementById('s6-car-list-go-btn').style.display = ''
+    } else {
+      document.getElementById('s6-car-list-status').textContent = 'Done! ' + res.count + ' cars loaded.'
+      document.getElementById('s6-car-list-close-btn').textContent = 'Close'
+      showNotice('s6-car-list-notice', 'success', res.count + ' stage 6 cars ready.')
+    }
+  } catch (e) {
+    showNotice('s6-car-list-notice', 'error', 'Failed: ' + e.message)
+    document.getElementById('s6-car-list-go-btn').style.display = ''
   }
 }
 
@@ -5985,16 +6108,20 @@ async function openEnsbEditor() {
     legends: {},
     fusions: {},
     stage6: {},
+    fusionsAll: null,
+    s6All: null,
   }
   _ensbGarageAllowDup = false
   _ensbFusionSearch = ''; _ensbS6Search = ''
   _ensbFusionSelected = new Set(); _ensbS6Selected = new Set(); _ensbS6Expanded = new Set()
   var owned = (res.legends && res.legends.owned) || []
   for (var i = 0; i < owned.length; i++) _ensbEditorState.legends[owned[i].crdb] = owned[i].amount
-  var brands = (res.fusions && res.fusions.brands) || []
-  for (var j = 0; j < brands.length; j++) _ensbEditorState.fusions[brands[j].id] = brands[j].amount
-  var s6cars = (res.stage6 && res.stage6.cars) || []
-  for (var k = 0; k < s6cars.length; k++) _ensbEditorState.stage6[s6cars[k].id] = s6cars[k].amount
+  // Fusions: init from owned brands in save (upma → amount)
+  var fusionOwned = (res.fusions && res.fusions.owned) || []
+  for (var j = 0; j < fusionOwned.length; j++) _ensbEditorState.fusions[fusionOwned[j].upma] = fusionOwned[j].amount
+  // Stage6: init from owned cars in save (esdb → amount)
+  var s6Owned = (res.stage6 && res.stage6.owned) || []
+  for (var k = 0; k < s6Owned.length; k++) _ensbEditorState.stage6[s6Owned[k].esdb] = s6Owned[k].amount
   _ensbActiveTab = 'currency'
   showModal('ensb-editor-modal')
   renderEnsbLeftPanel()
@@ -6333,18 +6460,32 @@ function ensbAddAllLegends() {
 
 function renderEnsbFusionsTab() {
   var allBrands = (_ensbFullData && _ensbFullData.fusions && _ensbFullData.fusions.brands) || []
+  var el = document.getElementById('ensb-tab-content')
   if (allBrands.length === 0) {
-    document.getElementById('ensb-tab-content').innerHTML = '<div style="color:var(--muted);font-size:13px">No fusion data — download car database first.</div>'
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px">No fusion brand list — open Fusions Data settings and click Update Brand List.</div>'
     return
   }
+  // Build name lookup from brand list
+  var brandNameMap = {}
+  for (var n = 0; n < allBrands.length; n++) brandNameMap[allBrands[n].upma] = allBrands[n].name
   var sq = _ensbFusionSearch.toLowerCase()
-  var filteredAll = sq ? allBrands.filter(function(b){ return (formatBrandId(b.id)||b.id||'').toLowerCase().includes(sq) }) : allBrands
-  var ownedBrands = allBrands.filter(function(b){ return (_ensbEditorState.fusions[b.id] || 0) > 0 })
-  var filteredOwned = sq ? ownedBrands.filter(function(b){ return (formatBrandId(b.id)||b.id||'').toLowerCase().includes(sq) }) : ownedBrands
+  // Left column: all upma with amount > 0
+  var ownedUpmas = Object.keys(_ensbEditorState.fusions).filter(function(u){ return (_ensbEditorState.fusions[u] || 0) > 0 })
+  var filteredOwned = sq ? ownedUpmas.filter(function(u){
+    return (brandNameMap[u] || formatBrandId(u) || u).toLowerCase().includes(sq)
+  }) : ownedUpmas
+  var filteredAll = sq ? allBrands.filter(function(b){ return (b.name||'').toLowerCase().includes(sq) }) : allBrands
   var selCount = _ensbFusionSelected.size
   var inputStyle = 'width:80px;height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
   var html = '<div style="display:flex;flex-direction:column;gap:0;height:100%">'
-  // Search bar spanning both
+  // "Add All" banner
+  if (_ensbEditorState.fusionsAll !== null) {
+    html += '<div style="background:rgba(126,101,81,.18);border:1px solid var(--accent);border-radius:7px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-shrink:0">'
+    html += '<span style="flex:1;font-size:12px;color:var(--text)">✅ Add All Fusions mode — amount: <strong>' + _ensbEditorState.fusionsAll + '</strong>. Individual edits will be overridden.</span>'
+    html += '<button onclick="_ensbEditorState.fusionsAll=null;renderEnsbFusionsTab()" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px;color:var(--muted)">Cancel</button>'
+    html += '</div>'
+  }
+  // Search + Add Selected
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
   html += '<input placeholder="Search brands..." value="' + escH(_ensbFusionSearch) + '" '
   html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
@@ -6353,7 +6494,6 @@ function renderEnsbFusionsTab() {
     html += '<button onclick="ensbFusionAddSelected()" style="background:var(--accent);border:none;border-radius:6px;padding:6px 12px;color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Add Selected (' + selCount + ')</button>'
   }
   html += '</div>'
-  // Two columns
   html += '<div style="display:flex;gap:14px;flex:1;overflow:hidden">'
   // Left: owned
   html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
@@ -6361,33 +6501,37 @@ function renderEnsbFusionsTab() {
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
   if (filteredOwned.length === 0) html += '<div style="color:var(--muted);font-size:12px">None owned.</div>'
   for (var i = 0; i < filteredOwned.length; i++) {
-    var b = filteredOwned[i]
-    var amt = _ensbEditorState.fusions[b.id] || 0
-    var safeid = b.id.replace(/'/g,"\\\\'")
+    var upma = filteredOwned[i]
+    var amt = _ensbEditorState.fusions[upma] || 0
+    var bname = brandNameMap[upma] || formatBrandId(upma) || upma
+    var safeupma = upma.replace(/'/g,"\\\\'")
     html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
-    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(formatBrandId(b.id)||b.id) + '</span>'
-    html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbFusionChange(\\'' + safeid + '\\',this.value)" style="' + inputStyle + '">'
-    html += '<button onclick="ensbFusionRemove(\\'' + safeid + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(bname) + '</span>'
+    html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbFusionChange(\\'' + safeupma + '\\',this.value)" style="' + inputStyle + '">'
+    html += '<button onclick="ensbFusionRemove(\\'' + safeupma + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
     html += '</div>'
   }
   html += '</div></div>'
-  // Right: all brands
+  // Right: all brands from GitHub cache
   html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;flex-shrink:0">All Brands (' + filteredAll.length + ')</div>'
+  html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-shrink:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">All Brands (' + filteredAll.length + ')</div>'
+  html += '<button onclick="ensbAddAllFusions()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">Add All</button>'
+  html += '</div>'
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
   if (filteredAll.length === 0) html += '<div style="color:var(--muted);font-size:12px">No brands found.</div>'
   for (var j = 0; j < filteredAll.length; j++) {
     var rb = filteredAll[j]
-    var isSel = _ensbFusionSelected.has(rb.id)
-    var safeid2 = rb.id.replace(/'/g,"\\\\'")
-    html += '<div onclick="ensbFusionToggle(\\'' + safeid2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf2)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;cursor:pointer">'
-    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(formatBrandId(rb.id)||rb.id) + '</span>'
-    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeid2 + '\\')" style="height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">Add</button>'
+    var isSel = _ensbFusionSelected.has(rb.upma)
+    var safeupma2 = rb.upma.replace(/'/g,"\\\\'")
+    html += '<div onclick="ensbFusionToggle(\\'' + safeupma2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf2)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:6px;cursor:pointer">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(rb.name || formatBrandId(rb.upma) || rb.upma) + '</span>'
+    html += '<button onclick="event.stopPropagation();ensbFusionAddOne(\\'' + safeupma2 + '\\')" style="height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:12px;color:var(--accent);white-space:nowrap">Add</button>'
     html += '</div>'
   }
   html += '</div></div>'
   html += '</div></div>'
-  document.getElementById('ensb-tab-content').innerHTML = html
+  el.innerHTML = html
 }
 
 function onEnsbFusionSearch(val) {
@@ -6442,25 +6586,41 @@ function ensbFusionChange(id, val) {
 function ensbS6GetBrand(id) { var idx = id ? id.indexOf('_') : -1; return idx !== -1 ? id.slice(0, idx) : (id || '') }
 
 function renderEnsbStage6Tab() {
-  var allCars = (_ensbFullData && _ensbFullData.stage6 && _ensbFullData.stage6.cars) || []
-  if (allCars.length === 0) {
-    document.getElementById('ensb-tab-content').innerHTML = '<div style="color:var(--muted);font-size:13px">No stage 6 data — download car database first.</div>'
+  var carList = (_ensbFullData && _ensbFullData.stage6 && _ensbFullData.stage6.carList) || []
+  var el = document.getElementById('ensb-tab-content')
+  if (carList.length === 0) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:13px">No stage 6 car list — open Stage 6 Data settings and click Update Car List.</div>'
     return
   }
+  // Build name lookup
+  var s6NameMap = {}
+  for (var n = 0; n < carList.length; n++) s6NameMap[carList[n].esdb] = carList[n].name || carList[n].esdb
   var sq = _ensbS6Search.toLowerCase()
-  var ownedCars = allCars.filter(function(c){ return (_ensbEditorState.stage6[c.id] || 0) > 0 })
-  var filteredOwned = sq ? ownedCars.filter(function(c){ return (c.name||c.id||'').toLowerCase().includes(sq) }) : ownedCars
-  // Group all cars by brand
+  // Left column: esdb with amount > 0
+  var ownedEsdbs = Object.keys(_ensbEditorState.stage6).filter(function(e){ return (_ensbEditorState.stage6[e] || 0) > 0 })
+  var filteredOwned = sq ? ownedEsdbs.filter(function(e){
+    return (s6NameMap[e] || e).toLowerCase().includes(sq)
+  }) : ownedEsdbs
+  // Right column: group by brand
   var brandMap = {}, brandOrder = []
-  for (var bi = 0; bi < allCars.length; bi++) {
-    var bc = allCars[bi]
-    var brand = ensbS6GetBrand(bc.id)
+  for (var bi = 0; bi < carList.length; bi++) {
+    var bc = carList[bi]
+    var brand = bc.brand || ensbS6GetBrand(bc.esdb)
     if (!brandMap[brand]) { brandMap[brand] = []; brandOrder.push(brand) }
-    if (!sq || (bc.name||bc.id||'').toLowerCase().includes(sq) || brand.toLowerCase().includes(sq)) brandMap[brand].push(bc)
+    if (!sq || (bc.name||bc.esdb||'').toLowerCase().includes(sq) || brand.toLowerCase().includes(sq)) brandMap[brand].push(bc)
   }
+  var totalCount = carList.length
   var selCount = _ensbS6Selected.size
   var inputStyle = 'width:75px;height:26px;box-sizing:border-box;background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:3px 6px;color:var(--text);font-size:12px;outline:none;text-align:right'
   var html = '<div style="display:flex;flex-direction:column;gap:0;height:100%">'
+  // "Add All" banner
+  if (_ensbEditorState.s6All !== null) {
+    html += '<div style="background:rgba(126,101,81,.18);border:1px solid var(--accent);border-radius:7px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-shrink:0">'
+    html += '<span style="flex:1;font-size:12px;color:var(--text)">✅ Add All Stage 6 mode — amount: <strong>' + _ensbEditorState.s6All + '</strong>. Individual edits will be overridden.</span>'
+    html += '<button onclick="_ensbEditorState.s6All=null;renderEnsbStage6Tab()" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;cursor:pointer;font-size:11px;color:var(--muted)">Cancel</button>'
+    html += '</div>'
+  }
+  // Search + Add Selected
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-shrink:0">'
   html += '<input placeholder="Search cars..." value="' + escH(_ensbS6Search) + '" '
   html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
@@ -6476,19 +6636,23 @@ function renderEnsbStage6Tab() {
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
   if (filteredOwned.length === 0) html += '<div style="color:var(--muted);font-size:12px">None owned.</div>'
   for (var i = 0; i < filteredOwned.length; i++) {
-    var oc = filteredOwned[i]
-    var amt = _ensbEditorState.stage6[oc.id] || 0
-    var safeid = oc.id.replace(/'/g,"\\\\'")
+    var esdb = filteredOwned[i]
+    var amt = _ensbEditorState.stage6[esdb] || 0
+    var carName = s6NameMap[esdb] || esdb
+    var safeesdb = esdb.replace(/'/g,"\\\\'")
     html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
-    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(oc.name||oc.id) + '</span>'
-    html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbS6Change(\\'' + safeid + '\\',this.value)" style="' + inputStyle + '">'
-    html += '<button onclick="ensbS6Remove(\\'' + safeid + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(carName) + '</span>'
+    html += '<input type="text" value="' + amt + '" oninput="ensbIntInput(this);ensbS6Change(\\'' + safeesdb + '\\',this.value)" style="' + inputStyle + '">'
+    html += '<button onclick="ensbS6Remove(\\'' + safeesdb + '\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">×</button>'
     html += '</div>'
   }
   html += '</div></div>'
-  // Right: brand-grouped all cars
+  // Right: brand-grouped from carList
   html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px;flex-shrink:0">All Cars (' + allCars.length + ')</div>'
+  html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-shrink:0">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">All Cars (' + totalCount + ')</div>'
+  html += '<button onclick="ensbAddAllS6()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">Add All</button>'
+  html += '</div>'
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
   for (var bi2 = 0; bi2 < brandOrder.length; bi2++) {
     var bname = brandOrder[bi2]
@@ -6503,19 +6667,21 @@ function renderEnsbStage6Tab() {
     if (isExp) {
       for (var ci = 0; ci < bcars.length; ci++) {
         var rc = bcars[ci]
-        var isSel = _ensbS6Selected.has(rc.id)
-        var safercid = rc.id.replace(/'/g,"\\\\'")
-        html += '<div onclick="ensbS6Toggle(\\'' + safercid + '\\')" style="display:flex;align-items:center;gap:6px;padding:4px 8px 4px 18px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:5px;cursor:pointer;margin-top:2px">'
-        html += '<input type="checkbox" class="chk-themed" ' + (isSel ? 'checked' : '') + ' onclick="event.stopPropagation();ensbS6Toggle(\\'' + safercid + '\\')" style="flex-shrink:0">'
-        html += '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(rc.name||rc.id) + '</span>'
-        html += '<button onclick="event.stopPropagation();ensbS6AddOne(\\'' + safercid + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;color:var(--accent);white-space:nowrap">Add</button>'
+        var isSel = _ensbS6Selected.has(rc.esdb)
+        var safeesdb2 = rc.esdb.replace(/'/g,"\\\\'")
+        var typeBadge = rc.type === 'gold' ? '<span style="font-size:9px;color:#e5c040;margin-left:4px">★ Gold</span>'
+                      : rc.type === 'purple' ? '<span style="font-size:9px;color:#b06cf0;margin-left:4px">★ Purple</span>' : ''
+        html += '<div onclick="ensbS6Toggle(\\'' + safeesdb2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:4px 8px 4px 18px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:5px;cursor:pointer;margin-top:2px">'
+        html += '<input type="checkbox" class="chk-themed" ' + (isSel ? 'checked' : '') + ' onclick="event.stopPropagation();ensbS6Toggle(\\'' + safeesdb2 + '\\')" style="flex-shrink:0">'
+        html += '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(rc.name||rc.esdb) + typeBadge + '</span>'
+        html += '<button onclick="event.stopPropagation();ensbS6AddOne(\\'' + safeesdb2 + '\\')" style="background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px;color:var(--accent);white-space:nowrap">Add</button>'
         html += '</div>'
       }
     }
   }
   html += '</div></div>'
   html += '</div></div>'
-  document.getElementById('ensb-tab-content').innerHTML = html
+  el.innerHTML = html
 }
 
 function ensbS6ToggleBrand(brand) {
@@ -6549,6 +6715,20 @@ function ensbS6Remove(id) {
   renderEnsbStage6Tab(); renderEnsbLeftPanel()
 }
 
+function ensbAddAllFusions() {
+  showEnsbAddModal('Add All Fusions', [], function(amount) {
+    _ensbEditorState.fusionsAll = amount
+    renderEnsbFusionsTab(); renderEnsbLeftPanel(); showEnsbToast()
+  })
+}
+
+function ensbAddAllS6() {
+  showEnsbAddModal('Add All Stage 6', [], function(amount) {
+    _ensbEditorState.s6All = amount
+    renderEnsbStage6Tab(); renderEnsbLeftPanel(); showEnsbToast()
+  })
+}
+
 function ensbS6Change(id, val) {
   _ensbEditorState.stage6[id] = Math.max(0, parseInt(val) || 0)
   renderEnsbLeftPanel(); showEnsbToast()
@@ -6566,7 +6746,9 @@ async function downloadEnsbFull() {
       garageAdded: _ensbEditorState.garageAdded,
       legends: _ensbEditorState.legends,
       fusions: _ensbEditorState.fusions,
+      fusionsAll: _ensbEditorState.fusionsAll,
       stage6: _ensbEditorState.stage6,
+      s6All: _ensbEditorState.s6All,
     })
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (startRes.error) { hideLoading(); return }
@@ -7195,43 +7377,35 @@ const server = http.createServer(async (req, res) => {
         const lc = lcMap[crdb]; if (lc) legendsOwned.push({ crdb, name: lc.name, amount, maxAmount: lc.amount })
       }
       const legendsAvailable = LEGEND_CARS.filter(lc => !(lc.crdb in crpe)).map(lc => ({ crdb: lc.crdb, name: lc.name, maxAmount: lc.amount }))
-      const fusionData = loadFusionData()
-      const fusAmounts = {}
+      // Fusions: owned brands from save's caup
+      const fusionOwnedMap = new Map()
       for (let i = 0; i < (data.caup || []).length; i++) {
         const e = data.caup[i]
-        if (typeof e === 'object' && e !== null && e.upma) {
-          const next = data.caup[i + 1]; if (typeof next === 'number') fusAmounts[e.upma] = next
+        if (typeof e === 'object' && e !== null && e.upma && !fusionOwnedMap.has(e.upma)) {
+          const next = data.caup[i + 1]
+          fusionOwnedMap.set(e.upma, typeof next === 'number' ? next : 0)
         }
       }
-      const fusSeen = new Map()
-      for (let i = 0; i < fusionData.length; i++) {
-        const e = fusionData[i]
-        if (typeof e === 'object' && e !== null && e.upma && !fusSeen.has(e.upma))
-          fusSeen.set(e.upma, { id: e.upma, name: e.upma, amount: fusAmounts[e.upma] || 0 })
-      }
-      const stage6Data = loadStage6Data()
-      const s6Amounts = {}
+      const fusionOwned = Array.from(fusionOwnedMap.entries()).map(([upma, amount]) => ({ upma, amount }))
+      const fusionBrands = loadFusionBrands()  // [{ name, upma }] from GitHub dir cache
+      // Stage6: owned cars from save's cues
+      const s6OwnedMap = new Map()
       for (let i = 0; i < (data.cues || []).length; i++) {
         const e = data.cues[i]
         if (typeof e === 'object' && e !== null && e.esdb) {
-          const next = data.cues[i + 1]; if (typeof next === 'number') s6Amounts[e.esdb] = next
+          const next = data.cues[i + 1]
+          if (typeof next === 'number') s6OwnedMap.set(e.esdb, next)
         }
       }
-      const carsDb = loadCsr2Cars()
-      const nameMap = {}; for (const car of carsDb) { if (car.crdb) nameMap[car.crdb] = car.name }
-      const s6Seen = new Map()
-      for (let i = 0; i < stage6Data.length; i++) {
-        const e = stage6Data[i]
-        if (typeof e === 'object' && e !== null && e.esdb && !s6Seen.has(e.esdb))
-          s6Seen.set(e.esdb, { id: e.esdb, name: nameMap[e.esdb] || e.esdb, amount: s6Amounts[e.esdb] || 0 })
-      }
+      const s6Owned = Array.from(s6OwnedMap.entries()).map(([esdb, amount]) => ({ esdb, amount }))
+      const s6CarList = loadS6CarList()  // [{ esdb, name, brand, type }] from GitHub dir cache
       return json(res, 200, {
         currencies,
         playerName: data.name || data.pnam || data.prfn || '',
         garage: { carCount: ownedCrdbs.length, ownedCrdbs },
         legends: { owned: legendsOwned, available: legendsAvailable },
-        fusions: { brands: Array.from(fusSeen.values()) },
-        stage6: { cars: Array.from(s6Seen.values()) },
+        fusions: { owned: fusionOwned, brands: fusionBrands },
+        stage6: { owned: s6Owned, carList: s6CarList },
       })
     } catch (e) {
       log('[csr2/read-nsb-full] Error: ' + e.message)
@@ -7262,43 +7436,84 @@ const server = http.createServer(async (req, res) => {
         if ('fusionBlue'   in c) data.afme.Blue   = Math.max(0, c.fusionBlue)
         if ('fusionRed'    in c) data.afme.Red    = Math.max(0, c.fusionRed)
         if ('fusionYellow' in c) data.afme.Yellow = Math.max(0, c.fusionYellow)
-        // Legends — replace crpe entirely with editor state
+        // Legends — write to icnd.crpe (correct location in save)
         if (body.legends && typeof body.legends === 'object') {
-          data.crpe = {}
-          for (const [crdb, amount] of Object.entries(body.legends)) data.crpe[crdb] = Math.max(0, parseInt(amount) || 0)
+          if (!data.icnd) data.icnd = {}
+          data.icnd.crpe = {}
+          for (const [crdb, amount] of Object.entries(body.legends)) data.icnd.crpe[crdb] = Math.max(0, parseInt(amount) || 0)
         }
-        // Fusions — rebuild caup from template with overridden amounts
-        const fusDelta = body.fusions && typeof body.fusions === 'object' ? body.fusions : null
-        if (fusDelta && Object.keys(fusDelta).length > 0) {
+        // Fusions — Add All mode OR selective SET/INSERT
+        if (body.fusionsAll !== null && body.fusionsAll !== undefined) {
           const fusionData = loadFusionData()
           if (Array.isArray(fusionData) && fusionData.length > 0) {
-            const newCaup = []
-            for (let i = 0; i < fusionData.length; i++) {
-              const e = fusionData[i]
-              if (typeof e === 'object' && e !== null && e.upma) {
-                newCaup.push(e)
-                const next = fusionData[i + 1]
-                if (typeof next === 'number') { newCaup.push(e.upma in fusDelta ? Math.max(0, fusDelta[e.upma]) : next); i++ }
-              } else if (typeof e !== 'number') { newCaup.push(e) }
+            const amt = Math.max(0, parseInt(body.fusionsAll) || 0)
+            data.caup = fusionData.map(e => {
+              if (typeof e === 'object' && e !== null) { const c = Object.assign({}, e); if ('upnn' in c) c.upnn = amt; return c }
+              return typeof e === 'number' ? amt : e
+            })
+          }
+        } else if (body.fusions && typeof body.fusions === 'object') {
+          if (!data.caup) data.caup = []
+          const fusionData = loadFusionData()
+          for (const [upma, amount] of Object.entries(body.fusions)) {
+            const amt = Math.max(0, parseInt(amount) || 0)
+            let found = false
+            for (let i = 0; i < data.caup.length; i++) {
+              const e = data.caup[i]
+              if (typeof e === 'object' && e !== null && e.upma === upma) {
+                if ('upnn' in e) e.upnn = amt
+                if (i + 1 < data.caup.length && typeof data.caup[i + 1] === 'number') data.caup[i + 1] = amt
+                found = true
+              }
             }
-            data.caup = newCaup
+            if (!found && amt > 0 && Array.isArray(fusionData)) {
+              for (let i = 0; i < fusionData.length; i++) {
+                const e = fusionData[i]
+                if (typeof e === 'object' && e !== null && e.upma === upma) {
+                  const entry = Object.assign({}, e); if ('upnn' in entry) entry.upnn = amt
+                  data.caup.push(entry)
+                  const next = fusionData[i + 1]
+                  data.caup.push(typeof next === 'number' ? amt : amt)
+                  i++
+                }
+              }
+            }
           }
         }
-        // Stage 6 — rebuild cues from template with overridden amounts
-        const s6Delta = body.stage6 && typeof body.stage6 === 'object' ? body.stage6 : null
-        if (s6Delta && Object.keys(s6Delta).length > 0) {
+        // Stage 6 — Add All mode OR selective SET/INSERT
+        if (body.s6All !== null && body.s6All !== undefined) {
           const stage6Data = loadStage6Data()
           if (Array.isArray(stage6Data) && stage6Data.length > 0) {
-            const newCues = []
-            for (let i = 0; i < stage6Data.length; i++) {
-              const e = stage6Data[i]
-              if (typeof e === 'object' && e !== null && e.esdb) {
-                newCues.push(e)
-                const next = stage6Data[i + 1]
-                if (typeof next === 'number') { newCues.push(e.esdb in s6Delta ? Math.max(0, s6Delta[e.esdb]) : next); i++ }
-              } else if (typeof e !== 'number') { newCues.push(e) }
+            const amt = Math.max(0, parseInt(body.s6All) || 0)
+            data.cues = stage6Data.map(e => {
+              if (typeof e === 'object' && e !== null) { return Object.assign({}, e, { esnn: amt }) }
+              return typeof e === 'number' ? amt : e
+            })
+          }
+        } else if (body.stage6 && typeof body.stage6 === 'object') {
+          if (!data.cues) data.cues = []
+          const stage6Data = loadStage6Data()
+          for (const [esdb, amount] of Object.entries(body.stage6)) {
+            const amt = Math.max(0, parseInt(amount) || 0)
+            let found = false
+            for (let i = 0; i < data.cues.length; i++) {
+              const e = data.cues[i]
+              if (typeof e === 'object' && e !== null && e.esdb === esdb) {
+                e.esnn = amt
+                if (i + 1 < data.cues.length && typeof data.cues[i + 1] === 'number') data.cues[i + 1] = amt
+                found = true
+              }
             }
-            data.cues = newCues
+            if (!found && amt > 0 && Array.isArray(stage6Data)) {
+              for (let i = 0; i < stage6Data.length; i++) {
+                const e = stage6Data[i]
+                if (typeof e === 'object' && e !== null && e.esdb === esdb) {
+                  data.cues.push(Object.assign({}, e, { esnn: amt }))
+                  data.cues.push(amt)
+                  i++
+                }
+              }
+            }
           }
         }
         // Garage — add confirmed cars
@@ -7687,6 +7902,118 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/fusions-update] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // ─── Fusion brand list (from GitHub 3.Fusions/ directory) ───────────────────
+
+  if (req.method === 'GET' && pathname === '/csr2/fusion-brands') {
+    const brands = loadFusionBrands()
+    return json(res, 200, { brands, count: brands.length })
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/fusion-brands-update') {
+    try {
+      const REPO = 'Nitro4CSR/CSR2-DataBase'
+      const BRANCH = 'Everything'
+      const EXCLUDED = new Set(['##AllFusions.txt', '#AllBrandIDs.txt', '#GeneratorPreset1Brand.txt', 'Placeholder Mystery.txt'])
+      log('[csr2/fusion-brands-update] Fetching GitHub tree...')
+      const tree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH + '?recursive=1')
+      if (!tree.tree) return json(res, 500, { error: 'GitHub API returned no tree' })
+      const brandFiles = tree.tree.filter(f => {
+        if (f.type !== 'blob') return false
+        const parts = f.path.split('/')
+        if (parts.length !== 2 || parts[0] !== '3.Fusions') return false
+        const fname = parts[1]
+        return fname.endsWith('.txt') && !fname.startsWith('#') && !EXCLUDED.has(fname)
+      })
+      log('[csr2/fusion-brands-update] Found ' + brandFiles.length + ' brand files')
+      const brands = []
+      const BATCH = 15
+      for (let i = 0; i < brandFiles.length; i += BATCH) {
+        const batch = brandFiles.slice(i, i + BATCH)
+        const results = await Promise.all(batch.map(async f => {
+          const encodedPath = f.path.split('/').map(s => encodeURIComponent(s)).join('/')
+          const rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + encodedPath
+          try {
+            const txt = await fetchRawGithub(rawUrl)
+            const arr = JSON.parse(txt)
+            const firstObj = arr.find(e => typeof e === 'object' && e !== null && e.upma)
+            if (!firstObj) return null
+            const name = f.path.split('/').pop().replace(/\.txt$/i, '')
+            return { name, upma: firstObj.upma }
+          } catch { return null }
+        }))
+        brands.push(...results.filter(Boolean))
+      }
+      saveFusionBrands(brands)
+      log('[csr2/fusion-brands-update] Saved ' + brands.length + ' brands')
+      return json(res, 200, { ok: true, count: brands.length })
+    } catch (e) {
+      log('[csr2/fusion-brands-update] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // ─── Stage 6 car list (from GitHub Gold Star + Purple Star directories) ───────
+
+  if (req.method === 'GET' && pathname === '/csr2/s6-car-list') {
+    const cars = loadS6CarList()
+    return json(res, 200, { cars, count: cars.length })
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/s6-car-list-update') {
+    try {
+      const REPO = 'Nitro4CSR/CSR2-DataBase'
+      const BRANCH = 'Everything'
+      const GOLD_PREFIX   = "4.Stage6's/1.Gold Star/"
+      const PURPLE_PREFIX = "4.Stage6's/2.Purple Star/"
+      log('[csr2/s6-car-list-update] Fetching GitHub tree...')
+      const tree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH + '?recursive=1')
+      if (!tree.tree) return json(res, 500, { error: 'GitHub API returned no tree' })
+      const carFiles = tree.tree.filter(f => {
+        if (f.type !== 'blob' || !f.path.endsWith('.txt')) return false
+        return f.path.startsWith(GOLD_PREFIX) || f.path.startsWith(PURPLE_PREFIX)
+      })
+      log('[csr2/s6-car-list-update] Found ' + carFiles.length + ' car files')
+      const carsDb = loadCsr2Cars()
+      const nameMap = {}; for (const car of carsDb) { if (car.crdb) nameMap[car.crdb] = car.name }
+      const carList = []
+      const seenEsdb = new Set()
+      const BATCH = 20
+      for (let i = 0; i < carFiles.length; i += BATCH) {
+        const batch = carFiles.slice(i, i + BATCH)
+        const results = await Promise.all(batch.map(async f => {
+          const isGold = f.path.startsWith(GOLD_PREFIX)
+          const type = isGold ? 'gold' : 'purple'
+          const prefix = isGold ? GOLD_PREFIX : PURPLE_PREFIX
+          const relative = f.path.slice(prefix.length)
+          const brand = relative.includes('/') ? relative.split('/')[0] : relative.replace(/\.txt$/i, '')
+          const encodedPath = f.path.split('/').map(s => encodeURIComponent(s)).join('/')
+          const rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + encodedPath
+          try {
+            let txt = await fetchRawGithub(rawUrl)
+            txt = txt.trim()
+            if (txt.startsWith(',')) txt = txt.slice(1).trim()
+            const arr = JSON.parse('[' + txt + ']')
+            const cars = []
+            for (const e of arr) {
+              if (typeof e === 'object' && e !== null && e.esdb && !seenEsdb.has(e.esdb)) {
+                seenEsdb.add(e.esdb)
+                cars.push({ esdb: e.esdb, name: nameMap[e.esdb] || e.esdb, brand, type })
+              }
+            }
+            return cars
+          } catch { return [] }
+        }))
+        for (const r of results) carList.push(...r)
+      }
+      saveS6CarList(carList)
+      log('[csr2/s6-car-list-update] Saved ' + carList.length + ' cars')
+      return json(res, 200, { ok: true, count: carList.length })
+    } catch (e) {
+      log('[csr2/s6-car-list-update] Error: ' + e.message)
       return json(res, 500, { error: e.message })
     }
   }
