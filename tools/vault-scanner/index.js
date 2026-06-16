@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.19'
+const VERSION = '0.7.20'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -7940,8 +7940,8 @@ const server = http.createServer(async (req, res) => {
           const encodedPath = f.path.split('/').map(s => encodeURIComponent(s)).join('/')
           const rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + encodedPath
           try {
-            const txt = await fetchRawGithub(rawUrl)
-            const arr = JSON.parse(txt)
+            const raw = await fetchRawGithub(rawUrl)
+            const arr = JSON.parse(raw.replace(/\bAMOUNT\b/g, '0'))
             const firstObj = arr.find(e => typeof e === 'object' && e !== null && e.upma)
             if (!firstObj) return null
             const name = f.path.split('/').pop().replace(/\.txt$/i, '')
@@ -8002,8 +8002,9 @@ const server = http.createServer(async (req, res) => {
           const rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + encodedPath
           try {
             let txt = await fetchRawGithub(rawUrl)
-            txt = txt.trim()
+            txt = txt.replace(/\bAMOUNT\b/g, '0').trim()
             if (txt.startsWith(',')) txt = txt.slice(1).trim()
+            if (txt.endsWith(',')) txt = txt.slice(0, -1)
             const arr = JSON.parse('[' + txt + ']')
             const cars = []
             for (const e of arr) {
