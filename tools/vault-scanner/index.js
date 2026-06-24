@@ -6342,8 +6342,8 @@ function renderEnsbGarageTab() {
   for (var oi = 0; oi < ownedFiltered.length; oi++) {
     var oc = ownedFiltered[oi]
     var isMaxed = oc.unid in _ensbEditorState.garageMaxout
-    var safeOcCrdb = oc.crdb.replace(/\\/g,'\\\\').replace(/'/g,"\\'")
-    var safeOcName = (oc.name || oc.crdb).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    var safeOcCrdb = oc.crdb.replace(/'/g,"\\\\'")
+    var safeOcName = (oc.name || oc.crdb).replace(/'/g,"\\\\'")
     html += '<div style="display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
     html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(oc.name || oc.crdb) + '</span>'
     if (isMaxed) html += '<span style="font-size:9px;color:#e5c040;white-space:nowrap;flex-shrink:0">maxed</span>'
