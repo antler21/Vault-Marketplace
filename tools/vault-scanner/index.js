@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.21'
+const VERSION = '0.7.22'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -27,6 +27,7 @@ const CSR2_BRANDS_FILE        = path.join(DATA_DIR, 'csr2-brands.json')
 const CSR2_BRANDS_SHA         = path.join(DATA_DIR, 'csr2-brands-sha.json')
 const CSR2_FUSION_BRANDS_FILE = path.join(DATA_DIR, 'csr2-fusion-brands.json')
 const CSR2_S6_CAR_LIST_FILE   = path.join(DATA_DIR, 'csr2-s6-car-list.json')
+const CSR2_MAXING_FILE        = path.join(DATA_DIR, 'csr2-maxing.json')
 const INT32_MAX = 2147483647
 const applyJobs = new Map()
 
@@ -93,6 +94,8 @@ function loadFusionBrands() { return loadJson(CSR2_FUSION_BRANDS_FILE, []) }
 function saveFusionBrands(d) { saveJson(CSR2_FUSION_BRANDS_FILE, d) }
 function loadS6CarList() { return loadJson(CSR2_S6_CAR_LIST_FILE, []) }
 function saveS6CarList(d) { saveJson(CSR2_S6_CAR_LIST_FILE, d) }
+function loadMaxingData() { return loadJson(CSR2_MAXING_FILE, {}) }
+function saveMaxingData(d) { saveJson(CSR2_MAXING_FILE, d) }
 function loadStage6Sha() { return loadJson(CSR2_STAGE6_SHA, {}) }
 function saveStage6Sha(d) { saveJson(CSR2_STAGE6_SHA, d) }
 function loadBrandData() { return loadJson(CSR2_BRANDS_FILE, []) }
@@ -1125,19 +1128,6 @@ function fetchRawGithubWithEtag(rawUrl) {
       }).on('error', reject)
     }
     get(rawUrl)
-  })
-}
-
-function fetchGithubApi(apiUrl) {
-  return new Promise((resolve, reject) => {
-    const get = (url) => {
-      https.get(url, { headers: { 'User-Agent': 'aio-tool-v' + VERSION, 'Accept': 'application/vnd.github.v3+json' } }, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) return get(res.headers.location)
-        let d = ''; res.on('data', c => d += c)
-        res.on('end', () => { try { resolve(JSON.parse(d)) } catch(e) { reject(e) } })
-      }).on('error', reject)
-    }
-    get(apiUrl)
   })
 }
 
@@ -2480,6 +2470,18 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <!-- NSB Editor Toast -->
 <div id="ensb-toast" style="display:none;position:fixed;top:24px;right:24px;background:#22c55e;color:#fff;font-size:13px;font-weight:600;padding:10px 18px;border-radius:8px;z-index:9999;box-shadow:0 2px 12px rgba(0,0,0,.3)">✅ Updated!</div>
 
+<!-- NSB Delete Car Confirm Modal -->
+<div class="modal-bg" id="ensb-delete-car-modal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">Delete Car</div>
+    <div style="font-size:13px;color:var(--text);margin-bottom:16px">Delete <strong id="ensb-delete-car-name"></strong> from the garage?</div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('ensb-delete-car-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="ensbConfirmDelete()" style="background:#ef4444;border-color:#ef4444">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- NSB Add-Amount Modal -->
 <div class="modal-bg" id="ensb-add-modal">
   <div class="modal" style="max-width:340px">
@@ -2804,7 +2806,8 @@ var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackId
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _ensbFullData = null
-var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], legends: {}, fusions: {}, stage6: {}, fusionsAll: null, s6All: null }
+var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], garageDeleted: [], garageMaxout: {}, legends: {}, fusions: {}, stage6: {}, fusionsAll: null, s6All: null, setPrvr: null }
+var _ensbGarageUndoStack = [], _ensbOwnedSearch = ''
 var _ensbGarageAllowDup = false, _ensbFusionSearch = '', _ensbS6Search = ''
 var _ensbFusionSelected = new Set(), _ensbS6Selected = new Set(), _ensbS6Expanded = new Set()
 var _ensbAddModalCb = null
@@ -6105,12 +6108,16 @@ async function openEnsbEditor() {
     },
     garageQueue: [],
     garageAdded: [],
+    garageDeleted: [],
+    garageMaxout: {},
     legends: {},
     fusions: {},
     stage6: {},
     fusionsAll: null,
     s6All: null,
+    setPrvr: null,
   }
+  _ensbGarageUndoStack = []; _ensbOwnedSearch = ''
   _ensbGarageAllowDup = false
   _ensbFusionSearch = ''; _ensbS6Search = ''
   _ensbFusionSelected = new Set(); _ensbS6Selected = new Set(); _ensbS6Expanded = new Set()
@@ -6145,7 +6152,7 @@ function switchEnsbTab(tab) {
 function renderEnsbLeftPanel() {
   var c = _ensbEditorState.currency
   var baseCarCount = _ensbFullData ? (_ensbFullData.garage && _ensbFullData.garage.carCount || 0) : 0
-  var carCount = baseCarCount + _ensbEditorState.garageAdded.length
+  var carCount = baseCarCount + _ensbEditorState.garageAdded.length - _ensbEditorState.garageDeleted.length
   var legendCount = Object.keys(_ensbEditorState.legends).length
   var playerName = (_ensbFullData && _ensbFullData.playerName) || ''
   var html = ''
@@ -6155,6 +6162,15 @@ function renderEnsbLeftPanel() {
     html += '<div style="font-size:13px;font-weight:600;word-break:break-all;line-height:1.3">' + escH(playerName) + '</div>'
     html += '</div>'
   }
+  var basePrvr = (_ensbFullData && _ensbFullData.prvr) || ''
+  var displayPrvr = _ensbEditorState.setPrvr !== null ? _ensbEditorState.setPrvr : basePrvr
+  html += '<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">'
+  html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Save Version</div>'
+  html += '<div style="display:flex;align-items:center;gap:6px">'
+  html += '<span id="ensb-prvr-display" style="font-size:13px;font-weight:600;flex:1;cursor:pointer;min-width:0;word-break:break-all" onclick="ensbEditPrvr()">' + escH(displayPrvr || '(none)') + '</span>'
+  html += '<button onclick="ensbEditPrvr()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px 4px;line-height:1;flex-shrink:0">✏</button>'
+  html += '</div>'
+  html += '</div>'
   html += '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:8px">Account Stats</div>'
   var chipStyle = 'flex:1;background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:5px 4px;text-align:center;min-width:0'
   var chipRow = 'display:flex;gap:5px;margin-bottom:6px'
@@ -6239,8 +6255,8 @@ var _ensbGarageSearch = ''
 
 function renderEnsbGarageTab() {
   var sq = _ensbGarageSearch.toLowerCase()
-  var ownedCrdbs = (_ensbFullData && _ensbFullData.garage && _ensbFullData.garage.ownedCrdbs) || []
-  var ownedSet = new Set(ownedCrdbs)
+  var ownedCarsAll = (_ensbFullData && _ensbFullData.garage && _ensbFullData.garage.ownedCars) || []
+  var ownedSet = new Set(ownedCarsAll.map(function(c){ return c.crdb }))
   var addedSet = new Set(_ensbEditorState.garageAdded.map(function(c){ return c.crdb }))
   var queueSet = new Set(_ensbEditorState.garageQueue.map(function(c){ return c.crdb }))
   var nameMap = {}
@@ -6304,22 +6320,47 @@ function renderEnsbGarageTab() {
   // Separator
   html += '<div style="height:1px;background:var(--border);margin:4px 0 10px"></div>'
   // Bottom: owned (caow) + garageAdded
-  var allOwned = []
-  for (var ci = 0; ci < ownedCrdbs.length; ci++) allOwned.push({ crdb: ownedCrdbs[ci], name: nameMap[ownedCrdbs[ci]] || ownedCrdbs[ci], added: false })
-  for (var ai = 0; ai < _ensbEditorState.garageAdded.length; ai++) allOwned.push({ crdb: _ensbEditorState.garageAdded[ai].crdb, name: _ensbEditorState.garageAdded[ai].name, added: true, idx: ai })
-  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:8px">Owned (' + allOwned.length + ')</div>'
+  var deletedUnids = new Set(_ensbEditorState.garageDeleted.map(function(d){ return d.unid }))
+  var osq = _ensbOwnedSearch.toLowerCase()
+  var ownedFiltered = ownedCarsAll.filter(function(oc){
+    if (deletedUnids.has(oc.unid)) return false
+    if (osq) return (oc.name || oc.crdb || '').toLowerCase().indexOf(osq) !== -1
+    return true
+  })
+  var totalOwned = ownedFiltered.length + _ensbEditorState.garageAdded.length
+  var undoCount = _ensbGarageUndoStack.length
+  html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+  html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">Owned (' + totalOwned + ')</div>'
+  if (undoCount > 0) {
+    html += '<button onclick="ensbUndoGarage()" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--text);cursor:pointer">↩ Undo</button>'
+  }
+  html += '</div>'
+  html += '<input placeholder="Search owned..." value="' + escH(_ensbOwnedSearch) + '" '
+  html += 'style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:6px 10px;color:var(--text);font-size:12px;outline:none;margin-bottom:6px" '
+  html += 'oninput="_ensbOwnedSearch=this.value;renderEnsbGarageTab()">'
   html += '<div style="display:flex;flex-direction:column;gap:3px;max-height:220px;overflow-y:auto">'
-  for (var oi = 0; oi < allOwned.length; oi++) {
-    var oc = allOwned[oi]
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:4px 10px;background:' + (oc.added ? 'rgba(59,130,246,.08)' : 'var(--surf2)') + ';border:1px solid ' + (oc.added ? 'rgba(59,130,246,.3)' : 'var(--border)') + ';border-radius:6px">'
-    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(oc.name) + '</span>'
-    if (oc.added) {
-      html += '<span style="font-size:10px;color:#60a5fa;white-space:nowrap">New</span>'
-      html += '<button onclick="ensbRemoveFromGarageAdded(' + oc.idx + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 2px">×</button>'
-    }
+  for (var oi = 0; oi < ownedFiltered.length; oi++) {
+    var oc = ownedFiltered[oi]
+    var isMaxed = oc.unid in _ensbEditorState.garageMaxout
+    var safeOcCrdb = oc.crdb.replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    var safeOcName = (oc.name || oc.crdb).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    html += '<div style="display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(oc.name || oc.crdb) + '</span>'
+    if (isMaxed) html += '<span style="font-size:9px;color:#e5c040;white-space:nowrap;flex-shrink:0">maxed</span>'
+    html += '<button onclick="ensbMaxOutCar(\\'' + safeOcCrdb + '\\',' + oc.unid + ',\\'' + safeOcName + '\\')" title="Max Out" style="background:none;border:none;cursor:pointer;font-size:13px;line-height:1;padding:0 2px;color:' + (isMaxed ? '#e5c040' : 'var(--muted)') + ';flex-shrink:0">★</button>'
+    html += '<button onclick="ensbDeleteCar(\\'' + safeOcCrdb + '\\',' + oc.unid + ',\\'' + safeOcName + '\\')" title="Delete" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;color:var(--muted);flex-shrink:0">×</button>'
     html += '</div>'
   }
-  if (allOwned.length === 0) html += '<div style="color:var(--muted);font-size:12px">No cars in garage.</div>'
+  for (var ai = 0; ai < _ensbEditorState.garageAdded.length; ai++) {
+    var ac = _ensbEditorState.garageAdded[ai]
+    if (osq && (ac.name||ac.crdb||'').toLowerCase().indexOf(osq) === -1) continue
+    html += '<div style="display:flex;align-items:center;gap:4px;padding:4px 8px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:6px">'
+    html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(ac.name) + '</span>'
+    html += '<span style="font-size:10px;color:#60a5fa;white-space:nowrap;flex-shrink:0">New</span>'
+    html += '<button onclick="ensbRemoveFromGarageAdded(' + ai + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 2px;flex-shrink:0">×</button>'
+    html += '</div>'
+  }
+  if (totalOwned === 0) html += '<div style="color:var(--muted);font-size:12px">No cars in garage.</div>'
   html += '</div>'
   html += '</div>'
   document.getElementById('ensb-tab-content').innerHTML = html
@@ -6357,8 +6398,10 @@ function ensbRemoveCarFromQueue(idx) {
 }
 
 function ensbConfirmGarageQueue() {
-  for (var i = 0; i < _ensbEditorState.garageQueue.length; i++) _ensbEditorState.garageAdded.push(_ensbEditorState.garageQueue[i])
+  var count = _ensbEditorState.garageQueue.length
+  for (var i = 0; i < count; i++) _ensbEditorState.garageAdded.push(_ensbEditorState.garageQueue[i])
   _ensbEditorState.garageQueue = []
+  if (count > 0) _ensbGarageUndoStack.push({ type: 'add', count: count })
   renderEnsbGarageTab()
   renderEnsbLeftPanel()
 }
@@ -6367,6 +6410,88 @@ function ensbRemoveFromGarageAdded(idx) {
   _ensbEditorState.garageAdded.splice(idx, 1)
   renderEnsbGarageTab()
   renderEnsbLeftPanel()
+}
+
+function ensbEditPrvr() {
+  var el = document.getElementById('ensb-prvr-display')
+  if (!el || el.querySelector('input')) return
+  var current = _ensbEditorState.setPrvr !== null ? _ensbEditorState.setPrvr : ((_ensbFullData && _ensbFullData.prvr) || '')
+  var inp = document.createElement('input')
+  inp.type = 'text'; inp.value = current
+  inp.style.cssText = 'font-size:13px;font-weight:600;background:none;border:none;border-bottom:1px solid var(--accent);outline:none;color:var(--text);width:100%;padding:0'
+  function save() {
+    _ensbEditorState.setPrvr = inp.value.trim()
+    renderEnsbLeftPanel()
+    showEnsbToast()
+  }
+  inp.addEventListener('blur', save)
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur() }
+    if (e.key === 'Escape') { inp.removeEventListener('blur', save); renderEnsbLeftPanel() }
+  })
+  el.textContent = ''
+  el.appendChild(inp)
+  inp.focus(); inp.select()
+}
+
+async function ensbMaxOutCar(crdb, unid, name) {
+  var btn = event && event.currentTarget
+  if (btn) { btn.textContent = '…'; btn.disabled = true }
+  try {
+    var check = await fetch('/csr2/maxout-data').then(function(r){ return r.json() }).catch(function(){ return { count: -1 } })
+    if (check.count === 0) {
+      var upd = await fetch('/csr2/maxout-data-update', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+      if (upd.error || !upd.ok) { alert('Could not load max out data: ' + (upd.error || 'unknown error')); if (btn) { btn.textContent = '★'; btn.disabled = false } return }
+    }
+    var res = await fetch('/csr2/maxout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ crdb: crdb, unid: unid }) }).then(function(r){ return r.json() })
+    if (res.error) { alert(res.error); if (btn) { btn.textContent = '★'; btn.disabled = false } return }
+    var prevUpst = unid in _ensbEditorState.garageMaxout ? _ensbEditorState.garageMaxout[unid] : null
+    _ensbEditorState.garageMaxout[unid] = res.upst
+    _ensbGarageUndoStack.push({ type: 'maxout', unid: unid, crdb: crdb, name: name, prevUpst: prevUpst })
+    renderEnsbGarageTab()
+    showEnsbToast()
+  } catch(e) { alert('Max out failed: ' + e.message); if (btn) { btn.textContent = '★'; btn.disabled = false } }
+}
+
+function ensbDeleteCar(crdb, unid, name) {
+  var modal = document.getElementById('ensb-delete-car-modal')
+  document.getElementById('ensb-delete-car-name').textContent = name || crdb
+  modal.dataset.crdb = crdb
+  modal.dataset.unid = unid
+  modal.dataset.name = name
+  showModal('ensb-delete-car-modal')
+}
+
+function ensbConfirmDelete() {
+  var modal = document.getElementById('ensb-delete-car-modal')
+  var crdb = modal.dataset.crdb
+  var unid = parseInt(modal.dataset.unid)
+  var name = modal.dataset.name
+  hideModal('ensb-delete-car-modal')
+  _ensbEditorState.garageDeleted.push({ crdb: crdb, unid: unid })
+  _ensbGarageUndoStack.push({ type: 'delete', crdb: crdb, unid: unid, name: name })
+  renderEnsbGarageTab()
+  renderEnsbLeftPanel()
+  showEnsbToast()
+}
+
+function ensbUndoGarage() {
+  if (!_ensbGarageUndoStack.length) return
+  var action = _ensbGarageUndoStack.pop()
+  if (action.type === 'delete') {
+    _ensbEditorState.garageDeleted = _ensbEditorState.garageDeleted.filter(function(d){ return !(d.unid === action.unid && d.crdb === action.crdb) })
+  } else if (action.type === 'maxout') {
+    if (action.prevUpst !== null) {
+      _ensbEditorState.garageMaxout[action.unid] = action.prevUpst
+    } else {
+      delete _ensbEditorState.garageMaxout[action.unid]
+    }
+  } else if (action.type === 'add') {
+    _ensbEditorState.garageAdded.splice(_ensbEditorState.garageAdded.length - action.count, action.count)
+  }
+  renderEnsbGarageTab()
+  renderEnsbLeftPanel()
+  showEnsbToast()
 }
 
 var LEGEND_COLORS = ['#e84040','#1a9d63','#a0a0c0','#1b5cbf','#e87030','#9b48c8','#cc3333','#8b4513','#1f75b3','#d4a016','#8b8b00','#d4601a','#1b2f80','#184d27','#0a7c46','#6b1f9a','#b52a2a','#888800','#cc7700','#cc4400','#0066cc','#aa2200','#0055aa','#b81c1c','#006b2f','#b0750d']
@@ -6746,11 +6871,14 @@ async function downloadEnsbFull() {
       nsbBase64: _nsbData.ensb.base64,
       currency: _ensbEditorState.currency,
       garageAdded: _ensbEditorState.garageAdded,
+      garageDeleted: _ensbEditorState.garageDeleted,
+      garageMaxout: _ensbEditorState.garageMaxout,
       legends: _ensbEditorState.legends,
       fusions: _ensbEditorState.fusions,
       fusionsAll: _ensbEditorState.fusionsAll,
       stage6: _ensbEditorState.stage6,
       s6All: _ensbEditorState.s6All,
+      setPrvr: _ensbEditorState.setPrvr,
     })
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (startRes.error) { hideLoading(); return }
@@ -7354,7 +7482,9 @@ const server = http.createServer(async (req, res) => {
         fusionRed:    (data.afme && data.afme.Red)    || 0,
         fusionYellow: (data.afme && data.afme.Yellow) || 0,
       }
-      const ownedCrdbs = Array.isArray(data.caow) ? data.caow.map(c => c.crdb).filter(Boolean) : []
+      const carsDbAll = loadCsr2Cars()
+      const crdbNameMap = {}; for (const car of carsDbAll) { if (car.crdb) crdbNameMap[car.crdb] = car.name || car.crdb }
+      const ownedCars = Array.isArray(data.caow) ? data.caow.filter(c => c.crdb).map(c => ({ crdb: c.crdb, unid: c.unid, name: crdbNameMap[c.crdb] || c.crdb })) : []
       const lcMap = LEGEND_CARS.reduce((m, lc) => { m[lc.crdb] = lc; return m }, {})
       // Deep-search for the crpe with the most LEGEND_CARS matches (correct crpe has CRDB string keys)
       function findBestCrpe(obj, depth) {
@@ -7404,7 +7534,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         currencies,
         playerName: data.name || data.pnam || data.prfn || '',
-        garage: { carCount: ownedCrdbs.length, ownedCrdbs },
+        garage: { carCount: ownedCars.length, ownedCars },
+        prvr: data.prvr || '',
         legends: { owned: legendsOwned, available: legendsAvailable },
         fusions: { owned: fusionOwned, brands: fusionBrands },
         stage6: { owned: s6Owned, carList: s6CarList },
@@ -7494,7 +7625,6 @@ const server = http.createServer(async (req, res) => {
           }
         } else if (body.stage6 && typeof body.stage6 === 'object') {
           if (!data.cues) data.cues = []
-          const stage6Data = loadStage6Data()
           for (const [esdb, amount] of Object.entries(body.stage6)) {
             const amt = Math.max(0, parseInt(amount) || 0)
             let found = false
@@ -7506,16 +7636,41 @@ const server = http.createServer(async (req, res) => {
                 found = true
               }
             }
-            if (!found && amt > 0 && Array.isArray(stage6Data)) {
-              for (let i = 0; i < stage6Data.length; i++) {
-                const e = stage6Data[i]
-                if (typeof e === 'object' && e !== null && e.esdb === esdb) {
-                  data.cues.push(Object.assign({}, e, { esnn: amt }))
-                  data.cues.push(amt)
-                  i++
-                }
+            if (!found && amt > 0) {
+              const s6CacheEntry = loadS6CarList().find(c => c.esdb === esdb)
+              if (s6CacheEntry && s6CacheEntry.filePath) {
+                try {
+                  const encodedPath = s6CacheEntry.filePath.split('/').map(s => encodeURIComponent(s)).join('/')
+                  const rawUrl = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/' + encodedPath
+                  let txt = await fetchRawGithub(rawUrl)
+                  txt = txt.replace(/\bAMOUNT\b/g, String(amt)).trim()
+                  if (txt.startsWith(',')) txt = txt.slice(1).trim()
+                  if (txt.endsWith(',')) txt = txt.slice(0, -1)
+                  const entries = JSON.parse('[' + txt + ']')
+                  for (const e of entries) data.cues.push(typeof e === 'object' && e !== null ? Object.assign({}, e) : e)
+                } catch(e) { log('[edit-nsb-full] stage6 INSERT error for ' + esdb + ': ' + e.message) }
               }
             }
+          }
+        }
+        // Save Version
+        if (body.setPrvr !== null && body.setPrvr !== undefined) {
+          const v = String(body.setPrvr)
+          data.prvr = v
+          if ('prvrfi' in data) data.prvrfi = v
+        }
+        // Garage — delete cars by unid
+        if (Array.isArray(body.garageDeleted) && body.garageDeleted.length > 0 && Array.isArray(data.caow)) {
+          const toDelete = new Set(body.garageDeleted.map(d => d.unid))
+          data.caow = data.caow.filter(car => !toDelete.has(car.unid))
+          data.cgpi = [...Array(data.ncui).keys(), -1]
+        }
+        // Garage — max out cars (set upst by unid)
+        if (body.garageMaxout && typeof body.garageMaxout === 'object' && Array.isArray(data.caow)) {
+          for (const [unidStr, upst] of Object.entries(body.garageMaxout)) {
+            const unid = parseInt(unidStr)
+            const car = data.caow.find(c => c.unid === unid)
+            if (car && Array.isArray(upst)) car.upst = upst
           }
         }
         // Garage — add confirmed cars
@@ -7921,12 +8076,12 @@ const server = http.createServer(async (req, res) => {
       const BRANCH = 'Everything'
       const EXCLUDED = new Set(['##AllFusions.txt', '#AllBrandIDs.txt', '#GeneratorPreset1Brand.txt', 'Placeholder Mystery.txt'])
       log('[csr2/fusion-brands-update] Fetching root tree...')
-      const rootTree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH)
+      const rootTree = await fetchGithubApi('/repos/' + REPO + '/git/trees/' + BRANCH)
       if (!rootTree.tree) return json(res, 500, { error: 'GitHub API returned no root tree' })
       const fusionsEntry = rootTree.tree.find(e => e.path === '3.Fusions' && e.type === 'tree')
       if (!fusionsEntry) return json(res, 500, { error: 'Could not find 3.Fusions directory in repo' })
       log('[csr2/fusion-brands-update] Fetching 3.Fusions subtree...')
-      const fusionsTree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + fusionsEntry.sha)
+      const fusionsTree = await fetchGithubApi('/repos/' + REPO + '/git/trees/' + fusionsEntry.sha)
       if (!fusionsTree.tree) return json(res, 500, { error: 'GitHub API returned no tree for 3.Fusions' })
       const brandFiles = fusionsTree.tree.filter(f => {
         return f.type === 'blob' && f.path.endsWith('.txt') && !f.path.startsWith('#') && !EXCLUDED.has(f.path)
@@ -7975,12 +8130,12 @@ const server = http.createServer(async (req, res) => {
       const GOLD_PREFIX   = "4.Stage6's/1.Gold Star/"
       const PURPLE_PREFIX = "4.Stage6's/2.Purple Star/"
       log("[csr2/s6-car-list-update] Fetching root tree...")
-      const rootTree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + BRANCH)
+      const rootTree = await fetchGithubApi('/repos/' + REPO + '/git/trees/' + BRANCH)
       if (!rootTree.tree) return json(res, 500, { error: 'GitHub API returned no root tree' })
       const s6Entry = rootTree.tree.find(e => e.path === "4.Stage6's" && e.type === 'tree')
       if (!s6Entry) return json(res, 500, { error: "Could not find 4.Stage6's directory in repo" })
       log("[csr2/s6-car-list-update] Fetching 4.Stage6's subtree (recursive)...")
-      const s6Tree = await fetchGithubApi('https://api.github.com/repos/' + REPO + '/git/trees/' + s6Entry.sha + '?recursive=1')
+      const s6Tree = await fetchGithubApi('/repos/' + REPO + '/git/trees/' + s6Entry.sha + '?recursive=1')
       if (!s6Tree.tree) return json(res, 500, { error: "GitHub API returned no tree for 4.Stage6's" })
       const carFiles = s6Tree.tree.filter(f => {
         if (f.type !== 'blob' || !f.path.endsWith('.txt')) return false
@@ -8012,7 +8167,7 @@ const server = http.createServer(async (req, res) => {
             for (const e of arr) {
               if (typeof e === 'object' && e !== null && e.esdb && !seenEsdb.has(e.esdb)) {
                 seenEsdb.add(e.esdb)
-                cars.push({ esdb: e.esdb, name: nameMap[e.esdb] || e.esdb, brand, type })
+                cars.push({ esdb: e.esdb, name: nameMap[e.esdb] || e.esdb, brand, type, filePath: f.path })
               }
             }
             return cars
@@ -8089,6 +8244,51 @@ const server = http.createServer(async (req, res) => {
       })
     } catch (e) {
       return json(res, 200, { fusions: false, stage6: false })
+    }
+  }
+
+  // CSR2 max out data — cached #Maxing.csv map {crdb: filename}
+  if (req.method === 'GET' && pathname === '/csr2/maxout-data') {
+    const d = loadMaxingData()
+    return json(res, 200, { data: d, count: Object.keys(d).length })
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/maxout-data-update') {
+    try {
+      const url = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/2.MaxOuts/%23Maxing.csv'
+      const txt = await fetchRawGithub(url)
+      const lines = txt.split('\n').map(l => l.trim()).filter(Boolean)
+      const map = {}
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split(',')
+        if (parts.length >= 3) {
+          const crdb = parts[1] && parts[1].trim()
+          const fname = parts[2] && parts[2].trim()
+          if (crdb && fname) map[crdb] = fname
+        }
+      }
+      saveMaxingData(map)
+      log('[csr2/maxout-data-update] Saved ' + Object.keys(map).length + ' entries')
+      return json(res, 200, { ok: true, count: Object.keys(map).length })
+    } catch (e) {
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/maxout') {
+    const body = await readBody(req)
+    const { crdb } = body
+    if (!crdb) return json(res, 400, { error: 'Missing crdb' })
+    try {
+      const maxingData = loadMaxingData()
+      const fname = maxingData[crdb]
+      if (!fname || fname === 'empty.txt') return json(res, 200, { error: 'No max out data for this car' })
+      const url = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/2.MaxOuts/' + encodeURIComponent(fname)
+      const txt = await fetchRawGithub(url)
+      const upst = JSON.parse(txt)
+      return json(res, 200, { upst })
+    } catch (e) {
+      return json(res, 500, { error: e.message })
     }
   }
 
