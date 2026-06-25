@@ -6594,8 +6594,11 @@ function renderEnsbFusionsTab() {
   var brandNameMap = {}
   for (var n = 0; n < allBrands.length; n++) brandNameMap[allBrands[n].upma] = allBrands[n].name
   var sq = _ensbFusionSearch.toLowerCase()
-  // Left column: all upma with amount > 0
-  var ownedUpmas = Object.keys(_ensbEditorState.fusions).filter(function(u){ return (_ensbEditorState.fusions[u] || 0) > 0 })
+  // Left column: all upma with amount > 0 (or all brands when fusionsAll is set)
+  var fusAllAmt = _ensbEditorState.fusionsAll
+  var ownedUpmas = (fusAllAmt !== null && fusAllAmt !== undefined)
+    ? allBrands.map(function(b){ return b.upma })
+    : Object.keys(_ensbEditorState.fusions).filter(function(u){ return (_ensbEditorState.fusions[u] || 0) > 0 })
   var filteredOwned = sq ? ownedUpmas.filter(function(u){
     return (brandNameMap[u] || formatBrandId(u) || u).toLowerCase().includes(sq)
   }) : ownedUpmas
@@ -6627,7 +6630,7 @@ function renderEnsbFusionsTab() {
   if (filteredOwned.length === 0) html += '<div style="color:var(--muted);font-size:12px">None owned.</div>'
   for (var i = 0; i < filteredOwned.length; i++) {
     var upma = filteredOwned[i]
-    var amt = _ensbEditorState.fusions[upma] || 0
+    var amt = (fusAllAmt !== null && fusAllAmt !== undefined) ? fusAllAmt : (_ensbEditorState.fusions[upma] || 0)
     var bname = brandNameMap[upma] || formatBrandId(upma) || upma
     var safeupma = upma.replace(/'/g,"\\\\'")
     html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
@@ -7630,13 +7633,29 @@ const server = http.createServer(async (req, res) => {
             let found = false
             for (let i = 0; i < data.cues.length; i++) {
               const e = data.cues[i]
-              if (typeof e === 'object' && e !== null && e.esdb === esdb) {
-                e.esnn = amt
-                if (i + 1 < data.cues.length && typeof data.cues[i + 1] === 'number') data.cues[i + 1] = amt
-                found = true
-              }
+              if (typeof e === 'object' && e !== null && e.esdb === esdb) { found = true; break }
             }
-            if (!found && amt > 0) {
+            if (found && amt === 0) {
+              // Remove all entries for this esdb from cues (object + paired number)
+              const newCues = []
+              for (let i = 0; i < data.cues.length; i++) {
+                const e = data.cues[i]
+                if (typeof e === 'object' && e !== null && e.esdb === esdb) {
+                  i++ // skip the paired number that follows
+                } else {
+                  newCues.push(e)
+                }
+              }
+              data.cues = newCues
+            } else if (found && amt > 0) {
+              for (let i = 0; i < data.cues.length; i++) {
+                const e = data.cues[i]
+                if (typeof e === 'object' && e !== null && e.esdb === esdb) {
+                  e.esnn = amt
+                  if (i + 1 < data.cues.length && typeof data.cues[i + 1] === 'number') data.cues[i + 1] = amt
+                }
+              }
+            } else if (!found && amt > 0) {
               const s6CacheEntry = loadS6CarList().find(c => c.esdb === esdb)
               if (s6CacheEntry && s6CacheEntry.filePath) {
                 try {
@@ -7649,6 +7668,19 @@ const server = http.createServer(async (req, res) => {
                   const entries = JSON.parse('[' + txt + ']')
                   for (const e of entries) data.cues.push(typeof e === 'object' && e !== null ? Object.assign({}, e) : e)
                 } catch(e) { log('[edit-nsb-full] stage6 INSERT error for ' + esdb + ': ' + e.message) }
+              } else {
+                // Fallback: use stored ##AllStage6's.txt, override esnn with actual amount
+                const stage6Fallback = loadStage6Data()
+                if (Array.isArray(stage6Fallback)) {
+                  for (let i = 0; i < stage6Fallback.length; i++) {
+                    const e = stage6Fallback[i]
+                    if (typeof e === 'object' && e !== null && e.esdb === esdb) {
+                      data.cues.push(Object.assign({}, e, { esnn: amt }))
+                      data.cues.push(amt)
+                      i++ // skip paired number in fallback data
+                    }
+                  }
+                }
               }
             }
           }
@@ -7663,7 +7695,7 @@ const server = http.createServer(async (req, res) => {
         if (Array.isArray(body.garageDeleted) && body.garageDeleted.length > 0 && Array.isArray(data.caow)) {
           const toDelete = new Set(body.garageDeleted.map(d => d.unid))
           data.caow = data.caow.filter(car => !toDelete.has(car.unid))
-          data.cgpi = [...Array(data.ncui).keys(), -1]
+          data.cgpi = [...Array(data.caow.length).keys(), -1]
         }
         // Garage — max out cars (set upst by unid)
         if (body.garageMaxout && typeof body.garageMaxout === 'object' && Array.isArray(data.caow)) {
