@@ -25,7 +25,8 @@ const CSR2_STAGE6_FILE  = path.join(DATA_DIR, 'csr2-stage6.json')
 const CSR2_STAGE6_SHA   = path.join(DATA_DIR, 'csr2-stage6-sha.json')
 const CSR2_BRANDS_FILE        = path.join(DATA_DIR, 'csr2-brands.json')
 const CSR2_BRANDS_SHA         = path.join(DATA_DIR, 'csr2-brands-sha.json')
-const CSR2_FUSION_BRANDS_FILE = path.join(DATA_DIR, 'csr2-fusion-brands.json')
+const CSR2_FUSION_BRANDS_FILE   = path.join(DATA_DIR, 'csr2-fusion-brands.json')
+const CSR2_FUSION_BRANDS_COMMIT = path.join(DATA_DIR, 'csr2-fusion-brands-commit.json')
 const CSR2_S6_CAR_LIST_FILE   = path.join(DATA_DIR, 'csr2-s6-car-list.json')
 const CSR2_S6_LIST_COMMIT     = path.join(DATA_DIR, 'csr2-s6-list-commit.json')
 const CSR2_MAXING_FILE        = path.join(DATA_DIR, 'csr2-maxing.json')
@@ -93,6 +94,8 @@ function loadStage6Data() { return loadJson(CSR2_STAGE6_FILE, {}) }
 function saveStage6Data(d) { saveJson(CSR2_STAGE6_FILE, d) }
 function loadFusionBrands() { return loadJson(CSR2_FUSION_BRANDS_FILE, []) }
 function saveFusionBrands(d) { saveJson(CSR2_FUSION_BRANDS_FILE, d) }
+function loadFusionBrandsCommit() { return loadJson(CSR2_FUSION_BRANDS_COMMIT, {}) }
+function saveFusionBrandsCommit(d) { saveJson(CSR2_FUSION_BRANDS_COMMIT, d) }
 function loadS6CarList() { return loadJson(CSR2_S6_CAR_LIST_FILE, []) }
 function saveS6CarList(d) { saveJson(CSR2_S6_CAR_LIST_FILE, d) }
 function loadS6ListCommit() { return loadJson(CSR2_S6_LIST_COMMIT, {}) }
@@ -2738,7 +2741,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div id="fusions-update-notice" style="display:none"></div>
     <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
       <button class="btn btn-secondary" onclick="hideModal('fusions-update-modal')" id="fusions-update-close-btn">Cancel</button>
-      <button class="btn btn-secondary" onclick="hideModal('fusions-update-modal');openFusionBrandsUpdate()">Update Brand List</button>
+      <button class="btn btn-secondary" id="fusion-brands-update-btn" onclick="hideModal('fusions-update-modal');openFusionBrandsUpdate()" style="position:relative">Update Brand List<span class="upd-badge" id="fusion-brands-update-dot" style="display:none">Update</span></button>
       <button class="btn btn-primary" onclick="doFusionsUpdate()" id="fusions-update-go-btn">Fetch & Cache</button>
     </div>
   </div>
@@ -2872,6 +2875,7 @@ async function init() {
   startPoll()
   // Silently check for car DB updates and remote data updates after UI is ready
   setTimeout(checkCsr2CarsUpdate, 3000)
+  setTimeout(checkFusionBrandsUpdate, 4000)
   setTimeout(checkFusionsUpdate, 4500)
   setTimeout(checkStage6Update, 6000)
   setTimeout(checkForDataUpdates, 7500)
@@ -4152,6 +4156,8 @@ async function doFusionBrandsUpdate() {
       document.getElementById('fusion-brands-status').textContent = 'Done! ' + res.count + ' brands loaded.'
       document.getElementById('fusion-brands-close-btn').textContent = 'Close'
       showNotice('fusion-brands-notice', 'success', res.count + ' fusion brands ready.')
+      var dot = document.getElementById('fusion-brands-update-dot')
+      if (dot) dot.style.display = 'none'
     }
   } catch (e) {
     showNotice('fusion-brands-notice', 'error', 'Failed: ' + e.message)
@@ -4787,6 +4793,14 @@ async function checkCsr2CarsUpdate() {
   try {
     var res = await fetch('/csr2/cars-check').then(function(r){ return r.json() })
     var dot = document.getElementById('cars-update-dot')
+    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
+  } catch {}
+}
+
+async function checkFusionBrandsUpdate() {
+  try {
+    var res = await fetch('/csr2/fusion-brands-check').then(function(r){ return r.json() })
+    var dot = document.getElementById('fusion-brands-update-dot')
     if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
   } catch {}
 }
@@ -7867,20 +7881,32 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, loadCsr2Cars())
   }
 
-  // CSR2 car database — check if GitHub has newer version (ETag comparison)
+  // CSR2 car database — check if GitHub has newer version (commit SHA comparison)
   if (req.method === 'GET' && pathname === '/csr2/cars-check') {
     try {
-      const ALL_CRDBS_URL = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/1.Cars/%23AllCarCRDBs.txt'
-      const remoteEtag = await headEtagCheck(ALL_CRDBS_URL)
+      const commits = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits?path=' + encodeURIComponent('1.Cars/#AllCarCRDBs.txt') + '&per_page=1')
+      const latestSha = commits && commits[0] ? commits[0].sha : null
       const stored = loadJson(CSR2_SHA_FILE, {})
-      const storedEtag = stored.crdbsEtag || ''
       const carCount = loadCsr2Cars().length
-      const hasUpdate = !storedEtag || (remoteEtag !== '' && remoteEtag !== storedEtag)
-      log('[csr2/cars-check] storedEtag=' + storedEtag + ' remoteEtag=' + remoteEtag + ' hasUpdate=' + hasUpdate)
+      const hasUpdate = !!latestSha && latestSha !== (stored.carCrdbsCommit || '')
+      log('[csr2/cars-check] stored=' + (stored.carCrdbsCommit || '') + ' latest=' + latestSha + ' hasUpdate=' + hasUpdate)
       return json(res, 200, { hasUpdate, carCount })
     } catch (e) {
       log('[csr2/cars-check] Error: ' + e.message)
       return json(res, 200, { hasUpdate: false, error: e.message, carCount: loadCsr2Cars().length })
+    }
+  }
+
+  // Fusion brand list — check if GitHub has newer version (commit SHA comparison)
+  if (req.method === 'GET' && pathname === '/csr2/fusion-brands-check') {
+    try {
+      const commits = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits?path=' + encodeURIComponent('3.Fusions/##AllFusions.txt') + '&per_page=1')
+      const latestSha = commits && commits[0] ? commits[0].sha : null
+      const stored = loadFusionBrandsCommit()
+      const hasUpdate = !!latestSha && latestSha !== (stored.sha || '')
+      return json(res, 200, { hasUpdate })
+    } catch (e) {
+      return json(res, 200, { hasUpdate: false, error: e.message })
     }
   }
 
@@ -7995,7 +8021,11 @@ const server = http.createServer(async (req, res) => {
 
       saveCsr2Cars(result)
       const crdbsEtag = await headEtagCheck('https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/1.Cars/%23AllCarCRDBs.txt')
-      saveCsr2Sha({ sha, crdbsEtag: crdbsEtag || '', updatedAt: new Date().toISOString() })
+      try {
+        const crdsbCommits = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits?path=' + encodeURIComponent('1.Cars/#AllCarCRDBs.txt') + '&per_page=1')
+        if (crdsbCommits && crdsbCommits[0]) saveCsr2Sha({ sha, crdbsEtag: crdbsEtag || '', carCrdbsCommit: crdsbCommits[0].sha, updatedAt: new Date().toISOString() })
+        else saveCsr2Sha({ sha, crdbsEtag: crdbsEtag || '', updatedAt: new Date().toISOString() })
+      } catch { saveCsr2Sha({ sha, crdbsEtag: crdbsEtag || '', updatedAt: new Date().toISOString() }) }
       log('[csr2/cars-update] Done — ' + result.length + ' cars saved, crdbsEtag=' + crdbsEtag)
       return json(res, 200, { ok: true, count: result.length })
     } catch (e) {
@@ -8149,6 +8179,10 @@ const server = http.createServer(async (req, res) => {
       }
       saveFusionBrands(brands)
       log('[csr2/fusion-brands-update] Saved ' + brands.length + ' brands')
+      try {
+        const commits = await fetchGithubApi('/repos/' + REPO + '/commits?path=' + encodeURIComponent('3.Fusions/##AllFusions.txt') + '&per_page=1')
+        if (commits && commits[0]) saveFusionBrandsCommit({ sha: commits[0].sha, date: commits[0].commit && commits[0].commit.committer ? commits[0].commit.committer.date : null })
+      } catch {}
       return json(res, 200, { ok: true, count: brands.length })
     } catch (e) {
       log('[csr2/fusion-brands-update] Error: ' + e.message)
