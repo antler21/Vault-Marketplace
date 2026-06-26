@@ -4189,6 +4189,11 @@ async function doS6CarListUpdate() {
       document.getElementById('s6-car-list-close-btn').textContent = 'Close'
       showNotice('s6-car-list-notice', 'success', res.count + ' stage 6 cars ready.')
       _ensbS6UpdateStatus = 'upToDate'
+      // Refresh the car list in the editor so it shows new cars immediately
+      fetch('/csr2/s6-car-list').then(function(r){ return r.json() }).then(function(d){
+        if (_ensbFullData && _ensbFullData.stage6) _ensbFullData.stage6.carList = d.cars || []
+        if (_ensbActiveTab === 'stage6') renderEnsbStage6Tab()
+      }).catch(function(){})
     }
   } catch (e) {
     showNotice('s6-car-list-notice', 'error', 'Failed: ' + e.message)
@@ -6792,8 +6797,8 @@ function renderEnsbStage6Tab() {
   html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
   html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-shrink:0">'
   html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">All Cars (' + totalCount + ')</div>'
-  var s6UpdBadge = _ensbS6UpdateStatus === 'hasUpdate' ? '<span class="upd-badge" style="position:relative;margin-left:4px;top:auto;right:auto">Update</span>' : ''
-  html += '<button onclick="openS6CarListUpdate()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap;position:relative">Update List' + s6UpdBadge + '</button>'
+  var s6UpdBadge = _ensbS6UpdateStatus === 'hasUpdate' ? '<span class="upd-badge">Update</span>' : ''
+  html += '<button onclick="openS6CarListUpdate()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap;position:relative">' + s6UpdBadge + 'Update List</button>'
   html += '<button onclick="ensbAddAllS6()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">Add All</button>'
   html += '</div>'
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
