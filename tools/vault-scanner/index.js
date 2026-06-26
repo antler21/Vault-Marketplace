@@ -27,6 +27,7 @@ const CSR2_BRANDS_FILE        = path.join(DATA_DIR, 'csr2-brands.json')
 const CSR2_BRANDS_SHA         = path.join(DATA_DIR, 'csr2-brands-sha.json')
 const CSR2_FUSION_BRANDS_FILE = path.join(DATA_DIR, 'csr2-fusion-brands.json')
 const CSR2_S6_CAR_LIST_FILE   = path.join(DATA_DIR, 'csr2-s6-car-list.json')
+const CSR2_S6_LIST_COMMIT     = path.join(DATA_DIR, 'csr2-s6-list-commit.json')
 const CSR2_MAXING_FILE        = path.join(DATA_DIR, 'csr2-maxing.json')
 const INT32_MAX = 2147483647
 const applyJobs = new Map()
@@ -94,6 +95,8 @@ function loadFusionBrands() { return loadJson(CSR2_FUSION_BRANDS_FILE, []) }
 function saveFusionBrands(d) { saveJson(CSR2_FUSION_BRANDS_FILE, d) }
 function loadS6CarList() { return loadJson(CSR2_S6_CAR_LIST_FILE, []) }
 function saveS6CarList(d) { saveJson(CSR2_S6_CAR_LIST_FILE, d) }
+function loadS6ListCommit() { return loadJson(CSR2_S6_LIST_COMMIT, {}) }
+function saveS6ListCommit(d) { saveJson(CSR2_S6_LIST_COMMIT, d) }
 function loadMaxingData() { return loadJson(CSR2_MAXING_FILE, {}) }
 function saveMaxingData(d) { saveJson(CSR2_MAXING_FILE, d) }
 function loadStage6Sha() { return loadJson(CSR2_STAGE6_SHA, {}) }
@@ -2807,7 +2810,7 @@ var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _ensbFullData = null
 var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], garageDeleted: [], garageMaxout: {}, legends: {}, fusions: {}, stage6: {}, fusionsAll: null, s6All: null, setPrvr: null }
-var _ensbGarageUndoStack = [], _ensbOwnedSearch = ''
+var _ensbGarageUndoStack = [], _ensbOwnedSearch = '', _ensbS6UpdateStatus = null
 var _ensbGarageAllowDup = false, _ensbFusionSearch = '', _ensbS6Search = ''
 var _ensbFusionSelected = new Set(), _ensbS6Selected = new Set(), _ensbS6Expanded = new Set()
 var _ensbAddModalCb = null
@@ -4185,6 +4188,7 @@ async function doS6CarListUpdate() {
       document.getElementById('s6-car-list-status').textContent = 'Done! ' + res.count + ' cars loaded.'
       document.getElementById('s6-car-list-close-btn').textContent = 'Close'
       showNotice('s6-car-list-notice', 'success', res.count + ' stage 6 cars ready.')
+      _ensbS6UpdateStatus = 'upToDate'
     }
   } catch (e) {
     showNotice('s6-car-list-notice', 'error', 'Failed: ' + e.message)
@@ -6715,6 +6719,14 @@ function ensbFusionChange(id, val) {
 function ensbS6GetBrand(id) { var idx = id ? id.indexOf('_') : -1; return idx !== -1 ? id.slice(0, idx) : (id || '') }
 
 function renderEnsbStage6Tab() {
+  // Auto-check for updates on first open
+  if (_ensbS6UpdateStatus === null) {
+    _ensbS6UpdateStatus = 'checking'
+    fetch('/csr2/s6-list-update-check').then(function(r){ return r.json() }).then(function(d){
+      _ensbS6UpdateStatus = d.hasUpdate ? 'hasUpdate' : 'upToDate'
+      renderEnsbStage6Tab()
+    }).catch(function(){ _ensbS6UpdateStatus = 'unknown' })
+  }
   var carList = (_ensbFullData && _ensbFullData.stage6 && _ensbFullData.stage6.carList) || []
   var el = document.getElementById('ensb-tab-content')
   if (carList.length === 0) {
@@ -6780,7 +6792,8 @@ function renderEnsbStage6Tab() {
   html += '<div style="flex:1;display:flex;flex-direction:column;min-width:0">'
   html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-shrink:0">'
   html += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);flex:1">All Cars (' + totalCount + ')</div>'
-  html += '<button onclick="openS6CarListUpdate()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap">Update List</button>'
+  var s6UpdBadge = _ensbS6UpdateStatus === 'hasUpdate' ? '<span class="upd-badge" style="position:relative;margin-left:4px;top:auto;right:auto">Update</span>' : ''
+  html += '<button onclick="openS6CarListUpdate()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap;position:relative">Update List' + s6UpdBadge + '</button>'
   html += '<button onclick="ensbAddAllS6()" style="height:22px;background:var(--surf);border:1px solid var(--border);border-radius:4px;padding:0 8px;cursor:pointer;font-size:11px;color:var(--accent);white-space:nowrap">Add All</button>'
   html += '</div>'
   html += '<div style="overflow-y:auto;display:flex;flex-direction:column;gap:3px">'
@@ -6800,7 +6813,8 @@ function renderEnsbStage6Tab() {
         var isSel = _ensbS6Selected.has(rc.esdb)
         var safeesdb2 = rc.esdb.replace(/'/g,"\\\\'")
         var typeBadge = rc.type === 'gold' ? '<span style="font-size:9px;color:#e5c040;margin-left:4px">★ Gold</span>'
-                      : rc.type === 'purple' ? '<span style="font-size:9px;color:#b06cf0;margin-left:4px">★ Purple</span>' : ''
+                      : rc.type === 'purple' ? '<span style="font-size:9px;color:#b06cf0;margin-left:4px">★ Purple</span>'
+                      : rc.type === 'legends' ? '<span style="font-size:9px;color:#4fc3f7;margin-left:4px">👑 Legends</span>' : ''
         html += '<div onclick="ensbS6Toggle(\\'' + safeesdb2 + '\\')" style="display:flex;align-items:center;gap:6px;padding:4px 8px 4px 18px;background:' + (isSel ? 'rgba(126,101,81,.15)' : 'var(--surf)') + ';border:1px solid ' + (isSel ? 'var(--accent)' : 'var(--border)') + ';border-radius:5px;cursor:pointer;margin-top:2px">'
         html += '<input type="checkbox" class="chk-themed" ' + (isSel ? 'checked' : '') + ' onclick="event.stopPropagation();ensbS6Toggle(\\'' + safeesdb2 + '\\')" style="flex-shrink:0">'
         html += '<span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(rc.name||rc.esdb) + typeBadge + '</span>'
@@ -7668,19 +7682,8 @@ const server = http.createServer(async (req, res) => {
                   const entries = JSON.parse('[' + txt + ']')
                   for (const e of entries) data.cues.push(typeof e === 'object' && e !== null ? Object.assign({}, e) : e)
                 } catch(e) { log('[edit-nsb-full] stage6 INSERT error for ' + esdb + ': ' + e.message) }
-              } else if (s6CacheEntry) {
-                // Fallback: no filePath cached yet — construct URL from brand + type + esdb
-                try {
-                  const typeFolder = s6CacheEntry.type === 'gold' ? '1.Gold Star' : '2.Purple Star'
-                  const pathParts = ["4.Stage6's", typeFolder, s6CacheEntry.brand, esdb + '.txt']
-                  const rawUrl = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/' + pathParts.map(s => encodeURIComponent(s)).join('/')
-                  let txt = await fetchRawGithub(rawUrl)
-                  txt = txt.replace(/\bAMOUNT\b/g, String(amt)).trim()
-                  if (txt.startsWith(',')) txt = txt.slice(1).trim()
-                  if (txt.endsWith(',')) txt = txt.slice(0, -1)
-                  const entries = JSON.parse('[' + txt + ']')
-                  for (const e of entries) data.cues.push(typeof e === 'object' && e !== null ? Object.assign({}, e) : e)
-                } catch(e) { log('[edit-nsb-full] stage6 INSERT fallback error for ' + esdb + ': ' + e.message) }
+              } else {
+                log('[edit-nsb-full] stage6 INSERT skipped for ' + esdb + ': not in car list cache, refresh car list')
               }
             }
           }
@@ -8148,7 +8151,22 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // ─── Stage 6 car list (from GitHub Gold Star + Purple Star directories) ───────
+  // ─── Stage 6 car list (from GitHub Gold Star + Purple Star + Legends dirs) ────
+
+  if (req.method === 'GET' && pathname === '/csr2/s6-list-update-check') {
+    try {
+      const REPO = 'Nitro4CSR/CSR2-DataBase'
+      const FILE_PATH = "4.Stage6's/##AllStage6's.txt"
+      const commits = await fetchGithubApi('/repos/' + REPO + '/commits?path=' + encodeURIComponent(FILE_PATH) + '&per_page=1')
+      const latest = commits && commits[0]
+      const latestSha = latest ? latest.sha : null
+      const latestDate = latest && latest.commit && latest.commit.committer ? latest.commit.committer.date : null
+      const stored = loadS6ListCommit()
+      return json(res, 200, { hasUpdate: !!latestSha && latestSha !== (stored.sha || ''), storedDate: stored.date || null, currentDate: latestDate })
+    } catch (e) {
+      return json(res, 200, { hasUpdate: false, error: e.message })
+    }
+  }
 
   if (req.method === 'GET' && pathname === '/csr2/s6-car-list') {
     const cars = loadS6CarList()
@@ -8159,8 +8177,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const REPO = 'Nitro4CSR/CSR2-DataBase'
       const BRANCH = 'Everything'
-      const GOLD_PREFIX   = "4.Stage6's/1.Gold Star/"
-      const PURPLE_PREFIX = "4.Stage6's/2.Purple Star/"
+      const GOLD_PREFIX    = "4.Stage6's/1.Gold Star/"
+      const PURPLE_PREFIX  = "4.Stage6's/2.Purple Star/"
+      const LEGENDS_PREFIX = "4.Stage6's/3.Legends/"
       log("[csr2/s6-car-list-update] Fetching root tree...")
       const rootTree = await fetchGithubApi('/repos/' + REPO + '/git/trees/' + BRANCH)
       if (!rootTree.tree) return json(res, 500, { error: 'GitHub API returned no root tree' })
@@ -8171,22 +8190,22 @@ const server = http.createServer(async (req, res) => {
       if (!s6Tree.tree) return json(res, 500, { error: "GitHub API returned no tree for 4.Stage6's" })
       const carFiles = s6Tree.tree.filter(f => {
         if (f.type !== 'blob' || !f.path.endsWith('.txt')) return false
-        return f.path.startsWith('1.Gold Star/') || f.path.startsWith('2.Purple Star/')
+        return f.path.startsWith('1.Gold Star/') || f.path.startsWith('2.Purple Star/') || f.path.startsWith('3.Legends/')
       }).map(f => ({ ...f, path: "4.Stage6's/" + f.path }))
       log('[csr2/s6-car-list-update] Found ' + carFiles.length + ' car files')
-      const carsDb = loadCsr2Cars()
-      const nameMap = {}; for (const car of carsDb) { if (car.crdb) nameMap[car.crdb] = car.name }
       const carList = []
       const seenEsdb = new Set()
       const BATCH = 20
       for (let i = 0; i < carFiles.length; i += BATCH) {
         const batch = carFiles.slice(i, i + BATCH)
         const results = await Promise.all(batch.map(async f => {
-          const isGold = f.path.startsWith(GOLD_PREFIX)
-          const type = isGold ? 'gold' : 'purple'
-          const prefix = isGold ? GOLD_PREFIX : PURPLE_PREFIX
-          const relative = f.path.slice(prefix.length)
-          const brand = relative.includes('/') ? relative.split('/')[0] : relative.replace(/\.txt$/i, '')
+          const isGold    = f.path.startsWith(GOLD_PREFIX)
+          const isPurple  = f.path.startsWith(PURPLE_PREFIX)
+          const type      = isGold ? 'gold' : isPurple ? 'purple' : 'legends'
+          const prefix    = isGold ? GOLD_PREFIX : isPurple ? PURPLE_PREFIX : LEGENDS_PREFIX
+          const relative  = f.path.slice(prefix.length)
+          const brand     = relative.includes('/') ? relative.split('/')[0] : relative.replace(/\.txt$/i, '')
+          const fileName  = f.path.split('/').pop().replace(/\.txt$/i, '')
           const encodedPath = f.path.split('/').map(s => encodeURIComponent(s)).join('/')
           const rawUrl = 'https://raw.githubusercontent.com/' + REPO + '/' + BRANCH + '/' + encodedPath
           try {
@@ -8199,7 +8218,7 @@ const server = http.createServer(async (req, res) => {
             for (const e of arr) {
               if (typeof e === 'object' && e !== null && e.esdb && !seenEsdb.has(e.esdb)) {
                 seenEsdb.add(e.esdb)
-                cars.push({ esdb: e.esdb, name: nameMap[e.esdb] || e.esdb, brand, type, filePath: f.path })
+                cars.push({ esdb: e.esdb, name: fileName, brand, type, filePath: f.path })
               }
             }
             return cars
@@ -8209,6 +8228,11 @@ const server = http.createServer(async (req, res) => {
       }
       saveS6CarList(carList)
       log('[csr2/s6-car-list-update] Saved ' + carList.length + ' cars')
+      // Store the latest commit SHA for ##AllStage6's.txt so we can detect future updates
+      try {
+        const commits = await fetchGithubApi('/repos/' + REPO + '/commits?path=' + encodeURIComponent("4.Stage6's/##AllStage6's.txt") + '&per_page=1')
+        if (commits && commits[0]) saveS6ListCommit({ sha: commits[0].sha, date: commits[0].commit && commits[0].commit.committer ? commits[0].commit.committer.date : null })
+      } catch {}
       return json(res, 200, { ok: true, count: carList.length })
     } catch (e) {
       log('[csr2/s6-car-list-update] Error: ' + e.message)
