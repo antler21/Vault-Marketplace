@@ -7671,7 +7671,7 @@ const server = http.createServer(async (req, res) => {
               } else if (s6CacheEntry) {
                 // Fallback: no filePath cached yet — construct URL from brand + type + esdb
                 try {
-                  const typeFolder = s6CacheEntry.type === 'Gold' ? '1.Gold Star' : '2.Purple Star'
+                  const typeFolder = s6CacheEntry.type === 'gold' ? '1.Gold Star' : '2.Purple Star'
                   const pathParts = ["4.Stage6's", typeFolder, s6CacheEntry.brand, esdb + '.txt']
                   const rawUrl = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/' + pathParts.map(s => encodeURIComponent(s)).join('/')
                   let txt = await fetchRawGithub(rawUrl)
