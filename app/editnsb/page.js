@@ -334,34 +334,53 @@ function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, own
 
 // ─── Stage 6 Tab ───────────────────────────────────────────────────────────────
 function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
-  const [cars, setCars] = useState(null)
-  const [search, setSearch] = useState('')
+  const [cars, setCars]       = useState(null)
+  const [search, setSearch]   = useState('')
   const [selected, setSelected] = useState(new Set())
   const [expanded, setExpanded] = useState(new Set())
-  const [modal, setModal] = useState(null)
+  const [modal, setModal]     = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState(null)
 
   useEffect(() => {
     if (cars !== null) return
     fetch('/api/nsb/s6cars-list').then(r=>r.json()).then(d=>setCars(d.cars||[])).catch(()=>setCars([]))
   }, [cars])
 
-  const sq = search.toLowerCase()
-  const ownedEsdbs = s6All!=null ? [] : Object.keys(stage6).filter(e=>(stage6[e]||0)>0)
-  const filteredOwned = sq ? ownedEsdbs.filter(e=>e.toLowerCase().includes(sq)) : ownedEsdbs
+  async function handleSync() {
+    setSyncing(true); setSyncError(null)
+    try {
+      const res = await fetch('/api/nsb/sync-s6-list', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) { setSyncError(d.error); return }
+      if (Array.isArray(d.cars)) setCars(d.cars)
+    } catch (e) { setSyncError(e.message) }
+    finally { setSyncing(false) }
+  }
 
-  // Group all cars by brand
+  const sq = search.toLowerCase()
+  const carMap = new Map((cars||[]).map(c => [c.esdb, c]))
+  const ownedEsdbs = s6All!=null ? [] : Object.keys(stage6).filter(e=>(stage6[e]||0)>0)
+  const filteredOwned = sq ? ownedEsdbs.filter(e=>{
+    const c = carMap.get(e)
+    return e.toLowerCase().includes(sq) || (c?.name||'').toLowerCase().includes(sq) || (c?.brand||'').toLowerCase().includes(sq)
+  }) : ownedEsdbs
+
   const brandMap = {}, brandOrder = []
   for (const rc of (cars||[])) {
-    if (sq && !rc.esdb.toLowerCase().includes(sq) && !(rc.brand||'').toLowerCase().includes(sq)) continue
+    const label = (rc.name||rc.esdb).toLowerCase()
+    const brandLow = (rc.brand||'').toLowerCase()
+    if (sq && !label.includes(sq) && !brandLow.includes(sq) && !rc.esdb.toLowerCase().includes(sq)) continue
     const b = rc.brand||rc.esdb
     if (!brandMap[b]) { brandMap[b]=[]; brandOrder.push(b) }
     brandMap[b].push(rc)
   }
+
   const selCount = selected.size
-  function toggle(id) { setSelected(p=>{ const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n }) }
-  function toggleBrand(b) { setExpanded(p=>{ const n=new Set(p); n.has(b)?n.delete(b):n.add(b); return n }) }
-  function addOne(id) { setModal({ title:'Add Stage 6 for 1 car', ids:[id] }) }
-  function addSelected() { if(!selected.size)return; const ids=[...selected]; setModal({ title:'Add Stage 6 for '+ids.length+' car(s)', ids }) }
+  function toggle(id)       { setSelected(p=>{ const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n }) }
+  function toggleBrand(b)   { setExpanded(p=>{ const n=new Set(p); n.has(b)?n.delete(b):n.add(b); return n }) }
+  function addOne(id)       { setModal({ title:'Add Stage 6 for 1 car', ids:[id] }) }
+  function addSelected()    { if(!selected.size)return; const ids=[...selected]; setModal({ title:'Add Stage 6 for '+ids.length+' car(s)', ids }) }
   function confirmAdd(amt) {
     if (modal.isAll) { setS6All(amt) } else { for(const id of modal.ids) setStage6(p=>({...p,[id]:Math.max(0,(p[id]||0)+amt)})); setSelected(new Set()) }
     setModal(null); toast()
@@ -375,6 +394,8 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
     if (type==='legends') return <span style={{ fontSize:9, color:C.lblue,  marginLeft:4 }}>👑 Legends</span>
     return null
   }
+
+  const noCache = cars !== null && cars.length === 0 && !sq
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:0, height:'100%' }}>
@@ -393,24 +414,42 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
           <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3 }}>
             {s6All!=null && <div style={{ color:C.muted, fontSize:12 }}>All stage 6 will be set to {fmtN(s6All)}.</div>}
             {s6All==null && filteredOwned.length===0 && <div style={{ color:C.muted, fontSize:12 }}>None owned.</div>}
-            {s6All==null && filteredOwned.map(id => (
-              <div key={id} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
-                <span style={{ flex:1, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{id}</span>
-                <NInput value={stage6[id]||0} onChange={v=>change(id,v)} style={{ width:75 }}/>
-                <button onClick={()=>remove(id)} style={BTN_ICON}>×</button>
-              </div>
-            ))}
+            {s6All==null && filteredOwned.map(id => {
+              const car = carMap.get(id)
+              return (
+                <div key={id} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{car?.name||id}</div>
+                    {car?.name && <div style={{ fontSize:10, color:C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{id}</div>}
+                  </div>
+                  <NInput value={stage6[id]||0} onChange={v=>change(id,v)} style={{ width:75 }}/>
+                  <button onClick={()=>remove(id)} style={BTN_ICON}>×</button>
+                </div>
+              )
+            })}
           </div>
         </div>
         {/* All Cars */}
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6, flexShrink:0 }}>
             <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, flex:1 }}>All Cars ({(cars||[]).length})</div>
-            <button onClick={()=>setModal({title:'Add All Stage 6',ids:[],isAll:true})} style={{ height:22, background:C.surf, border:`1px solid ${C.border}`, borderRadius:4, padding:'0 8px', cursor:'pointer', fontSize:11, color:C.accent, whiteSpace:'nowrap' }}>Add All</button>
+            {!noCache && <button onClick={()=>setModal({title:'Add All Stage 6',ids:[],isAll:true})} style={{ height:22, background:C.surf, border:`1px solid ${C.border}`, borderRadius:4, padding:'0 8px', cursor:'pointer', fontSize:11, color:C.accent, whiteSpace:'nowrap' }}>Add All</button>}
           </div>
-          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3 }}>
+          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
             {cars===null && <div style={{ color:C.muted, fontSize:12 }}>Loading...</div>}
-            {brandOrder.map(b => {
+            {noCache && (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 16px', gap:12, textAlign:'center' }}>
+                <div style={{ fontSize:28 }}>📦</div>
+                <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>Car list not synced yet</div>
+                <div style={{ fontSize:11, color:C.muted, maxWidth:220 }}>Sync once to fetch all Stage 6 cars from the CSR2 database with proper names and brands.</div>
+                {syncError && <div style={{ fontSize:11, color:C.red }}>{syncError}</div>}
+                <button onClick={handleSync} disabled={syncing}
+                  style={{ background:C.accent, border:'none', borderRadius:8, padding:'10px 22px', color:'#fff', fontSize:13, fontWeight:700, cursor:syncing?'not-allowed':'pointer', opacity:syncing?.7:1 }}>
+                  {syncing ? '⏳ Syncing (~30s)...' : '🔄 Sync Car List'}
+                </button>
+              </div>
+            )}
+            {!noCache && brandOrder.map(b => {
               const bcars = brandMap[b]; if(!bcars?.length)return null
               const isExp = expanded.has(b)
               return (
@@ -424,7 +463,7 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
                     return (
                       <div key={rc.esdb} onClick={()=>toggle(rc.esdb)} style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 8px 4px 18px', background:isSel?'rgba(126,101,81,.15)':C.surf, border:`1px solid ${isSel?C.accent:C.border}`, borderRadius:5, cursor:'pointer', marginTop:2 }}>
                         <input type="checkbox" checked={isSel} onChange={()=>toggle(rc.esdb)} onClick={e=>e.stopPropagation()} style={{ flexShrink:0 }}/>
-                        <span style={{ flex:1, fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{rc.esdb}{typeBadge(rc.type)}</span>
+                        <span style={{ flex:1, fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{rc.name||rc.esdb}{typeBadge(rc.type)}</span>
                         <button onClick={e=>{e.stopPropagation();addOne(rc.esdb)}} style={{ background:C.surf, border:`1px solid ${C.border}`, borderRadius:4, padding:'2px 6px', cursor:'pointer', fontSize:10, color:C.accent }}>Add</button>
                       </div>
                     )
@@ -433,6 +472,7 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
               )
             })}
           </div>
+          {!noCache && cars!==null && <button onClick={handleSync} disabled={syncing} style={{ marginTop:8, background:'none', border:`1px solid ${C.border}`, borderRadius:6, padding:'4px 8px', color:C.muted, fontSize:10, cursor:syncing?'not-allowed':'pointer', flexShrink:0 }}>{syncing?'Syncing...':'↻ Re-sync'}</button>}
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { parseSave, writeSave } from '@/lib/csr2Save'
+import { supabase } from '../../../lib/supabase'
 
 export const runtime = 'nodejs'
 
@@ -89,6 +90,16 @@ export async function POST(request) {
     }
 
     // ── Stage 6 ────────────────────────────────────────────────────────────────
+    let s6CarCache = null
+    async function getS6Car(esdb) {
+      if (!s6CarCache) {
+        try {
+          const { data } = await supabase.from('csr2_cache').select('data').eq('key', 's6_car_list').single()
+          s6CarCache = data?.data || []
+        } catch { s6CarCache = [] }
+      }
+      return s6CarCache.find(c => c.esdb === esdb) || null
+    }
     if (body.s6All != null) {
       const txt = await ghFetch(STAGE6_URL)
       const stage6Data = JSON.parse(txt)
@@ -107,6 +118,25 @@ export async function POST(request) {
         for (let i = 0; i < data.cues.length; i++) {
           const e = data.cues[i]
           if (typeof e === 'object' && e !== null && e.esdb === esdb) { found = true; break }
+        }
+        if (!found && amt > 0) {
+          const car = await getS6Car(esdb)
+          if (car?.filePath) {
+            try {
+              const encoded = car.filePath.split('/').map(s => encodeURIComponent(s)).join('/')
+              let txt = await ghFetch('https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/' + encoded)
+              txt = txt.replace(/\bAMOUNT\b/g, '0').trim()
+              if (txt.startsWith(',')) txt = txt.slice(1).trim()
+              if (txt.endsWith(',')) txt = txt.slice(0, -1)
+              const arr = JSON.parse('[' + txt + ']')
+              for (const e of arr) {
+                if (typeof e === 'object' && e !== null && e.esdb === esdb) {
+                  data.cues.push(Object.assign({}, e, { esnn: amt }), amt)
+                  break
+                }
+              }
+            } catch {}
+          }
         }
         if (found && amt === 0) {
           const newCues = []
