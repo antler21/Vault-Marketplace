@@ -7668,19 +7668,19 @@ const server = http.createServer(async (req, res) => {
                   const entries = JSON.parse('[' + txt + ']')
                   for (const e of entries) data.cues.push(typeof e === 'object' && e !== null ? Object.assign({}, e) : e)
                 } catch(e) { log('[edit-nsb-full] stage6 INSERT error for ' + esdb + ': ' + e.message) }
-              } else {
-                // Fallback: use stored ##AllStage6's.txt, override esnn with actual amount
-                const stage6Fallback = loadStage6Data()
-                if (Array.isArray(stage6Fallback)) {
-                  for (let i = 0; i < stage6Fallback.length; i++) {
-                    const e = stage6Fallback[i]
-                    if (typeof e === 'object' && e !== null && e.esdb === esdb) {
-                      data.cues.push(Object.assign({}, e, { esnn: amt }))
-                      data.cues.push(amt)
-                      i++ // skip paired number in fallback data
-                    }
-                  }
-                }
+              } else if (s6CacheEntry) {
+                // Fallback: no filePath cached yet — construct URL from brand + type + esdb
+                try {
+                  const typeFolder = s6CacheEntry.type === 'Gold' ? '1.Gold Star' : '2.Purple Star'
+                  const pathParts = ["4.Stage6's", typeFolder, s6CacheEntry.brand, esdb + '.txt']
+                  const rawUrl = 'https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/' + pathParts.map(s => encodeURIComponent(s)).join('/')
+                  let txt = await fetchRawGithub(rawUrl)
+                  txt = txt.replace(/\bAMOUNT\b/g, String(amt)).trim()
+                  if (txt.startsWith(',')) txt = txt.slice(1).trim()
+                  if (txt.endsWith(',')) txt = txt.slice(0, -1)
+                  const entries = JSON.parse('[' + txt + ']')
+                  for (const e of entries) data.cues.push(typeof e === 'object' && e !== null ? Object.assign({}, e) : e)
+                } catch(e) { log('[edit-nsb-full] stage6 INSERT fallback error for ' + esdb + ': ' + e.message) }
               }
             }
           }
@@ -7735,7 +7735,7 @@ const server = http.createServer(async (req, res) => {
               added++
             } catch { failed++ }
           }
-          data.cgpi = [...Array(data.ncui).keys(), -1]
+          data.cgpi = [...Array(data.caow.length).keys(), -1]
           if (added > 0 || failed > 0) note = added + ' car(s) added' + (failed > 0 ? ', ' + failed + ' failed' : '') + '.'
         }
         const out = csr2WriteSave(data)
