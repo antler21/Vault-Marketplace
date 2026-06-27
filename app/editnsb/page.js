@@ -166,37 +166,33 @@ function CurrencyTab({ currency, setCurrency }) {
     {k:'fusionGreen',label:'Green',dot:'#4caf50'},{k:'fusionBlue',label:'Blue',dot:'#2196F3'},
     {k:'fusionRed',label:'Red',dot:'#e05252'},{k:'fusionYellow',label:'Yellow',dot:'#FFC107'},
   ]
-  const fieldStyle = { display: 'flex', flexDirection: 'column', gap: 4 }
-  const labelStyle = { fontSize: 12, color: C.muted }
-  const wrapStyle = { display: 'flex', alignItems: 'center', gap: 4 }
-  const unitStyle = { fontSize: 11, color: C.muted, minWidth: 20 }
+  const INP  = { width:'100%', boxSizing:'border-box', paddingRight:36, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:5, padding:'5px 8px', paddingRight:36, color:C.text, fontSize:13, outline:'none' }
+  const UNIT = { position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:11, color:C.muted, pointerEvents:'none' }
   function set(k, v) { setCurrency(p => ({ ...p, [k]: v })) }
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Currencies</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 10, marginBottom: 16 }}>
+      <div style={{ ...SEC_HDR, marginBottom:10 }}>Currencies</div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
         {main.map(({k,label,unit}) => (
-          <div key={k} style={fieldStyle}>
-            <label style={labelStyle}>{label}</label>
-            <div style={wrapStyle}>
-              <input type="text" value={currency[k]??0} onChange={e=>set(k,Math.max(0,parseInt(e.target.value.replace(/\D/g,''))||0))}
-                style={{ flex:1, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:5, padding:'5px 8px', color:C.text, fontSize:13, outline:'none' }}
-              />
-              <span style={unitStyle}>{unit}</span>
+          <div key={k} style={{ marginBottom:4 }}>
+            <label style={{ fontSize:12, color:C.muted, display:'block', marginBottom:4 }}>{label}</label>
+            <div style={{ position:'relative' }}>
+              <input type="text" value={currency[k]??0} onChange={e=>set(k,Math.max(0,parseInt(e.target.value.replace(/\D/g,''))||0))} style={INP}/>
+              <span style={UNIT}>{unit}</span>
             </div>
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 10 }}>Elite Tokens</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: 10 }}>
+      <div style={{ ...SEC_HDR, marginBottom:10 }}>Elite Tokens</div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
         {tokens.map(({k,label,dot}) => (
-          <div key={k} style={fieldStyle}>
-            <label style={labelStyle}><span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:dot, marginRight:5, verticalAlign:'middle' }}/>{label}</label>
-            <div style={wrapStyle}>
-              <input type="text" value={currency[k]??0} onChange={e=>set(k,Math.max(0,parseInt(e.target.value.replace(/\D/g,''))||0))}
-                style={{ flex:1, background:C.surf2, border:`1px solid ${C.border}`, borderRadius:5, padding:'5px 8px', color:C.text, fontSize:13, outline:'none' }}
-              />
-              <span style={unitStyle}>Tk</span>
+          <div key={k} style={{ marginBottom:4 }}>
+            <label style={{ fontSize:12, color:C.muted, display:'block', marginBottom:4 }}>
+              <span style={{ display:'inline-block', width:8, height:8, borderRadius:'50%', background:dot, marginRight:5, verticalAlign:'middle' }}/>{label}
+            </label>
+            <div style={{ position:'relative' }}>
+              <input type="text" value={currency[k]??0} onChange={e=>set(k,Math.max(0,parseInt(e.target.value.replace(/\D/g,''))||0))} style={INP}/>
+              <span style={UNIT}>Tk</span>
             </div>
           </div>
         ))}
@@ -257,14 +253,8 @@ function LegendsTab({ legends, setLegends, toast }) {
   )
 }
 
-function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, ownedFusions, toast }) {
+function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, ownedFusions, toast, brands }) {
   const [modal, setModal] = useState(null)
-  const [brands, setBrands] = useState(null)
-
-  useEffect(() => {
-    if (brands !== null) return
-    fetch('/api/nsb/fusions-list').then(r=>r.json()).then(d=>setBrands(d.brands||[])).catch(()=>setBrands([]))
-  }, [brands])
 
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(new Set())
@@ -630,6 +620,7 @@ export default function EditNsbPage() {
   const [stage6, setStage6]               = useState({})
   const [s6All, setS6All]                 = useState(null)
   const [s6Cars,        setS6Cars]         = useState(null)
+  const [fusionBrands,  setFusionBrands]  = useState(null)
   const [garageDeleted, setGarageDeleted] = useState([])
   const [garageAdded,   setGarageAdded]   = useState([])
   const [setPrvrVal, setSetPrvrVal]       = useState(null)
@@ -651,7 +642,7 @@ export default function EditNsbPage() {
       setFusions(f)
       const s = {}; (data.stage6.owned||[]).forEach(o=>{ s[o.esdb]=o.amount })
       setStage6(s)
-      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setGarageAdded([]); setSetPrvrVal(null); setS6Cars(null)
+      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setGarageAdded([]); setSetPrvrVal(null); setS6Cars(null); setFusionBrands(null)
       setParsed(data); setTab('currency')
     } catch (e) { setError('Parse error: '+e.message) }
     finally { setParsing(false) }
@@ -661,6 +652,11 @@ export default function EditNsbPage() {
     if (!parsed || s6Cars !== null) return
     fetch('/api/nsb/s6cars-list').then(r=>r.json()).then(d=>setS6Cars(d.cars||[])).catch(()=>setS6Cars([]))
   }, [parsed, s6Cars])
+
+  useEffect(() => {
+    if (!parsed || fusionBrands !== null) return
+    fetch('/api/nsb/fusions-list').then(r=>r.json()).then(d=>setFusionBrands(d.brands||[])).catch(()=>setFusionBrands([]))
+  }, [parsed, fusionBrands])
 
   function onDrop(e) { e.preventDefault(); setDragging(false); const f=e.dataTransfer.files[0]; if(f) handleFile(f) }
 
@@ -747,7 +743,7 @@ export default function EditNsbPage() {
             {tab==='currency' && <CurrencyTab currency={currency} setCurrency={setCurrency}/>}
             {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} garageAdded={garageAdded} setGarageAdded={setGarageAdded} toast={fireToast} s6Cars={s6Cars} setS6Cars={setS6Cars}/>}
             {tab==='legends'  && <LegendsTab legends={legends} setLegends={setLegends} toast={fireToast}/>}
-            {tab==='fusions'  && <FusionsTabWrapper fusions={fusions} setFusions={setFusions} fusionsAll={fusionsAll} setFusionsAll={setFusionsAll} ownedFusions={parsed.fusions.owned} toast={fireToast}/>}
+            {tab==='fusions'  && <FusionsTabWrapper fusions={fusions} setFusions={setFusions} fusionsAll={fusionsAll} setFusionsAll={setFusionsAll} ownedFusions={parsed.fusions.owned} toast={fireToast} brands={fusionBrands}/>}
             {tab==='stage6'   && <Stage6Tab stage6={stage6} setStage6={setStage6} s6All={s6All} setS6All={setS6All} ownedS6={parsed.stage6.owned} toast={fireToast} s6Cars={s6Cars} setS6Cars={setS6Cars}/>}
           </div>
           {/* Footer */}
