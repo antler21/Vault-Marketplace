@@ -66,13 +66,20 @@ export async function POST() {
       for (const r of results) carList.push(...r)
     }
 
+    // Deduplicate by esdb (race condition inside Promise.all means same esdb can appear multiple times)
+    const deduped = []
+    const seenFinal = new Set()
+    for (const car of carList) {
+      if (!seenFinal.has(car.esdb)) { seenFinal.add(car.esdb); deduped.push(car) }
+    }
+
     await supabase.from('csr2_cache').upsert({
       key: 's6_car_list',
-      data: carList,
+      data: deduped,
       updated_at: new Date().toISOString(),
     })
 
-    return Response.json({ ok: true, count: carList.length, cars: carList })
+    return Response.json({ ok: true, count: deduped.length, cars: deduped })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
   }

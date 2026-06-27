@@ -333,19 +333,15 @@ function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, own
 }
 
 // ─── Stage 6 Tab ───────────────────────────────────────────────────────────────
-function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
-  const [cars, setCars]       = useState(null)
+function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast, s6Cars, setS6Cars }) {
+  const cars    = s6Cars
+  const setCars = setS6Cars
   const [search, setSearch]   = useState('')
   const [selected, setSelected] = useState(new Set())
   const [expanded, setExpanded] = useState(new Set())
   const [modal, setModal]     = useState(null)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState(null)
-
-  useEffect(() => {
-    if (cars !== null) return
-    fetch('/api/nsb/s6cars-list').then(r=>r.json()).then(d=>setCars(d.cars||[])).catch(()=>setCars([]))
-  }, [cars])
 
   async function handleSync() {
     setSyncing(true); setSyncError(null)
@@ -480,15 +476,22 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
 }
 
 // ─── Garage Tab ────────────────────────────────────────────────────────────────
-function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, setGarageAdded, toast }) {
-  const [s6Cars, setS6Cars]         = useState(null)
+function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, setGarageAdded, toast, s6Cars, setS6Cars }) {
   const [availSearch, setAvailSearch] = useState('')
   const [ownedSearch, setOwnedSearch] = useState('')
+  const [syncing, setSyncing]         = useState(false)
+  const [syncError, setSyncError]     = useState(null)
 
-  useEffect(() => {
-    if (s6Cars !== null) return
-    fetch('/api/nsb/s6cars-list').then(r=>r.json()).then(d=>setS6Cars(d.cars||[])).catch(()=>setS6Cars([]))
-  }, [s6Cars])
+  async function handleSync() {
+    setSyncing(true); setSyncError(null)
+    try {
+      const res = await fetch('/api/nsb/sync-s6-list', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) { setSyncError(d.error); return }
+      if (Array.isArray(d.cars)) setS6Cars(d.cars)
+    } catch (e) { setSyncError(e.message) }
+    finally { setSyncing(false) }
+  }
 
   const ownedCrdbSet = new Set(ownedCars.map(c=>c.crdb))
   const addedCrdbSet = new Set(garageAdded.map(c=>c.crdb))
@@ -534,8 +537,13 @@ function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, se
           {noSync && (
             <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 12px', gap:8, textAlign:'center' }}>
               <div style={{ fontSize:24 }}>📦</div>
-              <div style={{ fontSize:12, color:C.text, fontWeight:600 }}>Car list not synced</div>
-              <div style={{ fontSize:11, color:C.muted }}>Go to Stage 6 tab and hit Sync Car List first.</div>
+              <div style={{ fontSize:12, color:C.text, fontWeight:600 }}>Car list not synced yet</div>
+              <div style={{ fontSize:11, color:C.muted, maxWidth:200 }}>Sync once to show all available Stage 6 cars.</div>
+              {syncError && <div style={{ fontSize:11, color:C.red }}>{syncError}</div>}
+              <button onClick={handleSync} disabled={syncing}
+                style={{ background:C.accent, border:'none', borderRadius:8, padding:'10px 22px', color:'#fff', fontSize:13, fontWeight:700, cursor:syncing?'not-allowed':'pointer', opacity:syncing?.7:1 }}>
+                {syncing ? '⏳ Syncing (~30s)...' : '🔄 Sync Car List'}
+              </button>
             </div>
           )}
           {!noSync && filteredAvail.map(c=>(
@@ -621,6 +629,7 @@ export default function EditNsbPage() {
   const [fusionsAll, setFusionsAll]       = useState(null)
   const [stage6, setStage6]               = useState({})
   const [s6All, setS6All]                 = useState(null)
+  const [s6Cars,        setS6Cars]         = useState(null)
   const [garageDeleted, setGarageDeleted] = useState([])
   const [garageAdded,   setGarageAdded]   = useState([])
   const [setPrvrVal, setSetPrvrVal]       = useState(null)
@@ -642,11 +651,16 @@ export default function EditNsbPage() {
       setFusions(f)
       const s = {}; (data.stage6.owned||[]).forEach(o=>{ s[o.esdb]=o.amount })
       setStage6(s)
-      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setGarageAdded([]); setSetPrvrVal(null)
+      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setGarageAdded([]); setSetPrvrVal(null); setS6Cars(null)
       setParsed(data); setTab('currency')
     } catch (e) { setError('Parse error: '+e.message) }
     finally { setParsing(false) }
   }
+
+  useEffect(() => {
+    if (!parsed || s6Cars !== null) return
+    fetch('/api/nsb/s6cars-list').then(r=>r.json()).then(d=>setS6Cars(d.cars||[])).catch(()=>setS6Cars([]))
+  }, [parsed, s6Cars])
 
   function onDrop(e) { e.preventDefault(); setDragging(false); const f=e.dataTransfer.files[0]; if(f) handleFile(f) }
 
@@ -731,10 +745,10 @@ export default function EditNsbPage() {
           {/* Tab content */}
           <div style={{ flex:1, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', minHeight:0 }}>
             {tab==='currency' && <CurrencyTab currency={currency} setCurrency={setCurrency}/>}
-            {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} garageAdded={garageAdded} setGarageAdded={setGarageAdded} toast={fireToast}/>}
+            {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} garageAdded={garageAdded} setGarageAdded={setGarageAdded} toast={fireToast} s6Cars={s6Cars} setS6Cars={setS6Cars}/>}
             {tab==='legends'  && <LegendsTab legends={legends} setLegends={setLegends} toast={fireToast}/>}
             {tab==='fusions'  && <FusionsTabWrapper fusions={fusions} setFusions={setFusions} fusionsAll={fusionsAll} setFusionsAll={setFusionsAll} ownedFusions={parsed.fusions.owned} toast={fireToast}/>}
-            {tab==='stage6'   && <Stage6Tab stage6={stage6} setStage6={setStage6} s6All={s6All} setS6All={setS6All} ownedS6={parsed.stage6.owned} toast={fireToast}/>}
+            {tab==='stage6'   && <Stage6Tab stage6={stage6} setStage6={setStage6} s6All={s6All} setS6All={setS6All} ownedS6={parsed.stage6.owned} toast={fireToast} s6Cars={s6Cars} setS6Cars={setS6Cars}/>}
           </div>
           {/* Footer */}
           <div style={{ background:C.surf, borderTop:`1px solid ${C.border}`, padding:'10px 16px', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
