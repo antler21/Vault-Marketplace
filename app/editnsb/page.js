@@ -40,13 +40,10 @@ const LEGEND_CARS = [
 
 function fmtN(n) { return n == null ? '0' : Number(n).toLocaleString() }
 
-// ─── Shared styles ──────────────────────────────────────────────────────────────
-const ROW = `display:flex;align-items:center;gap:6px;padding:5px 8px;background:${C.surf2};border:1px solid ${C.border};border-radius:6px`
-const INP_SM = `width:80px;height:26px;box-sizing:border-box;background:${C.surf};border:1px solid ${C.border};border-radius:5px;padding:3px 6px;color:${C.text};font-size:12px;outline:none;text-align:right`
-const BTN_SML = `background:${C.surf};border:1px solid ${C.border};border-radius:5px;padding:3px 10px;cursor:pointer;font-size:11px;color:${C.accent};white-space:nowrap`
-const BTN_ICON = `background:none;border:none;color:${C.muted};cursor:pointer;font-size:16px;line-height:1;padding:0 2px`
-const SEARCH_INP = `flex:1;background:${C.surf2};border:1px solid ${C.border};border-radius:7px;padding:7px 10px;color:${C.text};font-size:13px;outline:none`
-const SEC_TITLE = `font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:${C.muted}`
+// ─── Shared styles (objects, not strings) ──────────────────────────────────────
+const BTN_SML  = { background: C.surf, border: `1px solid ${C.border}`, borderRadius: 5, padding: '3px 10px', cursor: 'pointer', fontSize: 11, color: C.accent, whiteSpace: 'nowrap' }
+const BTN_ICON = { background: 'none', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 2px' }
+const SEC_HDR  = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: C.muted }
 
 // ─── Toast ─────────────────────────────────────────────────────────────────────
 function useToast() {
@@ -483,37 +480,102 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
 }
 
 // ─── Garage Tab ────────────────────────────────────────────────────────────────
-function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, toast }) {
+function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, setGarageAdded, toast }) {
+  const [s6Cars, setS6Cars]         = useState(null)
+  const [availSearch, setAvailSearch] = useState('')
   const [ownedSearch, setOwnedSearch] = useState('')
+
+  useEffect(() => {
+    if (s6Cars !== null) return
+    fetch('/api/nsb/s6cars-list').then(r=>r.json()).then(d=>setS6Cars(d.cars||[])).catch(()=>setS6Cars([]))
+  }, [s6Cars])
+
+  const ownedCrdbSet = new Set(ownedCars.map(c=>c.crdb))
+  const addedCrdbSet = new Set(garageAdded.map(c=>c.crdb))
+  const asq = availSearch.toLowerCase()
+  const available = (s6Cars||[]).filter(c => !ownedCrdbSet.has(c.crdb) && !addedCrdbSet.has(c.crdb))
+  const filteredAvail = asq ? available.filter(c=>(c.name||c.crdb).toLowerCase().includes(asq)||(c.brand||'').toLowerCase().includes(asq)) : available
+
   const deletedUnids = new Set(garageDeleted.map(d=>d.unid))
   const osq = ownedSearch.toLowerCase()
-  const filtered = ownedCars.filter(c=>!deletedUnids.has(c.unid)&&(!osq||(c.crdb||'').toLowerCase().includes(osq)))
-  function del(unid, crdb) { setGarageDeleted(p=>[...p,{unid,crdb}]); toast() }
-  function restore(unid) { setGarageDeleted(p=>p.filter(d=>d.unid!==unid)) }
+  const filteredOwned = ownedCars.filter(c=>!deletedUnids.has(c.unid)&&(!osq||(c.crdb||'').toLowerCase().includes(osq)))
   const deleted = ownedCars.filter(c=>deletedUnids.has(c.unid))
+
+  function addToQueue(car)  { setGarageAdded(p=>[...p, car]); toast() }
+  function removeQueue(crdb){ setGarageAdded(p=>p.filter(c=>c.crdb!==crdb)) }
+  function del(unid, crdb)  { setGarageDeleted(p=>[...p,{unid,crdb}]); toast() }
+  function restore(unid)    { setGarageDeleted(p=>p.filter(d=>d.unid!==unid)) }
+
+  const noSync = s6Cars !== null && s6Cars.length === 0 && !asq
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
-      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6, flexShrink:0 }}>
-        <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, flex:1 }}>Owned ({filtered.length}{garageDeleted.length>0?`, ${garageDeleted.length} deleting`:''})</div>
+    <div style={{ display:'flex', gap:14, flex:1, overflow:'hidden' }}>
+      {/* Left: Available S6 cars */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6, flexShrink:0 }}>
+          <div style={{ ...SEC_HDR, flex:1 }}>Available ({filteredAvail.length})</div>
+        </div>
+        <input placeholder="Search available..." value={availSearch} onChange={e=>setAvailSearch(e.target.value)}
+          style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 10px', color:C.text, fontSize:12, outline:'none', marginBottom:6, flexShrink:0 }}
+        />
+        {garageAdded.length>0 && (
+          <div style={{ background:'rgba(126,101,81,.14)', border:`1px solid ${C.accent}`, borderRadius:6, padding:'6px 10px', marginBottom:6, flexShrink:0 }}>
+            <div style={{ fontSize:11, color:C.text, marginBottom:4 }}>Queued to add ({garageAdded.length}):</div>
+            {garageAdded.map(c=>(
+              <div key={c.crdb} style={{ display:'flex', alignItems:'center', gap:4, marginBottom:2 }}>
+                <span style={{ flex:1, fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.gold }}>{c.name||c.crdb}</span>
+                <button onClick={()=>removeQueue(c.crdb)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px' }}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+          {s6Cars===null && <div style={{ color:C.muted, fontSize:12 }}>Loading...</div>}
+          {noSync && (
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 12px', gap:8, textAlign:'center' }}>
+              <div style={{ fontSize:24 }}>📦</div>
+              <div style={{ fontSize:12, color:C.text, fontWeight:600 }}>Car list not synced</div>
+              <div style={{ fontSize:11, color:C.muted }}>Go to Stage 6 tab and hit Sync Car List first.</div>
+            </div>
+          )}
+          {!noSync && filteredAvail.map(c=>(
+            <div key={c.crdb} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name||c.crdb}</div>
+                {c.name && <div style={{ fontSize:9, color:C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.brand}</div>}
+              </div>
+              <button onClick={()=>addToQueue(c)} style={BTN_SML}>Add</button>
+            </div>
+          ))}
+          {!noSync && s6Cars!==null && filteredAvail.length===0 && !asq && garageAdded.length>0 && (
+            <div style={{ color:C.muted, fontSize:12 }}>All synced cars are already in your garage or queued.</div>
+          )}
+        </div>
       </div>
-      <input placeholder="Search owned..." value={ownedSearch} onChange={e=>setOwnedSearch(e.target.value)}
-        style={{ width:'100%', boxSizing:'border-box', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 10px', color:C.text, fontSize:12, outline:'none', marginBottom:6, flexShrink:0 }}
-      />
-      <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
-        {deleted.map(c => (
-          <div key={c.unid} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', background:'rgba(224,82,82,.08)', border:`1px solid rgba(224,82,82,.3)`, borderRadius:6 }}>
-            <span style={{ flex:1, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.red, textDecoration:'line-through' }}>{c.crdb}</span>
-            <span style={{ fontSize:10, color:C.red, flexShrink:0 }}>DELETE</span>
-            <button onClick={()=>restore(c.unid)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px' }}>↩</button>
-          </div>
-        ))}
-        {filtered.map(c => (
-          <div key={c.unid} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
-            <span style={{ flex:1, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.crdb}</span>
-            <button onClick={()=>del(c.unid,c.crdb)} title="Delete" style={{ background:'none', border:'none', cursor:'pointer', fontSize:15, lineHeight:1, padding:'0 2px', color:C.muted }}>×</button>
-          </div>
-        ))}
-        {filtered.length===0 && deleted.length===0 && <div style={{ color:C.muted, fontSize:12 }}>No cars in garage.</div>}
+      {/* Right: Owned */}
+      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+        <div style={{ ...SEC_HDR, marginBottom:6, flexShrink:0 }}>
+          Owned ({filteredOwned.length}{garageDeleted.length>0?`, ${garageDeleted.length} deleting`:''})
+        </div>
+        <input placeholder="Search owned..." value={ownedSearch} onChange={e=>setOwnedSearch(e.target.value)}
+          style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 10px', color:C.text, fontSize:12, outline:'none', marginBottom:6, flexShrink:0 }}
+        />
+        <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+          {deleted.map(c=>(
+            <div key={c.unid} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', background:'rgba(224,82,82,.08)', border:`1px solid rgba(224,82,82,.3)`, borderRadius:6 }}>
+              <span style={{ flex:1, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.red, textDecoration:'line-through' }}>{c.crdb}</span>
+              <span style={{ fontSize:10, color:C.red, flexShrink:0 }}>DELETE</span>
+              <button onClick={()=>restore(c.unid)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px' }}>↩</button>
+            </div>
+          ))}
+          {filteredOwned.map(c=>(
+            <div key={c.unid} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
+              <span style={{ flex:1, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.crdb}</span>
+              <button onClick={()=>del(c.unid,c.crdb)} title="Delete" style={{ background:'none', border:'none', cursor:'pointer', fontSize:15, lineHeight:1, padding:'0 2px', color:C.muted }}>×</button>
+            </div>
+          ))}
+          {filteredOwned.length===0 && deleted.length===0 && <div style={{ color:C.muted, fontSize:12 }}>No cars in garage.</div>}
+        </div>
       </div>
     </div>
   )
@@ -560,6 +622,7 @@ export default function EditNsbPage() {
   const [stage6, setStage6]               = useState({})
   const [s6All, setS6All]                 = useState(null)
   const [garageDeleted, setGarageDeleted] = useState([])
+  const [garageAdded,   setGarageAdded]   = useState([])
   const [setPrvrVal, setSetPrvrVal]       = useState(null)
 
   async function handleFile(file) {
@@ -579,7 +642,7 @@ export default function EditNsbPage() {
       setFusions(f)
       const s = {}; (data.stage6.owned||[]).forEach(o=>{ s[o.esdb]=o.amount })
       setStage6(s)
-      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setSetPrvrVal(null)
+      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setGarageAdded([]); setSetPrvrVal(null)
       setParsed(data); setTab('currency')
     } catch (e) { setError('Parse error: '+e.message) }
     finally { setParsing(false) }
@@ -603,6 +666,7 @@ export default function EditNsbPage() {
         stage6: s6All!=null ? undefined : stage6,
         s6All: s6All!=null ? Number(s6All) : undefined,
         garageDeleted: garageDeleted.length ? garageDeleted : undefined,
+        garageAdded:   garageAdded.length   ? garageAdded.map(c=>c.crdb) : undefined,
         setPrvr: setPrvrVal!=null ? setPrvrVal : undefined,
       }
       const res = await fetch('/api/nsb/write', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
@@ -667,7 +731,7 @@ export default function EditNsbPage() {
           {/* Tab content */}
           <div style={{ flex:1, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', minHeight:0 }}>
             {tab==='currency' && <CurrencyTab currency={currency} setCurrency={setCurrency}/>}
-            {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} toast={fireToast}/>}
+            {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} garageAdded={garageAdded} setGarageAdded={setGarageAdded} toast={fireToast}/>}
             {tab==='legends'  && <LegendsTab legends={legends} setLegends={setLegends} toast={fireToast}/>}
             {tab==='fusions'  && <FusionsTabWrapper fusions={fusions} setFusions={setFusions} fusionsAll={fusionsAll} setFusionsAll={setFusionsAll} ownedFusions={parsed.fusions.owned} toast={fireToast}/>}
             {tab==='stage6'   && <Stage6Tab stage6={stage6} setStage6={setStage6} s6All={s6All} setS6All={setS6All} ownedS6={parsed.stage6.owned} toast={fireToast}/>}
@@ -678,6 +742,7 @@ export default function EditNsbPage() {
             {applyMsg && !error && <div style={{ color:C.green, fontSize:12, flex:1 }}>{applyMsg}</div>}
             {!error && !applyMsg && (
               <div style={{ fontSize:11, color:C.muted, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {garageAdded.length>0   && <span style={{ color:C.green }}>{garageAdded.length} car(s) adding · </span>}
                 {garageDeleted.length>0 && <span style={{ color:C.red }}>{garageDeleted.length} car(s) deleting · </span>}
                 {fusionsAll!=null && <span style={{ color:C.green }}>Fusions All: {fmtN(fusionsAll)} · </span>}
                 {s6All!=null && <span style={{ color:C.green }}>S6 All: {fmtN(s6All)}</span>}

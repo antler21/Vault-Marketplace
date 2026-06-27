@@ -172,6 +172,24 @@ export async function POST(request) {
       data.cgpi = [...Array(data.caow.length).keys(), -1]
     }
 
+    // ── Garage add ─────────────────────────────────────────────────────────────
+    if (Array.isArray(body.garageAdded) && body.garageAdded.length > 0) {
+      if (!data.caow) data.caow = []
+      const template = data.caow.length > 0 ? data.caow[0] : null
+      for (const crdb of body.garageAdded) {
+        const unid = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
+        if (template) {
+          const clone = JSON.parse(JSON.stringify(template))
+          clone.crdb = crdb
+          clone.unid = unid
+          data.caow.push(clone)
+        } else {
+          data.caow.push({ crdb, unid })
+        }
+      }
+      data.cgpi = [...Array(data.caow.length).keys(), -1]
+    }
+
     const out = writeSave(data)
     return new Response(new Uint8Array(out), {
       headers: { 'Content-Type': 'application/octet-stream' },
