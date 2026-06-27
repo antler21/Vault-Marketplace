@@ -101,7 +101,7 @@ function AddAllModal({ title, onConfirm, onClose }) {
 }
 
 // ─── Left Panel ────────────────────────────────────────────────────────────────
-function LeftPanel({ parsed, currency, legends, garageDeleted, prvr, onEditPrvr }) {
+function LeftPanel({ parsed, currency, legends, garageDeleted, prvr, onEditPrvr, onChangeFile }) {
   const carCount = (parsed?.garage?.carCount || 0) - garageDeleted.length
   const legendCount = Object.keys(legends).length
   const c = currency
@@ -148,9 +148,12 @@ function LeftPanel({ parsed, currency, legends, garageDeleted, prvr, onEditPrvr 
         ))}
       </div>
       <div style={{ height: 1, background: C.border, margin: '8px 0' }}/>
-      <div style={{ display: 'flex', gap: 5 }}>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 16 }}>
         {chip('🚗','Cars', carCount)}{chip('⭐','Legends', legendCount)}
       </div>
+      <button onClick={onChangeFile} style={{ width:'100%', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, padding:'8px 0', color:C.muted, fontSize:12, cursor:'pointer', textAlign:'center' }}>
+        📂 Change File
+      </button>
     </div>
   )
 }
@@ -219,13 +222,13 @@ function LegendsTab({ legends, setLegends, toast }) {
   const colStyle = { flex:1, display:'flex', flexDirection:'column', minWidth:0 }
   const hdrRow = { display:'flex', alignItems:'center', gap:8, marginBottom:8, flexShrink:0 }
   return (
-    <div style={{ display:'flex', gap:14, overflow:'hidden', height:'100%' }}>
+    <div style={{ display:'flex', gap:14, flex:1, overflow:'hidden' }}>
       <div style={colStyle}>
         <div style={hdrRow}>
-          <div style={{ ...{SEC_TITLE}, fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, flex:1 }}>Owned ({ownedList.length})</div>
+          <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, flex:1 }}>Owned ({ownedList.length})</div>
           <button onClick={maxAll} style={{ ...BTN_SML }}>Max All</button>
         </div>
-        <div style={{ overflowY:'auto', display:'flex', flexDirection:'column' }}>
+        <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', flex:1 }}>
           {ownedList.length===0 && <div style={{ color:C.muted, fontSize:13, padding:'8px 0' }}>None owned. Add from the right.</div>}
           {ownedList.map(lc => (
             <div key={lc.crdb} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, marginBottom:4 }}>
@@ -242,7 +245,7 @@ function LegendsTab({ legends, setLegends, toast }) {
           <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, flex:1 }}>Available ({availList.length})</div>
           <button onClick={addAll} style={BTN_SML}>Add All</button>
         </div>
-        <div style={{ overflowY:'auto', display:'flex', flexDirection:'column' }}>
+        <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', flex:1 }}>
           {availList.length===0 && <div style={{ color:C.muted, fontSize:13, padding:'8px 0' }}>All legends owned.</div>}
           {availList.map(lc => (
             <div key={lc.crdb} style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 10px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, marginBottom:4 }}>
@@ -284,7 +287,7 @@ function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, own
   function remove(u) { setFusions(p=>({...p,[u]:0})) }
   function change(u,v) { setFusions(p=>({...p,[u]:v})); toast() }
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:0, height:'100%' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       {modal && <AddAllModal title={modal.title} onConfirm={confirmAdd} onClose={()=>setModal(null)}/>}
       {fusionsAll!=null && <AddAllBanner label="Add All Fusions mode" amount={fusionsAll} onCancel={()=>setFusionsAll(null)}/>}
       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10, flexShrink:0 }}>
@@ -294,7 +297,7 @@ function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, own
       <div style={{ display:'flex', gap:14, flex:1, overflow:'hidden' }}>
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
           <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, marginBottom:6, flexShrink:0 }}>Owned ({filteredOwned.length})</div>
-          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3 }}>
+          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
             {filteredOwned.length===0 && <div style={{ color:C.muted, fontSize:12 }}>None owned.</div>}
             {filteredOwned.map(u => {
               const amt = fusionsAll!=null ? fusionsAll : (fusions[u]||0)
@@ -313,7 +316,7 @@ function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, own
             <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, flex:1 }}>All Brands ({filteredBrands.length})</div>
             <button onClick={()=>setModal({title:'Add All Fusions',ids:[],isAll:true})} style={{ height:22, background:C.surf, border:`1px solid ${C.border}`, borderRadius:4, padding:'0 8px', cursor:'pointer', fontSize:11, color:C.accent, whiteSpace:'nowrap' }}>Add All</button>
           </div>
-          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3 }}>
+          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
             {brands===null && <div style={{ color:C.muted, fontSize:12 }}>Loading...</div>}
             {brands!==null && filteredBrands.length===0 && <div style={{ color:C.muted, fontSize:12 }}>No brands found.</div>}
             {filteredBrands.map(b => {
@@ -398,7 +401,7 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
   const noCache = cars !== null && cars.length === 0 && !sq
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:0, height:'100%' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       {modal && <AddAllModal title={modal.title} onConfirm={confirmAdd} onClose={()=>setModal(null)}/>}
       {s6All!=null && <AddAllBanner label="Add All Stage 6 mode" amount={s6All} onCancel={()=>setS6All(null)}/>}
       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:10, flexShrink:0 }}>
@@ -411,7 +414,7 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast }) {
           <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, marginBottom:6, flexShrink:0 }}>
             {s6All!=null ? 'Add All active' : `Owned (${filteredOwned.length})`}
           </div>
-          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3 }}>
+          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
             {s6All!=null && <div style={{ color:C.muted, fontSize:12 }}>All stage 6 will be set to {fmtN(s6All)}.</div>}
             {s6All==null && filteredOwned.length===0 && <div style={{ color:C.muted, fontSize:12 }}>None owned.</div>}
             {s6All==null && filteredOwned.map(id => {
@@ -489,7 +492,7 @@ function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, toast }) {
   function restore(unid) { setGarageDeleted(p=>p.filter(d=>d.unid!==unid)) }
   const deleted = ownedCars.filter(c=>deletedUnids.has(c.unid))
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:0, height:'100%' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden' }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6, flexShrink:0 }}>
         <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'.5px', color:C.muted, flex:1 }}>Owned ({filtered.length}{garageDeleted.length>0?`, ${garageDeleted.length} deleting`:''})</div>
       </div>
@@ -617,7 +620,7 @@ export default function EditNsbPage() {
     return (
       <div style={{ minHeight:'100vh', background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, fontFamily:'system-ui,sans-serif', color:C.text }}>
         <div style={{ maxWidth:480, width:'100%' }}>
-          <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>🎮 NSB Editor</div>
+          <div style={{ fontSize:22, fontWeight:700, marginBottom:6 }}>CSR Racing 2 Editor</div>
           <div style={{ fontSize:13, color:C.muted, marginBottom:24 }}>Upload your CSR2 save file to edit currencies, legends, fusions, stage 6, and garage.</div>
           <div onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={onDrop} onClick={()=>inputRef.current?.click()}
             style={{ border:`2px dashed ${dragging?C.accent:C.border}`, borderRadius:12, padding:'40px 24px', textAlign:'center', cursor:'pointer', background:dragging?'#1a1510':C.surf, transition:'all .15s' }}>
@@ -647,14 +650,12 @@ export default function EditNsbPage() {
       {/* Toast */}
       {toastOn && <div style={{ position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)', background:C.accent, color:'#fff', borderRadius:20, padding:'6px 18px', fontSize:12, fontWeight:600, zIndex:200, pointerEvents:'none' }}>Saved ✓</div>}
       {/* Header */}
-      <div style={{ background:C.surf, borderBottom:`1px solid ${C.border}`, padding:'10px 16px', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
-        <div style={{ fontWeight:700, fontSize:15 }}>🎮 NSB Editor</div>
-        <div style={{ fontSize:11, color:C.muted, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{fileRef.current?.name}</div>
-        <button onClick={()=>{setParsed(null);setError(null);setApplyMsg(null);fileRef.current=null}} style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, color:C.muted, padding:'5px 10px', fontSize:11, cursor:'pointer', flexShrink:0 }}>Change File</button>
+      <div style={{ background:C.surf, borderBottom:`1px solid ${C.border}`, padding:'10px 16px', display:'flex', alignItems:'center', flexShrink:0 }}>
+        <div style={{ fontWeight:700, fontSize:15 }}>CSR Racing 2 Editor</div>
       </div>
       {/* Body: left panel + right */}
       <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-        <LeftPanel parsed={parsed} currency={currency} legends={legends} garageDeleted={garageDeleted} prvr={setPrvrVal} onEditPrvr={()=>setPrvrModal(true)}/>
+        <LeftPanel parsed={parsed} currency={currency} legends={legends} garageDeleted={garageDeleted} prvr={setPrvrVal} onEditPrvr={()=>setPrvrModal(true)} onChangeFile={()=>{setParsed(null);setError(null);setApplyMsg(null);fileRef.current=null}}/>
         {/* Right: tabs + content */}
         <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
           {/* Tab bar */}
@@ -664,7 +665,7 @@ export default function EditNsbPage() {
             ))}
           </div>
           {/* Tab content */}
-          <div style={{ flex:1, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column' }}>
+          <div style={{ flex:1, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', minHeight:0 }}>
             {tab==='currency' && <CurrencyTab currency={currency} setCurrency={setCurrency}/>}
             {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} toast={fireToast}/>}
             {tab==='legends'  && <LegendsTab legends={legends} setLegends={setLegends} toast={fireToast}/>}
