@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 
 // ─── Colours (match tool CSS vars) ─────────────────────────────────────────────
 const C = {
@@ -113,7 +113,7 @@ function LeftPanel({ parsed, currency, legends, garageDeleted, prvr, onEditPrvr,
   }
   const displayPrvr = prvr !== null ? prvr : (parsed?.prvr || '')
   return (
-    <div style={{ width: 190, minWidth: 190, padding: '16px 14px', borderRight: `1px solid ${C.border}`, overflowY: 'auto', flexShrink: 0, background: C.surf }}>
+    <div style={{ width: 210, minWidth: 210, padding: '16px 14px', borderRight: `1px solid ${C.border}`, overflowY: 'auto', flexShrink: 0, background: C.surf }}>
       {parsed?.playerName && (
         <div style={{ marginBottom: 14, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: C.muted, marginBottom: 4 }}>Account Name</div>
@@ -253,8 +253,21 @@ function LegendsTab({ legends, setLegends, toast }) {
   )
 }
 
-function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, ownedFusions, toast, brands }) {
-  const [modal, setModal] = useState(null)
+function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, ownedFusions, toast, brands, setBrands }) {
+  const [modal,      setModal]    = useState(null)
+  const [fSyncing,   setFSyncing] = useState(false)
+  const [fSyncError, setFSyncErr] = useState(null)
+
+  async function handleFusionSync() {
+    setFSyncing(true); setFSyncErr(null)
+    try {
+      const res = await fetch('/api/nsb/sync-fusion-brands', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) { setFSyncErr(d.error); return }
+      if (Array.isArray(d.brands)) setBrands(d.brands)
+    } catch (e) { setFSyncErr(e.message) }
+    finally { setFSyncing(false) }
+  }
 
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(new Set())
@@ -305,7 +318,16 @@ function FusionsTabWrapper({ fusions, setFusions, fusionsAll, setFusionsAll, own
           </div>
           <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
             {brands===null && <div style={{ color:C.muted, fontSize:12 }}>Loading...</div>}
-            {brands!==null && filteredBrands.length===0 && <div style={{ color:C.muted, fontSize:12 }}>No brands found.</div>}
+            {brands!==null && brands.length===0 && !sq && (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'16px 8px', textAlign:'center' }}>
+                <div style={{ fontSize:11, color:C.text, fontWeight:600 }}>Brand list not synced yet</div>
+                {fSyncError && <div style={{ fontSize:11, color:C.red }}>{fSyncError}</div>}
+                <button onClick={handleFusionSync} disabled={fSyncing} style={{ background:C.accent, border:'none', borderRadius:7, padding:'8px 16px', color:'#fff', fontSize:12, fontWeight:700, cursor:fSyncing?'not-allowed':'pointer', opacity:fSyncing?.7:1 }}>
+                  {fSyncing ? '⏳ Syncing...' : '🔄 Sync Brand List'}
+                </button>
+              </div>
+            )}
+            {brands!==null && brands.length>0 && filteredBrands.length===0 && <div style={{ color:C.muted, fontSize:12 }}>No brands found.</div>}
             {filteredBrands.map(b => {
               const isSel = selected.has(b.upma)
               return (
@@ -465,95 +487,378 @@ function Stage6Tab({ stage6, setStage6, s6All, setS6All, ownedS6, toast, s6Cars,
   )
 }
 
+// ─── Garage Debug Modal ────────────────────────────────────────────────────────
+function GarageDebugModal({ buildDebugInfo, onClose }) {
+  const [diagLog,   setDiagLog]   = useState(null)
+  const [diagging,  setDiagging]  = useState(false)
+
+  async function runDiag() {
+    setDiagging(true); setDiagLog(null)
+    try {
+      const res = await fetch('/api/nsb/debug-car-db')
+      const d = await res.json()
+      setDiagLog(d.log?.join('\n') || JSON.stringify(d, null, 2))
+    } catch (e) { setDiagLog('Fetch failed: ' + e.message) }
+    finally { setDiagging(false) }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:C.surf, border:`1px solid ${C.border}`, borderRadius:10, padding:20, width:560, maxWidth:'94vw', maxHeight:'85vh', display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+          <div style={{ flex:1, fontWeight:700, fontSize:14 }}>🐛 Car DB Debug</div>
+          <button onClick={runDiag} disabled={diagging} style={{ background:C.accent, border:'none', borderRadius:5, padding:'4px 10px', color:'#fff', fontSize:11, cursor:diagging?'not-allowed':'pointer', opacity:diagging?.6:1 }}>
+            {diagging ? 'Running...' : 'Run Server Diagnostics'}
+          </button>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, lineHeight:1 }}>×</button>
+        </div>
+        <pre style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6, padding:12, fontSize:11, overflowY:'auto', flex:1, whiteSpace:'pre-wrap', wordBreak:'break-all', color:C.text, margin:0 }}>
+          {buildDebugInfo()}
+          {diagLog ? '\n\n─── Server Diagnostics ───\n' + diagLog : '\n\n(Click "Run Server Diagnostics" to check GitHub tree + Supabase)'}
+        </pre>
+        <div style={{ fontSize:11, color:C.muted, flexShrink:0 }}>Click outside to close.</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Car DB Sync Button ────────────────────────────────────────────────────────
+function CarDbSyncBtn({ carDb, setCarDb }) {
+  const [syncing, setSyncing] = useState(false)
+  const [err,     setErr]     = useState(null)
+
+  async function sync() {
+    setSyncing(true); setErr(null)
+    try {
+      const res = await fetch('/api/nsb/sync-car-db', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) { setErr(d.error); return }
+      // Reload from cache after sync
+      const list = await fetch('/api/nsb/car-db-list').then(r=>r.json())
+      setCarDb(list.cars || [])
+    } catch (e) { setErr(e.message) }
+    finally { setSyncing(false) }
+  }
+
+  const isEmpty = carDb !== null && carDb.length === 0
+  if (carDb === null) return null  // still loading
+
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:4, flexShrink:0 }}>
+      {err && <span style={{ fontSize:9, color:C.red }}>{err}</span>}
+      <button onClick={sync} disabled={syncing} title={isEmpty ? 'Sync Car DB to enable color picker' : 'Re-sync Car DB'}
+        style={{ background: isEmpty ? C.accent : 'none', border:`1px solid ${isEmpty?C.accent:C.border}`, borderRadius:4, padding:'2px 6px', color: isEmpty ? '#fff' : C.muted, fontSize:9, cursor:syncing?'not-allowed':'pointer', flexShrink:0, opacity:syncing?.6:1 }}>
+        {syncing ? '⏳' : isEmpty ? '🎨 Sync Car DB' : '🎨'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Color Picker Modal ────────────────────────────────────────────────────────
+function ColorPickerModal({ car, maxed, carDbEntry, onSelect, onClose }) {
+  const [picking, setPicking] = useState(null) // index being fetched
+  const colors = carDbEntry?.colors || []
+
+  async function pick(col) {
+    setPicking(col.name)
+    try {
+      const url = maxed && col.maxedTxtUrl ? col.maxedTxtUrl : col.stockTxtUrl
+      let paid = null
+      if (url) {
+        const txt = await fetch(url).then(r => r.json()).catch(()=>null)
+        paid = txt?.paid ?? null
+      }
+      onSelect({ colorName: col.displayName, paid })
+    } catch { onSelect({ colorName: col.displayName, paid: null }) }
+    finally { setPicking(null) }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:C.surf, border:`1px solid ${C.border}`, borderRadius:10, padding:20, width:480, maxWidth:'92vw', maxHeight:'80vh', display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:700 }}>{car.name || car.esdb}</div>
+            <div style={{ fontSize:11, color:C.muted }}>{car.brand} — {maxed ? 'Maxed' : 'Stock'}</div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:20, lineHeight:1 }}>×</button>
+        </div>
+        {colors.length === 0 && (
+          <div style={{ color:C.muted, fontSize:13, textAlign:'center', padding:'20px 0' }}>No color data available. Sync the Car DB first.</div>
+        )}
+        <div style={{ overflowY:'auto', display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))', gap:8 }}>
+          {colors.map(col => {
+            const photo = maxed && col.maxedPhotoUrl ? col.maxedPhotoUrl : col.photoUrl
+            const busy  = picking === col.name
+            return (
+              <div key={col.name} onClick={()=>!busy && pick(col)}
+                style={{ cursor:busy?'wait':'pointer', borderRadius:7, overflow:'hidden', border:`1px solid ${C.border}`, background:C.surf2, opacity:busy?.6:1, transition:'opacity .1s' }}>
+                {photo && <img src={photo} alt={col.displayName} style={{ width:'100%', height:60, objectFit:'cover', display:'block' }}
+                  onError={e=>{ e.target.style.display='none' }}/>}
+                <div style={{ fontSize:10, padding:'4px 5px', textAlign:'center', color:C.text, wordBreak:'break-word' }}>
+                  {busy ? '...' : col.displayName}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        {!carDbEntry && (
+          <div style={{ fontSize:11, color:C.muted, borderTop:`1px solid ${C.border}`, paddingTop:8 }}>
+            Car not found in Car DB. Sync the Car DB to enable color picking.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Garage Tab ────────────────────────────────────────────────────────────────
-function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, setGarageAdded, toast, s6Cars, setS6Cars }) {
+function parseCrdb(crdb) {
+  // "Ford_RingbrothersMustang_1969" → "Ford Ringbrothers Mustang 1969"
+  const parts = crdb.split('_')
+  if (parts.length < 2) return crdb
+  const brand = parts[0].replace(/([A-Z])/g, ' $1').trim()
+  const model = parts.slice(1, -1).map(p => p.replace(/([A-Z])/g, ' $1').trim()).join(' ')
+  const year  = parts[parts.length - 1]
+  const hasYear = /^\d{4}$/.test(year)
+  return (brand + ' ' + (model || (hasYear ? '' : year)) + (hasYear ? ' ' + year : '')).replace(/\s+/g, ' ').trim()
+}
+
+function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, setGarageAdded, garageMaxout, setGarageMaxout, toast, s6Cars, allCars, setAllCars, carDb, setCarDb }) {
+  const [queue,       setQueue]       = useState([])
   const [availSearch, setAvailSearch] = useState('')
   const [ownedSearch, setOwnedSearch] = useState('')
-  const [syncing, setSyncing]         = useState(false)
-  const [syncError, setSyncError]     = useState(null)
+  const [syncing,     setSyncing]     = useState(false)
+  const [syncError,   setSyncError]   = useState(null)
+  const [colorPicker, setColorPicker] = useState(null)
 
   async function handleSync() {
     setSyncing(true); setSyncError(null)
     try {
-      const res = await fetch('/api/nsb/sync-s6-list', { method: 'POST' })
+      const res = await fetch('/api/nsb/sync-all-cars', { method: 'POST' })
       const d = await res.json()
       if (d.error) { setSyncError(d.error); return }
-      if (Array.isArray(d.cars)) setS6Cars(d.cars)
+      // Reload from cache after sync
+      const list = await fetch('/api/nsb/all-cars-list').then(r=>r.json())
+      setAllCars(list.cars || [])
     } catch (e) { setSyncError(e.message) }
     finally { setSyncing(false) }
   }
 
-  const ownedCrdbSet = new Set(ownedCars.map(c=>c.crdb))
-  const addedCrdbSet = new Set(garageAdded.map(c=>c.crdb))
-  const asq = availSearch.toLowerCase()
-  const available = (s6Cars||[]).filter(c => !ownedCrdbSet.has(c.crdb) && !addedCrdbSet.has(c.crdb))
-  const filteredAvail = asq ? available.filter(c=>(c.name||c.crdb).toLowerCase().includes(asq)||(c.brand||'').toLowerCase().includes(asq)) : available
+  // s6Cars → name/brand/type lookup maps (s6 cars have richer names)
+  const s6NameMap = useMemo(() => {
+    const m = {}
+    for (const c of (s6Cars||[])) m[c.esdb] = { name: c.name, brand: c.brand }
+    return m
+  }, [s6Cars])
+  const s6TypeMap = useMemo(() => {
+    const m = {}
+    for (const c of (s6Cars||[])) m[c.esdb] = c.type
+    return m
+  }, [s6Cars])
+  const carDbMap = useMemo(() => {
+    const m = {}
+    for (const c of (carDb||[])) m[c.crdb] = c
+    return m
+  }, [carDb])
 
-  const deletedUnids = new Set(garageDeleted.map(d=>d.unid))
-  const osq = ownedSearch.toLowerCase()
-  const filteredOwned = ownedCars.filter(c=>!deletedUnids.has(c.unid)&&(!osq||(c.crdb||'').toLowerCase().includes(osq)))
-  const deleted = ownedCars.filter(c=>deletedUnids.has(c.unid))
+  // Enrich allCars (list of crdb strings) with display names
+  const allCarsEnriched = useMemo(() => {
+    return (allCars||[]).map(crdb => {
+      const s6 = s6NameMap[crdb]
+      return {
+        crdb,
+        esdb:  crdb,  // same value — needed for carDbMap lookup + queue dedup
+        name:  s6?.name  || parseCrdb(crdb),
+        brand: s6?.brand || crdb.split('_')[0],
+        type:  s6TypeMap[crdb] || null,
+      }
+    })
+  }, [allCars, s6NameMap, s6TypeMap])
 
-  function addToQueue(car)  { setGarageAdded(p=>[...p, car]); toast() }
-  function removeQueue(crdb){ setGarageAdded(p=>p.filter(c=>c.crdb!==crdb)) }
-  function del(unid, crdb)  { setGarageDeleted(p=>[...p,{unid,crdb}]); toast() }
-  function restore(unid)    { setGarageDeleted(p=>p.filter(d=>d.unid!==unid)) }
+  const cname  = crdb => s6NameMap[crdb]?.name  || parseCrdb(crdb)
+  const cbrand = crdb => s6NameMap[crdb]?.brand  || crdb.split('_')[0]
 
-  const noSync = s6Cars !== null && s6Cars.length === 0 && !asq
+  const ownedCrdbSet  = new Set(ownedCars.map(c=>c.crdb))
+  const addedEsdbSet  = new Set([...garageAdded.map(c=>c.esdb), ...queue.map(c=>c.esdb)])
+  const asq           = availSearch.toLowerCase()
+  const available     = allCarsEnriched.filter(c => !ownedCrdbSet.has(c.crdb) && !addedEsdbSet.has(c.crdb))
+  const filteredAvail = asq ? available.filter(c=>c.name.toLowerCase().includes(asq)||c.brand.toLowerCase().includes(asq)||c.crdb.toLowerCase().includes(asq)) : available
+  const deletedUnids  = new Set(garageDeleted.map(d=>d.unid))
+  const osq           = ownedSearch.toLowerCase()
+  const filteredOwned = ownedCars.filter(c=>!deletedUnids.has(c.unid)&&(!osq||cname(c.crdb).toLowerCase().includes(osq)||(c.crdb||'').toLowerCase().includes(osq)))
+  const deleted       = ownedCars.filter(c=>deletedUnids.has(c.unid))
+  const noSync        = allCars !== null && allCars.length === 0 && !asq
+
+  function openColorPicker(car, maxed) {
+    const entry = carDbMap[car.esdb] || null
+    if (!entry || entry.colors.length <= 1) {
+      // No color choice needed — add directly (with single color paid if available)
+      const col = entry?.colors?.[0] || null
+      const colorName = col?.displayName || null
+      const txtUrl = maxed && col?.maxedTxtUrl ? col.maxedTxtUrl : col?.stockTxtUrl
+      if (txtUrl) {
+        fetch(txtUrl).then(r=>r.json()).then(obj => {
+          addToQueue(car, maxed, colorName, obj.paid ?? null)
+        }).catch(()=>addToQueue(car, maxed, colorName, null))
+      } else {
+        addToQueue(car, maxed, colorName, null)
+      }
+    } else {
+      setColorPicker({ car, maxed, carDbEntry: entry })
+    }
+  }
+  function addToQueue(car, maxed, colorName, paid) {
+    setQueue(p=>[...p, { ...car, esdb: car.esdb, maxed, colorName, paid }])
+  }
+  function dequeue(esdb)     { setQueue(p=>p.filter(c=>c.esdb!==esdb)) }
+  function confirmQueue()      { setGarageAdded(p=>[...p, ...queue]); setQueue([]); toast() }
+  function removeAdded(esdb)   { setGarageAdded(p=>p.filter(c=>c.esdb!==esdb)) }
+  function del(unid, crdb)     { setGarageDeleted(p=>[...p,{unid,crdb}]); toast() }
+  function restore(unid)       { setGarageDeleted(p=>p.filter(d=>d.unid!==unid)) }
+  function toggleMaxout(unid)  { setGarageMaxout(p=>({...p,[unid]:!p[unid]})); toast() }
+
+  const typeBadge = type => {
+    if (type==='gold')    return <span style={{ fontSize:9, color:C.gold,   marginLeft:4 }}>★</span>
+    if (type==='purple')  return <span style={{ fontSize:9, color:C.purple, marginLeft:4 }}>★</span>
+    if (type==='legends') return <span style={{ fontSize:9, color:C.lblue,  marginLeft:4 }}>👑</span>
+    return null
+  }
+
+  const [debugOpen, setDebugOpen] = useState(false)
+  function buildDebugInfo() {
+    const lines = []
+    lines.push(`allCars: ${allCars === null ? 'null (loading)' : `Array(${allCars.length})`}`)
+    lines.push(`carDb state: ${carDb === null ? 'null (loading)' : `Array(${carDb.length})`}`)
+    lines.push(`carDbMap keys: ${Object.keys(carDbMap).length}`)
+    lines.push(`s6Cars: ${s6Cars === null ? 'null' : `Array(${s6Cars.length})`}`)
+    lines.push(`available cars: ${available.length}`)
+    lines.push('')
+    // Check first 5 available cars against carDbMap
+    const sample = available.slice(0, 5)
+    if (sample.length === 0) lines.push('No available cars to check.')
+    for (const car of sample) {
+      const entry = carDbMap[car.crdb]
+      if (!entry) {
+        lines.push(`crdb: ${car.crdb}`)
+        lines.push(`  → name: ${car.name}`)
+        lines.push(`  → carDbMap: NOT FOUND (no color picker)`)
+      } else {
+        lines.push(`crdb: ${car.crdb}`)
+        lines.push(`  → FOUND: ${entry.brand} ${entry.model} (${entry.colors.length} colors)`)
+        if (entry.colors[0]) lines.push(`  → first color: ${entry.colors[0].name}`)
+      }
+    }
+    if (carDb && carDb.length > 0) {
+      lines.push('')
+      lines.push(`Sample carDb[0]: crdb=${carDb[0].crdb}, colors=${carDb[0].colors?.length}`)
+    }
+    return lines.join('\n')
+  }
 
   return (
-    <div style={{ display:'flex', gap:14, flex:1, overflow:'hidden' }}>
-      {/* Left: Available S6 cars */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6, flexShrink:0 }}>
-          <div style={{ ...SEC_HDR, flex:1 }}>Available ({filteredAvail.length})</div>
-        </div>
-        <input placeholder="Search available..." value={availSearch} onChange={e=>setAvailSearch(e.target.value)}
-          style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 10px', color:C.text, fontSize:12, outline:'none', marginBottom:6, flexShrink:0 }}
+    <div style={{ display:'flex', flexDirection:'column', flex:1, overflow:'hidden', gap:0 }}>
+      {colorPicker && (
+        <ColorPickerModal
+          car={colorPicker.car}
+          maxed={colorPicker.maxed}
+          carDbEntry={colorPicker.carDbEntry}
+          onSelect={({ colorName, paid }) => {
+            addToQueue(colorPicker.car, colorPicker.maxed, colorName, paid)
+            setColorPicker(null)
+          }}
+          onClose={() => setColorPicker(null)}
         />
-        {garageAdded.length>0 && (
-          <div style={{ background:'rgba(126,101,81,.14)', border:`1px solid ${C.accent}`, borderRadius:6, padding:'6px 10px', marginBottom:6, flexShrink:0 }}>
-            <div style={{ fontSize:11, color:C.text, marginBottom:4 }}>Queued to add ({garageAdded.length}):</div>
+      )}
+      {debugOpen && <GarageDebugModal buildDebugInfo={buildDebugInfo} onClose={()=>setDebugOpen(false)}/>}
+
+      {/* Top half: Available + Queue */}
+      <div style={{ display:'flex', gap:12, marginBottom:8, minHeight:0, flex:'0 0 auto', maxHeight:'55%' }}>
+
+        {/* Available */}
+        <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6, flexShrink:0 }}>
+            <div style={{ ...SEC_HDR, flex:1 }}>Available ({filteredAvail.length})</div>
+            <button onClick={()=>setDebugOpen(true)} title="Debug car DB lookup" style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:4, padding:'2px 6px', color:C.muted, fontSize:9, cursor:'pointer', flexShrink:0 }}>🐛</button>
+            {allCars !== null && allCars.length > 0 && !syncing && (
+              <button onClick={handleSync} disabled={syncing} style={{ background:'none', border:`1px solid ${C.border}`, borderRadius:4, padding:'2px 6px', color:C.muted, fontSize:9, cursor:'pointer', flexShrink:0 }}>↻</button>
+            )}
+            <CarDbSyncBtn carDb={carDb} setCarDb={setCarDb}/>
+          </div>
+          <input placeholder="Search available..." value={availSearch} onChange={e=>setAvailSearch(e.target.value)}
+            style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 10px', color:C.text, fontSize:12, outline:'none', marginBottom:6, flexShrink:0 }}
+          />
+          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+            {allCars===null && <div style={{ color:C.muted, fontSize:12 }}>Loading...</div>}
+            {syncing && <div style={{ color:C.muted, fontSize:12 }}>⏳ Syncing...</div>}
+            {noSync && !syncing && (
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'16px 8px', gap:8, textAlign:'center' }}>
+                <div style={{ fontSize:20 }}>📦</div>
+                <div style={{ fontSize:12, color:C.text, fontWeight:600 }}>Car list not synced yet</div>
+                {syncError && <div style={{ fontSize:11, color:C.red }}>{syncError}</div>}
+                <button onClick={handleSync} style={{ background:C.accent, border:'none', borderRadius:7, padding:'8px 16px', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  🔄 Sync Car List
+                </button>
+              </div>
+            )}
+            {!noSync && !syncing && filteredAvail.map(c=>(
+              <div key={c.crdb} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}{typeBadge(c.type)}</div>
+                  <div style={{ fontSize:9, color:C.muted }}>{c.brand}</div>
+                </div>
+                <button onClick={()=>openColorPicker(c, false)} style={{ ...BTN_SML, fontSize:10 }}>Stock</button>
+                <button onClick={()=>openColorPicker(c, true)}  style={{ ...BTN_SML, fontSize:10, color:C.gold, borderColor:C.gold }}>Max</button>
+              </div>
+            ))}
+            {!noSync && !syncing && allCars!==null && filteredAvail.length===0 && !asq && (
+              <div style={{ color:C.muted, fontSize:12 }}>All cars are already in your garage or queue.</div>
+            )}
+          </div>
+        </div>
+
+        {/* Queue */}
+        <div style={{ width:180, minWidth:180, display:'flex', flexDirection:'column' }}>
+          <div style={{ ...SEC_HDR, marginBottom:6, flexShrink:0 }}>Queue ({queue.length + garageAdded.length})</div>
+          <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+            {queue.length===0 && garageAdded.length===0 && <div style={{ color:C.muted, fontSize:11, lineHeight:1.5 }}>Empty.<br/><span style={{ fontSize:10 }}>Click Stock or Max.</span></div>}
+            {/* Confirmed (already committed to garageAdded) */}
             {garageAdded.map(c=>(
-              <div key={c.crdb} style={{ display:'flex', alignItems:'center', gap:4, marginBottom:2 }}>
-                <span style={{ flex:1, fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.gold }}>{c.name||c.crdb}</span>
-                <button onClick={()=>removeQueue(c.crdb)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px' }}>×</button>
+              <div key={c.esdb} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 7px', background:'rgba(59,130,246,.08)', border:`1px solid rgba(59,130,246,.3)`, borderRadius:5 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'#60a5fa' }}>{c.name||c.esdb}</div>
+                  {c.colorName && <div style={{ fontSize:9, color:C.muted }}>{c.colorName}</div>}
+                </div>
+                {c.maxed && <span style={{ fontSize:9, color:C.gold, flexShrink:0 }}>Max</span>}
+                <button onClick={()=>removeAdded(c.esdb)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px' }}>×</button>
+              </div>
+            ))}
+            {/* Pending queue */}
+            {queue.map(c=>(
+              <div key={c.esdb} style={{ display:'flex', alignItems:'center', gap:4, padding:'3px 7px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:5 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name||c.esdb}</div>
+                  {c.colorName && <div style={{ fontSize:9, color:C.muted }}>{c.colorName}</div>}
+                </div>
+                {c.maxed && <span style={{ fontSize:9, color:C.gold, flexShrink:0 }}>Max</span>}
+                <button onClick={()=>dequeue(c.esdb)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px' }}>×</button>
               </div>
             ))}
           </div>
-        )}
-        <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
-          {s6Cars===null && <div style={{ color:C.muted, fontSize:12 }}>Loading...</div>}
-          {noSync && (
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px 12px', gap:8, textAlign:'center' }}>
-              <div style={{ fontSize:24 }}>📦</div>
-              <div style={{ fontSize:12, color:C.text, fontWeight:600 }}>Car list not synced yet</div>
-              <div style={{ fontSize:11, color:C.muted, maxWidth:200 }}>Sync once to show all available Stage 6 cars.</div>
-              {syncError && <div style={{ fontSize:11, color:C.red }}>{syncError}</div>}
-              <button onClick={handleSync} disabled={syncing}
-                style={{ background:C.accent, border:'none', borderRadius:8, padding:'10px 22px', color:'#fff', fontSize:13, fontWeight:700, cursor:syncing?'not-allowed':'pointer', opacity:syncing?.7:1 }}>
-                {syncing ? '⏳ Syncing (~30s)...' : '🔄 Sync Car List'}
-              </button>
-            </div>
-          )}
-          {!noSync && filteredAvail.map(c=>(
-            <div key={c.crdb} style={{ display:'flex', alignItems:'center', gap:6, padding:'5px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name||c.crdb}</div>
-                {c.name && <div style={{ fontSize:9, color:C.muted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.brand}</div>}
-              </div>
-              <button onClick={()=>addToQueue(c)} style={BTN_SML}>Add</button>
-            </div>
-          ))}
-          {!noSync && s6Cars!==null && filteredAvail.length===0 && !asq && garageAdded.length>0 && (
-            <div style={{ color:C.muted, fontSize:12 }}>All synced cars are already in your garage or queued.</div>
-          )}
+          <button onClick={confirmQueue} disabled={queue.length===0}
+            style={{ marginTop:6, background:C.accent, border:'none', borderRadius:6, padding:'7px 10px', color:'#fff', fontSize:12, fontWeight:600, cursor:queue.length===0?'not-allowed':'pointer', opacity:queue.length===0?.5:1, flexShrink:0 }}>
+            + Add to Garage ({queue.length})
+          </button>
         </div>
       </div>
-      {/* Right: Owned */}
-      <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
-        <div style={{ ...SEC_HDR, marginBottom:6, flexShrink:0 }}>
-          Owned ({filteredOwned.length}{garageDeleted.length>0?`, ${garageDeleted.length} deleting`:''})
+
+      {/* Separator */}
+      <div style={{ height:1, background:C.border, marginBottom:8, flexShrink:0 }}/>
+
+      {/* Bottom: Owned */}
+      <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6, flexShrink:0 }}>
+          <div style={{ ...SEC_HDR, flex:1 }}>Owned ({filteredOwned.length}{garageDeleted.length>0?`, ${garageDeleted.length} deleting`:''})</div>
         </div>
         <input placeholder="Search owned..." value={ownedSearch} onChange={e=>setOwnedSearch(e.target.value)}
           style={{ background:C.surf2, border:`1px solid ${C.border}`, borderRadius:7, padding:'6px 10px', color:C.text, fontSize:12, outline:'none', marginBottom:6, flexShrink:0 }}
@@ -561,17 +866,29 @@ function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, se
         <div style={{ overflowY:'auto', display:'flex', flexDirection:'column', gap:3, flex:1 }}>
           {deleted.map(c=>(
             <div key={c.unid} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', background:'rgba(224,82,82,.08)', border:`1px solid rgba(224,82,82,.3)`, borderRadius:6 }}>
-              <span style={{ flex:1, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.red, textDecoration:'line-through' }}>{c.crdb}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:C.red, textDecoration:'line-through' }}>{cname(c.crdb)}</div>
+                {cbrand(c.crdb) && <div style={{ fontSize:9, color:C.red, opacity:.7 }}>{cbrand(c.crdb)}</div>}
+              </div>
               <span style={{ fontSize:10, color:C.red, flexShrink:0 }}>DELETE</span>
               <button onClick={()=>restore(c.unid)} style={{ background:'none', border:'none', color:C.muted, cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px' }}>↩</button>
             </div>
           ))}
-          {filteredOwned.map(c=>(
-            <div key={c.unid} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
-              <span style={{ flex:1, fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.crdb}</span>
-              <button onClick={()=>del(c.unid,c.crdb)} title="Delete" style={{ background:'none', border:'none', cursor:'pointer', fontSize:15, lineHeight:1, padding:'0 2px', color:C.muted }}>×</button>
-            </div>
-          ))}
+          {filteredOwned.map(c=>{
+            const isMaxed = garageMaxout[c.unid]
+            const brand   = cbrand(c.crdb)
+            return (
+              <div key={c.unid} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cname(c.crdb)}</div>
+                  {brand && <div style={{ fontSize:9, color:C.muted }}>{brand}</div>}
+                </div>
+                {isMaxed && <span style={{ fontSize:9, color:C.gold, flexShrink:0 }}>maxed</span>}
+                <button onClick={()=>toggleMaxout(c.unid)} title="Max Out" style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, lineHeight:1, padding:'0 2px', color:isMaxed?C.gold:C.muted }}>★</button>
+                <button onClick={()=>del(c.unid,c.crdb)} title="Delete" style={{ background:'none', border:'none', cursor:'pointer', fontSize:15, lineHeight:1, padding:'0 2px', color:C.muted }}>×</button>
+              </div>
+            )
+          })}
           {filteredOwned.length===0 && deleted.length===0 && <div style={{ color:C.muted, fontSize:12 }}>No cars in garage.</div>}
         </div>
       </div>
@@ -620,9 +937,12 @@ export default function EditNsbPage() {
   const [stage6, setStage6]               = useState({})
   const [s6All, setS6All]                 = useState(null)
   const [s6Cars,        setS6Cars]         = useState(null)
+  const [allCars,       setAllCars]        = useState(null)
   const [fusionBrands,  setFusionBrands]  = useState(null)
+  const [carDb,         setCarDb]          = useState(null)
   const [garageDeleted, setGarageDeleted] = useState([])
   const [garageAdded,   setGarageAdded]   = useState([])
+  const [garageMaxout,  setGarageMaxout]  = useState({})
   const [setPrvrVal, setSetPrvrVal]       = useState(null)
 
   async function handleFile(file) {
@@ -642,7 +962,7 @@ export default function EditNsbPage() {
       setFusions(f)
       const s = {}; (data.stage6.owned||[]).forEach(o=>{ s[o.esdb]=o.amount })
       setStage6(s)
-      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setGarageAdded([]); setSetPrvrVal(null); setS6Cars(null); setFusionBrands(null)
+      setFusionsAll(null); setS6All(null); setGarageDeleted([]); setGarageAdded([]); setGarageMaxout({}); setSetPrvrVal(null); setS6Cars(null); setAllCars(null); setFusionBrands(null); setCarDb(null)
       setParsed(data); setTab('currency')
     } catch (e) { setError('Parse error: '+e.message) }
     finally { setParsing(false) }
@@ -654,9 +974,19 @@ export default function EditNsbPage() {
   }, [parsed, s6Cars])
 
   useEffect(() => {
+    if (!parsed || allCars !== null) return
+    fetch('/api/nsb/all-cars-list').then(r=>r.json()).then(d=>setAllCars(d.cars||[])).catch(()=>setAllCars([]))
+  }, [parsed, allCars])
+
+  useEffect(() => {
     if (!parsed || fusionBrands !== null) return
     fetch('/api/nsb/fusions-list').then(r=>r.json()).then(d=>setFusionBrands(d.brands||[])).catch(()=>setFusionBrands([]))
   }, [parsed, fusionBrands])
+
+  useEffect(() => {
+    if (!parsed || carDb !== null) return
+    fetch('/api/nsb/car-db-list').then(r=>r.json()).then(d=>setCarDb(d.cars||[])).catch(()=>setCarDb([]))
+  }, [parsed, carDb])
 
   function onDrop(e) { e.preventDefault(); setDragging(false); const f=e.dataTransfer.files[0]; if(f) handleFile(f) }
 
@@ -676,7 +1006,8 @@ export default function EditNsbPage() {
         stage6: s6All!=null ? undefined : stage6,
         s6All: s6All!=null ? Number(s6All) : undefined,
         garageDeleted: garageDeleted.length ? garageDeleted : undefined,
-        garageAdded:   garageAdded.length   ? garageAdded.map(c=>c.crdb) : undefined,
+        garageAdded:   garageAdded.length   ? garageAdded.map(c=>({esdb:c.esdb,maxed:!!c.maxed,paid:c.paid??null})) : undefined,
+        garageMaxout:  Object.keys(garageMaxout).length ? garageMaxout : undefined,
         setPrvr: setPrvrVal!=null ? setPrvrVal : undefined,
       }
       const res = await fetch('/api/nsb/write', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
@@ -741,9 +1072,9 @@ export default function EditNsbPage() {
           {/* Tab content */}
           <div style={{ flex:1, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', minHeight:0 }}>
             {tab==='currency' && <CurrencyTab currency={currency} setCurrency={setCurrency}/>}
-            {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} garageAdded={garageAdded} setGarageAdded={setGarageAdded} toast={fireToast} s6Cars={s6Cars} setS6Cars={setS6Cars}/>}
+            {tab==='garage'   && <GarageTab ownedCars={parsed.garage.ownedCars} garageDeleted={garageDeleted} setGarageDeleted={setGarageDeleted} garageAdded={garageAdded} setGarageAdded={setGarageAdded} garageMaxout={garageMaxout} setGarageMaxout={setGarageMaxout} toast={fireToast} s6Cars={s6Cars} allCars={allCars} setAllCars={setAllCars} carDb={carDb} setCarDb={setCarDb}/>}
             {tab==='legends'  && <LegendsTab legends={legends} setLegends={setLegends} toast={fireToast}/>}
-            {tab==='fusions'  && <FusionsTabWrapper fusions={fusions} setFusions={setFusions} fusionsAll={fusionsAll} setFusionsAll={setFusionsAll} ownedFusions={parsed.fusions.owned} toast={fireToast} brands={fusionBrands}/>}
+            {tab==='fusions'  && <FusionsTabWrapper fusions={fusions} setFusions={setFusions} fusionsAll={fusionsAll} setFusionsAll={setFusionsAll} ownedFusions={parsed.fusions.owned} toast={fireToast} brands={fusionBrands} setBrands={setFusionBrands}/>}
             {tab==='stage6'   && <Stage6Tab stage6={stage6} setStage6={setStage6} s6All={s6All} setS6All={setS6All} ownedS6={parsed.stage6.owned} toast={fireToast} s6Cars={s6Cars} setS6Cars={setS6Cars}/>}
           </div>
           {/* Footer */}
