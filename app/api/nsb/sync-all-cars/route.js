@@ -13,11 +13,11 @@ export async function POST() {
     const cars = text.split('\n').map(l => l.trim()).filter(Boolean)
     if (cars.length === 0) throw new Error('Empty car list returned from GitHub')
 
-    await supabase.from('csr2_cache').upsert({
-      key:        'all_cars',
-      data:       cars,
-      updated_at: new Date().toISOString(),
-    })
+    const { error: upsertErr } = await supabase.from('csr2_cache').upsert(
+      { key: 'all_cars', data: cars, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    )
+    if (upsertErr) throw new Error('Supabase upsert failed: ' + upsertErr.message)
 
     return Response.json({ ok: true, count: cars.length })
   } catch (e) {

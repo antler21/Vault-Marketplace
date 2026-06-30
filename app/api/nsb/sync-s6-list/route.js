@@ -73,11 +73,18 @@ export async function POST() {
       if (!seenFinal.has(car.esdb)) { seenFinal.add(car.esdb); deduped.push(car) }
     }
 
-    await supabase.from('csr2_cache').upsert({
-      key: 's6_car_list',
-      data: deduped,
-      updated_at: new Date().toISOString(),
-    })
+    const { error: upsertErr } = await supabase.from('csr2_cache').upsert(
+      { key: 's6_car_list', data: deduped, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    )
+    if (upsertErr) throw new Error('Supabase upsert failed: ' + upsertErr.message)
+
+    // Store SHA for update-check
+    try {
+      const commits = await ghApi("/repos/" + REPO + "/commits?path=" + encodeURIComponent("4.Stage6's/##AllStage6's.txt") + "&per_page=1")
+      const sha = commits?.[0]?.sha || null
+      if (sha) await supabase.from('csr2_cache').upsert({ key: 's6_list_sha', data: { sha }, updated_at: new Date().toISOString() })
+    } catch {}
 
     return Response.json({ ok: true, count: deduped.length, cars: deduped })
   } catch (e) {

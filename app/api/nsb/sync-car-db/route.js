@@ -119,11 +119,11 @@ export async function POST() {
     }
 
     // ── Step 6: store in Supabase ────────────────────────────────────────────
-    await supabase.from('csr2_cache').upsert({
-      key:        'car_db',
-      data:       result,
-      updated_at: new Date().toISOString(),
-    })
+    const { error: upsertErr } = await supabase.from('csr2_cache').upsert(
+      { key: 'car_db', data: result, updated_at: new Date().toISOString() },
+      { onConflict: 'key' }
+    )
+    if (upsertErr) throw new Error('Supabase upsert failed: ' + upsertErr.message)
 
     return Response.json({ ok: true, count: result.length, totalColors: result.reduce((n,c)=>n+c.colors.length,0) })
   } catch (e) {

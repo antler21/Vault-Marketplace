@@ -637,10 +637,12 @@ function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, se
     try {
       const res = await fetch('/api/nsb/sync-all-cars', { method: 'POST' })
       const d = await res.json()
-      if (d.error) { setSyncError(d.error); return }
+      if (d.error) { setSyncError('Sync error: ' + d.error); return }
       // Reload from cache after sync
       const list = await fetch('/api/nsb/all-cars-list').then(r=>r.json())
-      setAllCars(list.cars || [])
+      const cars = list.cars || []
+      if (cars.length === 0) { setSyncError('Sync returned ' + (d.count||0) + ' cars but cache is still empty — check Supabase csr2_cache table'); return }
+      setAllCars(cars)
     } catch (e) { setSyncError(e.message) }
     finally { setSyncing(false) }
   }
