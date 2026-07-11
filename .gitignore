@@ -39,7 +39,7 @@ yarn-error.log*
 # tool executables — only keep latest in public/, never commit old versions
 tools/vault-scanner/aio-tool-v*.exe
 public/aio-tool-v*.exe
-!public/aio-tool-v0.7.24.exe
+!public/aio-tool-v0.7.25.exe
 
 # typescript
 *.tsbuildinfo

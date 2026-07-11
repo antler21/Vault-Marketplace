@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.24'
+const VERSION = '0.7.25'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -2818,7 +2818,7 @@ var _ensbGarageAllowDup = false, _ensbFusionSearch = '', _ensbS6Search = ''
 var _ensbFusionSelected = new Set(), _ensbS6Selected = new Set(), _ensbS6Expanded = new Set()
 var _ensbAddModalCb = null
 var _ensbActiveTab = 'currency'
-var _currencyOverride = {}, _partialSelectionEnabled = false, _selectedLegends = []
+var _currencyOverride = {}, _currencyOverrideSnapshot = null, _partialSelectionEnabled = false, _selectedLegends = []
 var _nsbCurrentData = null, _applyPackRef = null, _currencyEditMode = false
 var _selMode = false, _selected = new Set()
 var LEGEND_CARS = [
@@ -4839,6 +4839,7 @@ function openEditNsb(packId) {
   hideNotice('ansb-notice')
   renderSelectedCars()
   _currencyOverride = {}
+  _currencyOverrideSnapshot = null
   _partialSelectionEnabled = false
   _selectedLegends = []
   _selectedBrands = []
@@ -5178,12 +5179,30 @@ function renderCurrencyTab(pack, nsbData) {
   tableEl.innerHTML = html
 }
 
+function previewCurrencyOverride() {
+  var pack = _applyPackRef
+  if (!pack) return
+  var c = pack.currencies || {}
+  var temp = {}
+  for (var i = 0; i < AP_CURR_KEYS.length; i++) {
+    var ck = AP_CURR_KEYS[i]
+    if (!c[ck.k]) continue
+    var input = document.getElementById('ap-ov-' + ck.k)
+    if (!input) continue
+    var raw = parseInt(input.value.replace(/,/g, ''), 10)
+    if (!isNaN(raw)) temp[ck.k] = raw
+  }
+  _currencyOverride = temp
+  renderCurrencyTab(pack, _nsbCurrentData)
+}
+
 function toggleCurrencyEdit() {
   _currencyEditMode = !_currencyEditMode
   var form = document.getElementById('ap-curr-edit-form')
   var grid = document.getElementById('ap-curr-edit-grid')
   if (!form || !grid) return
   if (_currencyEditMode) {
+    _currencyOverrideSnapshot = Object.assign({}, _currencyOverride)
     var pack = _applyPackRef
     if (!pack) return
     var c = pack.currencies || {}
@@ -5195,13 +5214,18 @@ function toggleCurrencyEdit() {
       var overVal = _currencyOverride[ck.k]
       var displayVal = (overVal !== undefined) ? overVal.toLocaleString('en-US') : (packVal > 0 ? packVal.toLocaleString('en-US') : '')
       fieldsHtml += '<div class="field"><label>' + ck.em + ' ' + escH(ck.lbl) + '</label>'
-      fieldsHtml += '<input type="text" id="ap-ov-' + ck.k + '" value="' + escH(displayVal) + '" placeholder="' + fmtN(packVal) + ' (pack default)" onblur="fmtInput(this)" onfocus="unfmtInput(this)"></div>'
+      fieldsHtml += '<input type="text" id="ap-ov-' + ck.k + '" value="' + escH(displayVal) + '" placeholder="' + fmtN(packVal) + ' (pack default)" onblur="fmtInput(this)" onfocus="unfmtInput(this)" oninput="previewCurrencyOverride()"></div>'
     }
     grid.innerHTML = fieldsHtml
     form.style.display = ''
     var editBtn = document.getElementById('ap-curr-edit-btn')
     if (editBtn) editBtn.textContent = '✏️ Editing...'
   } else {
+    if (_currencyOverrideSnapshot !== null) {
+      _currencyOverride = _currencyOverrideSnapshot
+      _currencyOverrideSnapshot = null
+      renderCurrencyTab(_applyPackRef, _nsbCurrentData)
+    }
     form.style.display = 'none'
     var editBtn2 = document.getElementById('ap-curr-edit-btn')
     if (editBtn2) editBtn2.textContent = '✏️ Override'
@@ -5209,6 +5233,11 @@ function toggleCurrencyEdit() {
 }
 
 function cancelCurrencyEdit() {
+  if (_currencyOverrideSnapshot !== null) {
+    _currencyOverride = _currencyOverrideSnapshot
+    _currencyOverrideSnapshot = null
+    renderCurrencyTab(_applyPackRef, _nsbCurrentData)
+  }
   _currencyEditMode = false
   var form = document.getElementById('ap-curr-edit-form')
   if (form) form.style.display = 'none'
@@ -5223,13 +5252,13 @@ function saveCurrencyOverride() {
   var newOverride = {}
   for (var i = 0; i < AP_CURR_KEYS.length; i++) {
     var ck = AP_CURR_KEYS[i]
-    var packVal = c[ck.k] || 0
-    if (!packVal) continue
+    if (!c[ck.k]) continue
     var input = document.getElementById('ap-ov-' + ck.k)
     if (!input) continue
     var raw = parseInt(input.value.replace(/,/g, ''), 10)
-    if (!isNaN(raw) && raw !== packVal) newOverride[ck.k] = raw
+    if (!isNaN(raw)) newOverride[ck.k] = raw
   }
+  _currencyOverrideSnapshot = null  // prevent cancelCurrencyEdit from reverting
   _currencyOverride = newOverride
   cancelCurrencyEdit()
   renderCurrencyTab(pack, _nsbCurrentData)
