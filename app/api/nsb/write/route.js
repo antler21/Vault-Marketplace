@@ -86,7 +86,7 @@ export async function POST(request) {
               data.caup.push(entry)
               const next = fusionData[i + 1]
               data.caup.push(typeof next === 'number' ? amt : amt)
-              i++; break
+              i++
             }
           }
         }
@@ -133,10 +133,7 @@ export async function POST(request) {
               if (txt.endsWith(',')) txt = txt.slice(0, -1)
               const arr = JSON.parse('[' + txt + ']')
               for (const e of arr) {
-                if (typeof e === 'object' && e !== null && e.esdb === esdb) {
-                  data.cues.push(Object.assign({}, e, { esnn: amt }), amt)
-                  break
-                }
+                data.cues.push(typeof e === 'object' && e !== null ? Object.assign({}, e) : e)
               }
             } catch {}
           }
