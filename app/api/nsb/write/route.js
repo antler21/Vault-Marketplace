@@ -12,6 +12,15 @@ async function ghFetch(url) {
   return res.text()
 }
 
+async function getCachedOrGhJson(cacheKey, ghUrl) {
+  try {
+    const { data: row } = await supabase.from('csr2_cache').select('data').eq('key', cacheKey).single()
+    if (Array.isArray(row?.data) && row.data.length > 0) return row.data
+  } catch {}
+  const txt = await ghFetch(ghUrl)
+  return JSON.parse(txt)
+}
+
 export async function POST(request) {
   try {
     const body = await request.json()
@@ -47,8 +56,7 @@ export async function POST(request) {
     // ── Fusions ────────────────────────────────────────────────────────────────
     let fusionData = null
     if (body.fusionsAll != null) {
-      const txt = await ghFetch(FUSIONS_URL)
-      fusionData = JSON.parse(txt)
+      fusionData = await getCachedOrGhJson('fusions_full', FUSIONS_URL)
       if (Array.isArray(fusionData) && fusionData.length > 0) {
         const amt = Math.max(0, parseInt(body.fusionsAll) || 0)
         data.caup = fusionData.map(e => {
@@ -58,6 +66,7 @@ export async function POST(request) {
       }
     } else if (body.fusions && typeof body.fusions === 'object') {
       if (!data.caup) data.caup = []
+      fusionData = await getCachedOrGhJson('fusions_full', FUSIONS_URL)
       for (const [upma, amount] of Object.entries(body.fusions)) {
         const amt = Math.max(0, parseInt(amount) || 0)
         let found = false
@@ -69,20 +78,15 @@ export async function POST(request) {
             found = true
           }
         }
-        if (!found && amt > 0) {
-          if (!fusionData) {
-            try { const txt = await ghFetch(FUSIONS_URL); fusionData = JSON.parse(txt) } catch {}
-          }
-          if (Array.isArray(fusionData)) {
-            for (let i = 0; i < fusionData.length; i++) {
-              const e = fusionData[i]
-              if (typeof e === 'object' && e !== null && e.upma === upma) {
-                const entry = Object.assign({}, e); if ('upnn' in entry) entry.upnn = amt
-                data.caup.push(entry)
-                const next = fusionData[i + 1]
-                data.caup.push(typeof next === 'number' ? amt : amt)
-                i++; break
-              }
+        if (!found && amt > 0 && Array.isArray(fusionData)) {
+          for (let i = 0; i < fusionData.length; i++) {
+            const e = fusionData[i]
+            if (typeof e === 'object' && e !== null && e.upma === upma) {
+              const entry = Object.assign({}, e); if ('upnn' in entry) entry.upnn = amt
+              data.caup.push(entry)
+              const next = fusionData[i + 1]
+              data.caup.push(typeof next === 'number' ? amt : amt)
+              i++; break
             }
           }
         }
@@ -94,15 +98,14 @@ export async function POST(request) {
     async function getS6Car(esdb) {
       if (!s6CarCache) {
         try {
-          const { data } = await supabase.from('csr2_cache').select('data').eq('key', 's6_car_list').single()
-          s6CarCache = data?.data || []
+          const { data: row } = await supabase.from('csr2_cache').select('data').eq('key', 's6_car_list').single()
+          s6CarCache = row?.data || []
         } catch { s6CarCache = [] }
       }
       return s6CarCache.find(c => c.esdb === esdb) || null
     }
     if (body.s6All != null) {
-      const txt = await ghFetch(STAGE6_URL)
-      const stage6Data = JSON.parse(txt)
+      const stage6Data = await getCachedOrGhJson('stage6_full', STAGE6_URL)
       if (Array.isArray(stage6Data) && stage6Data.length > 0) {
         const amt = Math.max(0, parseInt(body.s6All) || 0)
         data.cues = stage6Data.map(e => {
@@ -125,7 +128,7 @@ export async function POST(request) {
             try {
               const encoded = car.filePath.split('/').map(s => encodeURIComponent(s)).join('/')
               let txt = await ghFetch('https://raw.githubusercontent.com/Nitro4CSR/CSR2-DataBase/Everything/' + encoded)
-              txt = txt.replace(/\bAMOUNT\b/g, '0').trim()
+              txt = txt.replace(/\bAMOUNT\b/g, String(amt)).trim()
               if (txt.startsWith(',')) txt = txt.slice(1).trim()
               if (txt.endsWith(',')) txt = txt.slice(0, -1)
               const arr = JSON.parse('[' + txt + ']')

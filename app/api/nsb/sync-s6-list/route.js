@@ -79,6 +79,16 @@ export async function POST() {
     )
     if (upsertErr) throw new Error('Supabase upsert failed: ' + upsertErr.message)
 
+    // Cache full stage6 data (used by write route for "Add All" mode)
+    try {
+      let fullTxt = await ghRaw("4.Stage6's/##AllStage6's.txt")
+      const fullData = JSON.parse(fullTxt)
+      await supabase.from('csr2_cache').upsert(
+        { key: 'stage6_full', data: fullData, updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      )
+    } catch {}
+
     // Store SHA for update-check
     try {
       const commits = await ghApi("/repos/" + REPO + "/commits?path=" + encodeURIComponent("4.Stage6's/##AllStage6's.txt") + "&per_page=1")

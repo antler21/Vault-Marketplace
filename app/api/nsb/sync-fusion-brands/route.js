@@ -63,6 +63,16 @@ export async function POST() {
     await supabase.from('csr2_cache').upsert({ key: 'fusion_brands', data: brands, updated_at: new Date().toISOString() })
     if (sha) await supabase.from('csr2_cache').upsert({ key: 'fusion_brands_sha', data: { sha }, updated_at: new Date().toISOString() })
 
+    // Cache full fusions data (used by write route for "Add All" and individual insert modes)
+    try {
+      const fullTxt = await ghRaw('3.Fusions/##AllFusions.txt')
+      const fullData = JSON.parse(fullTxt)
+      await supabase.from('csr2_cache').upsert(
+        { key: 'fusions_full', data: fullData, updated_at: new Date().toISOString() },
+        { onConflict: 'key' }
+      )
+    } catch {}
+
     return Response.json({ ok: true, count: brands.length, brands })
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 })
