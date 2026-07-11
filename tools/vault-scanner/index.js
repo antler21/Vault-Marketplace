@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.22'
+const VERSION = '0.7.23'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -6297,7 +6297,7 @@ function renderEnsbGarageTab() {
   html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">'
   html += '<input id="ensb-garage-search" placeholder="Search available cars..." value="' + escH(_ensbGarageSearch) + '" '
   html += 'style="flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-size:13px;outline:none" '
-  html += 'oninput="_ensbGarageSearch=this.value;renderEnsbGarageTab()">'
+  html += 'oninput="var s=this.selectionStart,e=this.selectionEnd;_ensbGarageSearch=this.value;renderEnsbGarageTab();var el=document.getElementById(\'ensb-garage-search\');if(el){el.focus();el.setSelectionRange(s,e)}">'
   html += '<div class="allow-dup-row" style="flex-shrink:0">'
   html += '<input type="checkbox" class="chk-themed" id="ensb-garage-dup" ' + (_ensbGarageAllowDup ? 'checked' : '') + ' onchange="_ensbGarageAllowDup=this.checked;renderEnsbGarageTab()">'
   html += '<span style="font-size:12px;color:var(--text)">Allow Duplicates</span></div></div>'
@@ -7712,6 +7712,7 @@ const server = http.createServer(async (req, res) => {
           const v = String(body.setPrvr)
           data.prvr = v
           if ('prvrfi' in data) data.prvrfi = v
+          if ('adbpvr' in data) data.adbpvr = v
         }
         // Garage — delete cars by unid
         if (Array.isArray(body.garageDeleted) && body.garageDeleted.length > 0 && Array.isArray(data.caow)) {

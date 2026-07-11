@@ -803,7 +803,7 @@ function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, se
                 </button>
               </div>
             )}
-            {!noSync && !syncing && filteredAvail.map(c=>(
+            {!noSync && !syncing && filteredAvail.slice(0, 80).map(c=>(
               <div key={c.crdb} style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 8px', background:C.surf2, border:`1px solid ${C.border}`, borderRadius:6 }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:11, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}{typeBadge(c.type)}</div>
@@ -813,6 +813,9 @@ function GarageTab({ ownedCars, garageDeleted, setGarageDeleted, garageAdded, se
                 <button onClick={()=>openColorPicker(c, true)}  style={{ ...BTN_SML, fontSize:10, color:C.gold, borderColor:C.gold }}>Max</button>
               </div>
             ))}
+            {!noSync && !syncing && filteredAvail.length > 80 && (
+              <div style={{ color:C.muted, fontSize:11, padding:'4px 8px', textAlign:'center' }}>+{filteredAvail.length - 80} more — search to filter</div>
+            )}
             {!noSync && !syncing && allCars!==null && filteredAvail.length===0 && !asq && (
               <div style={{ color:C.muted, fontSize:12 }}>All cars are already in your garage or queue.</div>
             )}

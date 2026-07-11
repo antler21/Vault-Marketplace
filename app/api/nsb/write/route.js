@@ -163,6 +163,7 @@ export async function POST(request) {
       const v = String(body.setPrvr)
       data.prvr = v
       if ('prvrfi' in data) data.prvrfi = v
+      if ('adbpvr' in data) data.adbpvr = v
     }
 
     // ── Garage delete ──────────────────────────────────────────────────────────
