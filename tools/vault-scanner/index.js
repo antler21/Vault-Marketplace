@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.25'
+const VERSION = '0.7.26'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -7342,9 +7342,11 @@ const server = http.createServer(async (req, res) => {
       `Start-Sleep -Milliseconds 300`,
       `$w.SendKeys('{ENTER}')`,
     ].join('\r\n')
-    const encoded = Buffer.from(psLines, 'utf16le').toString('base64')
-    log(`[sendkeys] Firing for ${username} — total PS script: ${psLines.split('\r\n').length} lines`)
-    exec(`powershell -NoProfile -NonInteractive -EncodedCommand ${encoded}`, async (err) => {
+    const tmpPs1 = path.join(os.tmpdir(), 'rc-login-' + Date.now() + '.ps1')
+    fs.writeFileSync(tmpPs1, psLines, 'utf8')
+    log(`[sendkeys] Firing for ${username} — script written to ${tmpPs1}`)
+    exec(`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${tmpPs1}"`, async (err) => {
+      try { fs.unlinkSync(tmpPs1) } catch {}
       if (err) { log(`[sendkeys] PowerShell error: ${err.message}`); return }
       log(`[sendkeys] PowerShell done — polling auth-state for 10s`)
       for (let i = 1; i <= 5; i++) {
