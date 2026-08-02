@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.26'
+const VERSION = '0.7.27'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1861,6 +1861,12 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div class="main-hdr">
         <span class="main-title">Accounts</span>
         <div class="spacer"></div>
+        <select id="sort-select" onchange="setSortOrder(this.value)" class="btn btn-secondary btn-sm" style="cursor:pointer;padding:4px 8px;font-size:12px">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="most-skins">Most Skins</option>
+          <option value="least-skins">Least Skins</option>
+        </select>
         <button class="btn btn-secondary btn-sm" id="sel-btn" onclick="toggleSelect()" style="display:none">Select</button>
         <button class="btn btn-secondary btn-sm" id="unfriend-btn" onclick="openUnfriendModal()" style="display:none">Unfriend All</button>
         <button class="btn btn-secondary btn-sm" id="scan-current-btn" onclick="scanCurrentAccount()" style="display:none">Scan Current</button>
@@ -2821,6 +2827,7 @@ var _ensbActiveTab = 'currency'
 var _currencyOverride = {}, _currencyOverrideSnapshot = null, _partialSelectionEnabled = false, _selectedLegends = []
 var _nsbCurrentData = null, _applyPackRef = null, _currencyEditMode = false
 var _selMode = false, _selected = new Set()
+var _sortOrder = 'newest'
 var LEGEND_CARS = [
   { crdb: 'Ferrari_250GTOClassic_1962',            name: 'Ferrari 250 GTO',                amount: 14800 },
   { crdb: 'AstonMartin_DB5Classic_1964',            name: 'Aston Martin DB5',               amount: 17400 },
@@ -3050,11 +3057,30 @@ async function reloadAccounts() {
   _accounts = await apiFetch('/local/accounts', [])
 }
 
+function fmtDate(iso) {
+  if (!iso) return ''
+  var d = new Date(iso)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function setSortOrder(v) { _sortOrder = v; renderAccounts() }
+
 function renderAccounts() {
   var grid = document.getElementById('grid')
-  var list = _activeGame
+  var list = (_activeGame
     ? _accounts.filter(function(a){ return a.gameId === _activeGame.id })
-    : _accounts
+    : _accounts).slice()
+  // Sort
+  var now = Date.now()
+  if (_sortOrder === 'newest') {
+    list.sort(function(a,b){ return new Date(b.createdAt||0) - new Date(a.createdAt||0) })
+  } else if (_sortOrder === 'oldest') {
+    list.sort(function(a,b){ return new Date(a.createdAt||0) - new Date(b.createdAt||0) })
+  } else if (_sortOrder === 'most-skins') {
+    list.sort(function(a,b){ return (Array.isArray(b.ownedSkinIds)?b.ownedSkinIds.length:0) - (Array.isArray(a.ownedSkinIds)?a.ownedSkinIds.length:0) })
+  } else if (_sortOrder === 'least-skins') {
+    list.sort(function(a,b){ return (Array.isArray(a.ownedSkinIds)?a.ownedSkinIds.length:0) - (Array.isArray(b.ownedSkinIds)?b.ownedSkinIds.length:0) })
+  }
   document.getElementById('sel-btn').style.display = list.length ? '' : 'none'
   if (!list.length) {
     grid.innerHTML = '<div class="empty"><h3>No accounts yet</h3><p>Use Single Scan or Multi Scan to add accounts.</p></div>'
@@ -3067,16 +3093,23 @@ function renderAccounts() {
     var skins = Array.isArray(a.ownedSkinIds) ? a.ownedSkinIds.length : 0
     var rank = a.soloRank || 'Unranked'
     var isSel = _selected.has(a.id)
+    var isNew = a.createdAt && (now - new Date(a.createdAt).getTime()) < 86400000
     var thumbInner = (_activeGame && _activeGame.image)
       ? '<img src="' + escH(_activeGame.image) + '" class="card-game-img">'
       : '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#3a4050" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>'
-    html += '<div class="card' + (isSel ? ' sel' : '') + '" id="c-' + a.id + '">' +
+    var metaExtra = ''
+    if (a.loginUsername) metaExtra += '<span style="color:var(--muted);font-size:10px">' + escH(a.loginUsername) + '</span>'
+    if (a.createdAt) metaExtra += '<span style="color:var(--muted);font-size:10px">' + escH(fmtDate(a.createdAt)) + '</span>'
+    html += '<div class="card' + (isSel ? ' sel' : '') + '" id="c-' + a.id + '" style="position:relative">' +
+      (isNew ? '<div style="position:absolute;top:6px;right:6px;background:#e05252;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;z-index:2;letter-spacing:.4px">NEW</div>' : '') +
       (_selMode ? '<div class="chk' + (isSel ? ' on' : '') + '" data-id="' + a.id + '" onclick="toggleSel(this.dataset.id,event)">' +
         (isSel ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>' : '') +
         '</div>' : '') +
       '<div class="card-thumb">' + thumbInner + '</div>' +
       '<div class="card-body"><div class="card-name" title="' + escH(name) + '">' + escH(name) + '</div>' +
-      '<div class="card-meta"><span>' + skins + ' skins</span><span>' + escH(rank) + '</span></div></div>' +
+      '<div class="card-meta"><span>' + skins + ' skins</span><span>' + escH(rank) + '</span></div>' +
+      (metaExtra ? '<div class="card-meta" style="gap:6px;margin-top:2px">' + metaExtra + '</div>' : '') +
+      '</div>' +
       '<div class="card-overlay">' +
       '<button class="ov-btn ov-import" data-id="' + a.id + '" onclick="openImport(this.dataset.id,event)">Import to Webapp</button>' +
       '<button class="ov-btn ov-preview" data-id="' + a.id + '" onclick="openPreview(this.dataset.id,event)">Preview Link</button>' +
@@ -3239,7 +3272,15 @@ async function retryScan() {
   runSingleScan()
 }
 
-async function saveLocally(data) {
+function censorUsername(u) {
+  if (!u) return ''
+  var s = String(u)
+  if (s.length <= 3) return '****'
+  var keep = Math.min(3, Math.floor(s.length / 4))
+  return s.slice(0, keep) + '****' + s.slice(-1)
+}
+
+async function saveLocally(data, loginUsername) {
   var gameId = _activeGame ? _activeGame.id : null
   var existing = _accounts.find(function(a){ return a.summonerName === data.summonerName && a.region === data.region && a.gameId === gameId })
   var body = {
@@ -3251,6 +3292,7 @@ async function saveLocally(data) {
     soloRank: data.soloRank || null,
     ownedSkinIds: data.ownedSkinIds || [],
     scanData: data,
+    loginUsername: loginUsername || (existing ? existing.loginUsername : '') || '',
     createdAt: existing ? existing.createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
@@ -3495,7 +3537,7 @@ async function runMultiLoop(creds, myRunId) {
       showNotice('multi-notice', 'error', username + ': Scan failed — ' + (result ? result.error : 'timed out'))
     } else {
       markLastDone()
-      await saveLocally(result)
+      await saveLocally(result, censorUsername(username))
       await reloadAccounts()
       renderAccounts()
       // Unfriend all if toggle is enabled
