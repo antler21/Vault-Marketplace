@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.31'
+const VERSION = '0.7.32'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1694,6 +1694,11 @@ main{flex:1;overflow-y:auto;padding:20px}
 .card-overlay{position:absolute;inset:0;background:rgba(0,0,0,.75);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;opacity:0;transition:opacity .15s;pointer-events:none}
 .card:hover .card-overlay{opacity:1;pointer-events:all}
 .ov-btn{width:82%;padding:7px 12px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:500;transition:opacity .15s}
+.card-corner-btns{position:absolute;top:6px;right:6px;display:flex;gap:4px;opacity:0;transition:opacity .15s;z-index:2}
+.card:hover .card-corner-btns{opacity:1}
+.card-corner-btn{background:rgba(0,0,0,.6);border:none;border-radius:5px;color:#fff;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1;transition:background .12s;backdrop-filter:blur(2px)}
+.card-corner-btn.ck-edit:hover{background:var(--accent)}
+.card-corner-btn.ck-del:hover{background:#ef4444}
 .ov-import{background:var(--accent);color:var(--text)}
 .ov-preview{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
 .ov-remove{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.4)}
@@ -2511,12 +2516,22 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div class="modal-title">Edit NSB</div>
     <div class="modal-sub">Load a save file to manually edit values or apply unban</div>
     <div class="field">
-      <label>NSB File</label>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin-bottom:0">NSB File</label>
+        <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb('ensb')" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+      </div>
       <label class="file-drop" id="ensb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ensb')">
         <input type="file" id="ensb-file" style="display:none" onchange="handleNsbFile(event,'ensb')">
         <div class="file-drop-label">Click to select or drag &amp; drop your NSB file</div>
         <div class="file-drop-name" id="ensb-file-name" style="display:none"></div>
       </label>
+      <div id="ensb-grab-picker" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surf2)">
+        <div style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <span>NSB Files in Grab Folder</span>
+          <button onclick="document.getElementById('ensb-grab-picker').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0">×</button>
+        </div>
+        <div id="ensb-grab-list" style="max-height:180px;overflow-y:auto"></div>
+      </div>
     </div>
     <div id="ensb-notice" style="display:none"></div>
     <div class="modal-actions">
@@ -3913,13 +3928,12 @@ function renderPacks() {
   var html = ''
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
-    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '">'
+    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:pointer" title="Apply Pack">'
     html += '<div class="card-thumb">' + thumb + '</div>'
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
-    html += '<div class="card-overlay">'
-    html += '<button class="ov-btn ov-import" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)">Apply Pack</button>'
-    html += '<button class="ov-btn ov-preview" data-pid="' + p.id + '" onclick="openEditPack(this.dataset.pid)">Edit Pack</button>'
-    html += '<button class="ov-btn ov-remove" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">Delete</button>'
+    html += '<div class="card-corner-btns">'
+    html += '<button class="card-corner-btn ck-edit" title="Edit Pack" data-pid="' + p.id + '" onclick="event.stopPropagation();openEditPack(this.dataset.pid)">✏</button>'
+    html += '<button class="card-corner-btn ck-del" title="Delete" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">✕</button>'
     html += '</div></div>'
   }
   grid.innerHTML = html
@@ -6021,44 +6035,55 @@ function readNsbFile(file, which) {
   reader.readAsArrayBuffer(file)
 }
 
-async function autoGrabNsb() {
+async function autoGrabNsb(ctx) {
+  if (!ctx) ctx = 'ansb'
+  var noticeId = ctx === 'ensb' ? 'ensb-notice' : 'ansb-notice'
+  var pickerId = ctx === 'ensb' ? 'ensb-grab-picker' : 'ansb-grab-picker'
+  var listId = ctx === 'ensb' ? 'ensb-grab-list' : 'ansb-grab-list'
   if (!_csr2GrabFolder) {
-    showNotice('ansb-notice', 'error', 'No grab folder set — configure it in CSR2 Settings first.')
+    showNotice(noticeId, 'error', 'No grab folder set — configure it in CSR2 Settings first.')
     return
   }
   var res = await fetch('/csr2/list-nsb-files').then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
-  if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
-  if (!res.files || res.files.length === 0) { showNotice('ansb-notice', 'error', 'No .nsb files found in grab folder.'); return }
-  if (res.files.length === 1) { loadGrabbedNsb(res.files[0].name, res.files[0].mtime); return }
-  var list = document.getElementById('ansb-grab-list')
+  if (res.error) { showNotice(noticeId, 'error', res.error); return }
+  if (!res.files || res.files.length === 0) { showNotice(noticeId, 'error', 'No NSB files found in grab folder.'); return }
+  if (res.files.length === 1) { loadGrabbedNsb(res.files[0].name, res.files[0].mtime, ctx); return }
+  var list = document.getElementById(listId)
   list.innerHTML = res.files.map(function(f) {
     var d = new Date(f.mtime)
     var dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    return '<div onclick="loadGrabbedNsb(' + JSON.stringify(f.name) + ',' + JSON.stringify(f.mtime) + ')" style="padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background=\\'var(--surf3)\\'" onmouseout="this.style.background=\\'\\'">'
+    return '<div onclick="loadGrabbedNsb(' + JSON.stringify(f.name) + ',' + JSON.stringify(f.mtime) + ',' + JSON.stringify(ctx) + ')" style="padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background=\\'var(--surf3)\\'" onmouseout="this.style.background=\\'\\'">'
       + '<span style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' + escH(f.name) + '</span>'
       + '<span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:10px">' + escH(dateStr) + '</span>'
       + '</div>'
   }).join('')
-  document.getElementById('ansb-grab-picker').style.display = ''
+  document.getElementById(pickerId).style.display = ''
 }
 
-async function loadGrabbedNsb(filename, mtime) {
-  document.getElementById('ansb-grab-picker').style.display = 'none'
+async function loadGrabbedNsb(filename, mtime, ctx) {
+  if (!ctx) ctx = 'ansb'
+  var pickerId = ctx === 'ensb' ? 'ensb-grab-picker' : 'ansb-grab-picker'
+  var noticeId = ctx === 'ensb' ? 'ensb-notice' : 'ansb-notice'
+  document.getElementById(pickerId).style.display = 'none'
   var res = await fetch('/csr2/grab-nsb-file?name=' + encodeURIComponent(filename)).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
-  if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
-  _nsbData.ansb = { base64: res.base64, name: res.name }
-  var nameEl = document.getElementById('ansb-file-name')
+  if (res.error) { showNotice(noticeId, 'error', res.error); return }
+  _nsbData[ctx] = { base64: res.base64, name: res.name }
+  var nameEl = document.getElementById(ctx + '-file-name')
   var d = new Date(mtime)
   var dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  nameEl.innerHTML = '<svg width="13" height="15" viewBox="0 0 13 15" fill="none" style="flex-shrink:0;margin-right:8px;opacity:.85" xmlns="http://www.w3.org/2000/svg"><path d="M2 1h6l3 3v10H2V1z" fill="rgba(126,101,81,.25)" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 1v3h3" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="7" x2="9" y2="7" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/><line x1="4" y1="9.5" x2="8" y2="9.5" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">' + escH(res.name) + '</span><span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px">' + escH(dateStr) + '</span><button onclick="event.stopPropagation();clearNsbFile(\\'ansb\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 10px;flex-shrink:0;display:flex;align-items:center" title="Remove">×</button>'
+  nameEl.innerHTML = '<svg width="13" height="15" viewBox="0 0 13 15" fill="none" style="flex-shrink:0;margin-right:8px;opacity:.85" xmlns="http://www.w3.org/2000/svg"><path d="M2 1h6l3 3v10H2V1z" fill="rgba(126,101,81,.25)" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 1v3h3" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="7" x2="9" y2="7" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/><line x1="4" y1="9.5" x2="8" y2="9.5" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">' + escH(res.name) + '</span><span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px">' + escH(dateStr) + '</span><button onclick="event.stopPropagation();clearNsbFile(' + JSON.stringify(ctx) + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 10px;flex-shrink:0;display:flex;align-items:center" title="Remove">×</button>'
   nameEl.style.display = 'flex'
   nameEl.style.alignItems = 'center'
-  var labelEl = document.getElementById('ansb-drop').querySelector('.file-drop-label')
+  var labelEl = document.getElementById(ctx + '-drop').querySelector('.file-drop-label')
   if (labelEl) labelEl.style.display = 'none'
-  document.getElementById('ansb-drop').classList.add('has-file')
-  loadNsbComparison()
-  document.getElementById('ansb-apply-btn').disabled = false
-  _updateApplyTabsNsbState(true)
+  document.getElementById(ctx + '-drop').classList.add('has-file')
+  if (ctx === 'ensb') {
+    loadEnsbCurrent()
+  } else {
+    loadNsbComparison()
+    document.getElementById('ansb-apply-btn').disabled = false
+    _updateApplyTabsNsbState(true)
+  }
 }
 
 function clearNsbFile(which) {
