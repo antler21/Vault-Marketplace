@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.27'
+const VERSION = '0.7.29'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1099,7 +1099,17 @@ function fetchGithubApi(apiPath) {
       let data = ''
       res.on('data', c => data += c)
       res.on('end', () => {
-        try { resolve(JSON.parse(data)) } catch (e) { reject(new Error('GitHub API parse error: ' + data.slice(0, 120))) }
+        let parsed
+        try { parsed = JSON.parse(data) } catch (e) {
+          return reject(new Error('GitHub API returned non-JSON (HTTP ' + res.statusCode + '): ' + data.slice(0, 120)))
+        }
+        if (res.statusCode === 403 || res.statusCode === 429) {
+          const msg = parsed.message || ('HTTP ' + res.statusCode)
+          const isRateLimit = msg.toLowerCase().includes('rate limit')
+          return reject(new Error(isRateLimit ? 'GitHub API rate limit reached — try again in a few minutes' : 'GitHub API error: ' + msg))
+        }
+        if (res.statusCode >= 400) return reject(new Error('GitHub API error (HTTP ' + res.statusCode + '): ' + (parsed.message || data.slice(0, 120))))
+        resolve(parsed)
       })
     })
     req.on('error', reject)
@@ -1886,11 +1896,9 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div class="main-hdr">
         <span class="main-title">CSR2 Services</span>
         <div class="spacer"></div>
-        <button class="btn btn-sm" onclick="openUnban()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#ef4444">🚫 Unban</button>
-        <button class="btn btn-secondary btn-sm" id="cars-update-btn" onclick="openCarsUpdate()" style="display:flex;align-items:center;gap:5px;position:relative">↺ Car DB <span id="cars-db-count" style="font-size:10px;opacity:.6"></span><span class="upd-badge" id="cars-update-dot" style="display:none">Update</span></button>
+        <button class="btn btn-secondary btn-sm" id="data-hub-btn" onclick="openDataHub()" style="position:relative;display:flex;align-items:center;gap:5px">⬡ Data Hub<span id="data-hub-badge" style="display:none;position:absolute;top:-7px;right:-8px;background:#ef4444;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;padding:0 2px;box-sizing:border-box"></span></button>
         <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
         <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
-        <button class="btn btn-secondary btn-sm" id="sync-all-packs-btn" onclick="syncAllPacks()">↑ Sync All</button>
         <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
       </div>
       <div class="grid" id="packs-grid"></div>
@@ -2242,7 +2250,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Fusion Data</div>
             <div id="cp-fusions-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
           </div>
-          <button class="btn btn-secondary btn-sm" id="fusions-update-btn" onclick="openFusionsUpdate()" style="position:relative">Update<span class="upd-badge" id="fusions-update-dot" style="display:none">Update</span></button>
+          <button class="btn btn-secondary btn-sm" id="fusions-update-btn" onclick="openDataHub('fusions')" style="position:relative">Update<span class="upd-badge" id="fusions-update-dot" style="display:none">Update</span></button>
         </div>
       </div>
     </div>
@@ -2272,7 +2280,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
             <div style="font-size:12px;font-weight:600;margin-bottom:3px">Stage 6 Data</div>
             <div id="cp-stage6-data-status" style="font-size:11px;color:var(--muted)">Checking...</div>
           </div>
-          <button class="btn btn-secondary btn-sm" id="stage6-update-btn" onclick="openStage6Update()" style="position:relative">Update<span class="upd-badge" id="stage6-update-dot" style="display:none">Update</span></button>
+          <button class="btn btn-secondary btn-sm" id="stage6-update-btn" onclick="openDataHub('stage6')" style="position:relative">Update<span class="upd-badge" id="stage6-update-dot" style="display:none">Update</span></button>
         </div>
       </div>
     </div>
@@ -2418,8 +2426,19 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div class="modal-title">⚙ CSR2 Settings</div>
     <div class="modal-sub">Configure where modified NSB files are saved</div>
     <div class="field">
+      <label>NSB Grab Folder</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="csr2-grab-folder-input" placeholder="e.g. C:\Users\You\Downloads" style="flex:1">
+        <button class="btn btn-secondary btn-sm" onclick="browseFolder('csr2-grab-folder-input')" style="flex-shrink:0;white-space:nowrap">Browse…</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Folder scanned by the Auto Grab button when selecting an NSB file to apply.</div>
+    <div class="field">
       <label>Output Folder Path</label>
-      <input type="text" id="csr2-folder-input" placeholder="e.g. C:\Users\You\Documents\CSR2">
+      <div style="display:flex;gap:8px">
+        <input type="text" id="csr2-folder-input" placeholder="e.g. C:\Users\You\Documents\CSR2" style="flex:1">
+        <button class="btn btn-secondary btn-sm" onclick="browseFolder('csr2-folder-input')" style="flex-shrink:0;white-space:nowrap">Browse…</button>
+      </div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Leave empty to only download (no auto-save). Files in the folder are replaced on each apply.</div>
     <div id="csr2-settings-notice" style="display:none"></div>
@@ -2544,13 +2563,27 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <label>Pack</label>
         <select id="ansb-pack-select" onchange="onAnsbPackSelect(this.value)"></select>
       </div>
+      <div class="field" style="margin-bottom:8px">
+        <label>Save Version <span style="font-weight:400;color:var(--muted);font-size:11px">(optional)</span></label>
+        <input type="text" id="ansb-save-version" placeholder="e.g. 5.7.0" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px">
+      </div>
       <div class="field" style="margin-bottom:0">
-        <label>NSB File</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <label style="margin-bottom:0">NSB File</label>
+          <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb()" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+        </div>
         <label class="file-drop" id="ansb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
           <input type="file" id="ansb-file" style="display:none" onchange="handleNsbFile(event,'ansb')">
           <div class="file-drop-label">Click to select or drag &amp; drop your NSB file</div>
           <div class="file-drop-name" id="ansb-file-name" style="display:none"></div>
         </label>
+        <div id="ansb-grab-picker" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surf2)">
+          <div style="padding:8px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <span>NSB Files in Grab Folder</span>
+            <button onclick="document.getElementById('ansb-grab-picker').style.display='none'" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0">×</button>
+          </div>
+          <div id="ansb-grab-list" style="max-height:180px;overflow-y:auto"></div>
+        </div>
       </div>
     </div>
     <!-- Currencies tab -->
@@ -2721,34 +2754,51 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
 </div>
 
-<!-- Stage 6 Update Modal -->
-<div class="modal-bg" id="stage6-update-modal">
-  <div class="modal" style="max-width:440px">
-    <div class="modal-title">Stage 6 Data</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Source: CSR2-DataBase / ##AllStage6's.txt</div>
-    <div id="stage6-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load Stage 6 data.</div>
-    <div class="cars-update-bar" style="display:none" id="stage6-update-bar"><div class="cars-update-bar-fill" id="stage6-update-bar-fill"></div></div>
-    <div id="stage6-update-notice" style="display:none"></div>
-    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
-      <button class="btn btn-secondary" onclick="hideModal('stage6-update-modal')" id="stage6-update-close-btn">Cancel</button>
-      <button class="btn btn-secondary" onclick="hideModal('stage6-update-modal');openS6CarListUpdate()">Update Car List</button>
-      <button class="btn btn-primary" onclick="doStage6Update()" id="stage6-update-go-btn">Fetch & Cache</button>
+<!-- Data Hub Modal -->
+<div class="modal-bg" id="data-hub-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">⬡ Data Hub</div>
+    <div class="modal-sub">CSR2 data used for applying packs — update individually or all at once</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:10px 12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px">
+      <div>
+        <div style="font-size:13px;font-weight:600">Auto Update on Startup</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Fetch all updates automatically when the tool opens</div>
+      </div>
+      <input type="checkbox" id="dh-auto-update" onchange="setDataHubAutoUpdate(this.checked)" style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer;flex-shrink:0">
     </div>
-  </div>
-</div>
-
-<!-- Fusions Update Modal -->
-<div class="modal-bg" id="fusions-update-modal">
-  <div class="modal" style="max-width:440px">
-    <div class="modal-title">Fusion Data</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Source: CSR2-DataBase / ##AllFusions.txt</div>
-    <div id="fusions-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Click Fetch to load fusion data.</div>
-    <div class="cars-update-bar" style="display:none" id="fusions-update-bar"><div class="cars-update-bar-fill" id="fusions-update-bar-fill"></div></div>
-    <div id="fusions-update-notice" style="display:none"></div>
-    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
-      <button class="btn btn-secondary" onclick="hideModal('fusions-update-modal')" id="fusions-update-close-btn">Cancel</button>
-      <button class="btn btn-secondary" id="fusion-brands-update-btn" onclick="hideModal('fusions-update-modal');openFusionBrandsUpdate()" style="position:relative">Update Brand List<span class="upd-badge" id="fusion-brands-update-dot" style="display:none">Update</span></button>
-      <button class="btn btn-primary" onclick="doFusionsUpdate()" id="fusions-update-go-btn">Fetch & Cache</button>
+    <div style="padding:12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;margin-bottom:10px" id="dh-row-cars">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">🚗 Car Database</div>
+          <div id="dh-cars-status" style="font-size:11px;color:var(--muted);margin-top:3px">Checking...</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="dh-cars-btn" onclick="dhUpdate('cars')" style="flex-shrink:0">Update</button>
+      </div>
+      <div class="cars-update-bar" id="dh-cars-bar" style="display:none;margin-top:10px"><div class="cars-update-bar-fill" id="dh-cars-bar-fill"></div></div>
+    </div>
+    <div style="padding:12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;margin-bottom:10px" id="dh-row-fusions">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">⚗️ Fusions</div>
+          <div id="dh-fusions-status" style="font-size:11px;color:var(--muted);margin-top:3px">Checking...</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="dh-fusions-btn" onclick="dhUpdate('fusions')" style="flex-shrink:0">Update</button>
+      </div>
+      <div class="cars-update-bar" id="dh-fusions-bar" style="display:none;margin-top:10px"><div class="cars-update-bar-fill" id="dh-fusions-bar-fill"></div></div>
+    </div>
+    <div style="padding:12px;background:var(--surf2);border:1px solid var(--border);border-radius:8px;margin-bottom:4px" id="dh-row-stage6">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">6️⃣ Stage 6</div>
+          <div id="dh-stage6-status" style="font-size:11px;color:var(--muted);margin-top:3px">Checking...</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="dh-stage6-btn" onclick="dhUpdate('stage6')" style="flex-shrink:0">Update</button>
+      </div>
+      <div class="cars-update-bar" id="dh-stage6-bar" style="display:none;margin-top:10px"><div class="cars-update-bar-fill" id="dh-stage6-bar-fill"></div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('data-hub-modal')">Close</button>
+      <button class="btn btn-primary" id="dh-update-all-btn" onclick="dhUpdateAll()">Update All</button>
     </div>
   </div>
 </div>
@@ -2783,20 +2833,6 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
 </div>
 
-<!-- Car DB Update Modal -->
-<div class="modal-bg" id="cars-update-modal">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-title">Car Database</div>
-    <div id="cars-update-status" style="font-size:13px;color:var(--muted);margin:8px 0 4px">Checking for updates...</div>
-    <div class="cars-update-bar"><div class="cars-update-bar-fill" id="cars-update-bar-fill"></div></div>
-    <div id="cars-update-info" style="font-size:12px;color:var(--muted);margin-bottom:4px"></div>
-    <div id="cars-update-notice" style="display:none"></div>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="hideModal('cars-update-modal')" id="cars-update-close-btn">Cancel</button>
-      <button class="btn btn-primary" onclick="doCarsUpdate()" id="cars-update-go-btn" style="display:none">Update Now</button>
-    </div>
-  </div>
-</div>
 
 <!-- Debug Panel -->
 <div class="debug-panel" id="debug-panel">
@@ -2816,7 +2852,7 @@ var _packs = [], _nsbData = { ansb: null, unban: null, ensb: null }, _selectedCa
 var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _carFilter = { tier: null, brand: null, starType: null }
-var _csr2OutputFolder = '', _ensbCurrent = {}, _pendingSavePack = null
+var _csr2OutputFolder = '', _csr2GrabFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _ensbFullData = null
 var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], garageDeleted: [], garageMaxout: {}, legends: {}, fusions: {}, stage6: {}, fusionsAll: null, s6All: null, setPrvr: null }
 var _ensbGarageUndoStack = [], _ensbOwnedSearch = '', _ensbS6UpdateStatus = null
@@ -2871,6 +2907,9 @@ async function init() {
   var cfg = await apiFetch('/local/config', {}).catch(function(){ return {} })
   _url = (cfg.webappUrl || '').replace(/\\/$/, '')
   _csr2OutputFolder = cfg.csr2OutputFolder || ''
+  _csr2GrabFolder = cfg.csr2GrabFolder || ''
+  _dataHubAutoUpdate = !!cfg.autoUpdateData
+  if (cfg.autoUpdateData) setTimeout(function(){ dhUpdate('cars', true); dhUpdate('fusions', true); dhUpdate('stage6', true) }, 15000)
   await fetchGames()
   await reloadAccounts()
   await reloadPacks()
@@ -2892,8 +2931,10 @@ async function init() {
 async function checkForDataUpdates() {
   try {
     var res = await apiFetch('/csr2/updates-check', null)
-    if (res && (res.fusions || res.stage6)) {
-      showDataUpdateBanner(res.fusions, res.stage6)
+    if (res) {
+      if (res.fusions) _dataHubUpdates.fusions = true
+      if (res.stage6) _dataHubUpdates.stage6 = true
+      updateDataHubBadge()
     }
   } catch (e) {}
 }
@@ -2923,29 +2964,7 @@ function showToolUpdateBanner(newVersion) {
   document.body.appendChild(banner)
 }
 
-function showDataUpdateBanner(hasFusions, hasStage6) {
-  var existing = document.getElementById('data-update-banner')
-  if (existing) return
-  var labels = []
-  if (hasFusions) labels.push('Fusions')
-  if (hasStage6) labels.push('Stage 6')
-  var banner = document.createElement('div')
-  banner.id = 'data-update-banner'
-  banner.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9999;background:var(--surf2);border:1px solid var(--accent);border-radius:10px;padding:10px 14px;font-size:12px;max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,.4)'
-  var btns = ''
-  if (hasFusions) btns += '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove();openFusionsUpdate()" style="font-size:11px;padding:4px 10px">Update Fusions</button>'
-  if (hasStage6) btns += '<button class="btn btn-primary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove();openStage6Update()" style="font-size:11px;padding:4px 10px">Update Stage 6</button>'
-  btns += '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\\'data-update-banner\\').remove()" style="font-size:11px;padding:4px 10px">Dismiss</button>'
-  banner.innerHTML = '<div style="font-weight:600;margin-bottom:4px">📦 Data Update Available</div>' +
-    '<div style="color:var(--muted);margin-bottom:8px">New ' + labels.join(' & ') + ' data on GitHub.</div>' +
-    '<div style="display:flex;gap:6px;flex-wrap:wrap">' + btns + '</div>'
-  document.body.appendChild(banner)
-}
-
-function updateCarDbCountBadge() {
-  var el = document.getElementById('cars-db-count')
-  if (el) el.textContent = _csr2CarsDb.length ? '(' + _csr2CarsDb.length + ')' : '(empty)'
-}
+function updateCarDbCountBadge() {}
 
 async function apiFetch(path, fallback) {
   var r = await fetch(path)
@@ -4773,93 +4792,208 @@ function renderCppSelectedCars() {
 
 // ─── Apply NSB Modal + Car DB ──────────────────────────────────────────────────
 
-async function openCarsUpdate() {
-  document.getElementById('cars-update-status').textContent = 'Checking GitHub for updates...'
-  document.getElementById('cars-update-info').textContent = ''
-  document.getElementById('cars-update-bar-fill').style.width = '0%'
-  document.getElementById('cars-update-go-btn').style.display = 'none'
-  document.getElementById('cars-update-close-btn').textContent = 'Close'
-  hideNotice('cars-update-notice')
-  showModal('cars-update-modal')
+// ─── Data Hub ─────────────────────────────────────────────────────────────────
+
+var _dataHubUpdates = { cars: false, fusions: false, stage6: false }
+var _dataHubErrors = { cars: null, fusions: null, stage6: null }
+var _dataHubAutoUpdate = false
+
+function updateDataHubBadge() {
+  var badge = document.getElementById('data-hub-badge')
+  if (!badge) return
+  if (_dataHubAutoUpdate) {
+    // Auto-update ON: badge is an error indicator — show "!" if any update failed
+    var hasError = !!((_dataHubErrors.cars || _dataHubErrors.fusions || _dataHubErrors.stage6))
+    badge.textContent = '!'
+    badge.style.background = '#FFC107'
+    badge.style.color = '#000'
+    badge.style.display = hasError ? 'flex' : 'none'
+  } else {
+    // Auto-update OFF: badge shows count of available updates
+    var count = ((_dataHubUpdates.cars ? 1 : 0) + (_dataHubUpdates.fusions ? 1 : 0) + (_dataHubUpdates.stage6 ? 1 : 0))
+    badge.textContent = count
+    badge.style.background = '#ef4444'
+    badge.style.color = '#fff'
+    badge.style.display = count > 0 ? 'flex' : 'none'
+  }
+}
+
+async function openDataHub(focusKey) {
+  var cfg = await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} })
+  var chk = document.getElementById('dh-auto-update')
+  if (chk) chk.checked = !!cfg.autoUpdateData
+  dhLoadStatus('cars')
+  dhLoadStatus('fusions')
+  dhLoadStatus('stage6')
+  showModal('data-hub-modal')
+  if (focusKey) {
+    var row = document.getElementById('dh-row-' + focusKey)
+    if (row) setTimeout(function(){ row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }, 200)
+  }
+}
+
+async function dhLoadStatus(key) {
+  var statusEl = document.getElementById('dh-' + key + '-status')
+  var btnEl = document.getElementById('dh-' + key + '-btn')
+  if (!statusEl) return
+  statusEl.textContent = 'Checking...'
+  statusEl.style.color = 'var(--muted)'
   try {
-    var res = await fetch('/csr2/cars-check').then(function(r){ return r.json() })
+    var hasUpdate = false, count = 0
+    if (key === 'cars') {
+      var r = await fetch('/csr2/cars-check').then(function(r){ return r.json() })
+      if (r.error) { statusEl.textContent = 'Check failed: ' + r.error; return }
+      count = r.carCount || 0
+      hasUpdate = !!r.hasUpdate || count === 0
+      statusEl.textContent = count === 0 ? 'No data — click Update to download'
+        : r.hasUpdate ? count + ' cars loaded · Update available'
+        : count + ' cars loaded · Up to date'
+    } else if (key === 'fusions') {
+      var r2 = await fetch('/csr2/fusions-check').then(function(r){ return r.json() })
+      var s = await fetch('/csr2/fusions').then(function(r){ return r.json() }).catch(function(){ return { count: 0 } })
+      count = s.count || 0
+      hasUpdate = !!r2.hasUpdate || count === 0
+      statusEl.textContent = count === 0 ? 'No data — click Update to download'
+        : r2.hasUpdate ? count + ' entries cached · Update available'
+        : count + ' entries cached · Up to date'
+    } else if (key === 'stage6') {
+      var r3 = await fetch('/csr2/stage6-check').then(function(r){ return r.json() })
+      var s3 = await fetch('/csr2/stage6').then(function(r){ return r.json() }).catch(function(){ return { count: 0 } })
+      count = s3.count || 0
+      hasUpdate = !!r3.hasUpdate || count === 0
+      statusEl.textContent = count === 0 ? 'No data — click Update to download'
+        : r3.hasUpdate ? count + ' entries cached · Update available'
+        : count + ' entries cached · Up to date'
+    }
+    statusEl.style.color = hasUpdate ? '#FFC107' : 'var(--green)'
+    if (count === 0) statusEl.style.color = 'var(--muted)'
+    _dataHubUpdates[key] = hasUpdate
+    if (btnEl) btnEl.style.display = hasUpdate ? '' : 'none'
+  } catch (e) {
+    if (statusEl) statusEl.textContent = 'Check failed: ' + e.message
+  }
+  updateDataHubBadge()
+}
+
+async function dhUpdate(key, silent) {
+  var statusEl = document.getElementById('dh-' + key + '-status')
+  var barEl = document.getElementById('dh-' + key + '-bar')
+  var barFill = document.getElementById('dh-' + key + '-bar-fill')
+  var btnEl = document.getElementById('dh-' + key + '-btn')
+  if (btnEl) btnEl.disabled = true
+  if (barEl) barEl.style.display = ''
+  if (barFill) barFill.style.width = '20%'
+  if (statusEl) { statusEl.textContent = 'Updating...'; statusEl.style.color = 'var(--muted)' }
+  try {
+    var endpoint = key === 'cars' ? '/csr2/cars-update' : key === 'fusions' ? '/csr2/fusions-update' : '/csr2/stage6-update'
+    if (barFill) barFill.style.width = '45%'
+    var res = await fetch(endpoint, { method: 'POST' }).then(function(r){ return r.json() })
     if (res.error) {
-      document.getElementById('cars-update-status').textContent = 'Could not reach GitHub.'
-      document.getElementById('cars-update-info').textContent = res.error
+      _dataHubErrors[key] = res.error
+      updateDataHubBadge()
+      if (statusEl) { statusEl.textContent = 'Failed: ' + res.error; statusEl.style.color = '#ef4444' }
+      if (btnEl) { btnEl.disabled = false; btnEl.style.display = '' }
+      if (barEl) setTimeout(function(){ barEl.style.display = 'none' }, 1500)
       return
     }
-    var count = res.carCount || 0
-    if (count === 0) {
-      document.getElementById('cars-update-status').textContent = 'Car database is empty.'
-      document.getElementById('cars-update-info').textContent = 'Download the full car list from GitHub to enable the car picker.'
-    } else if (res.hasUpdate) {
-      document.getElementById('cars-update-status').textContent = 'Update available!'
-      document.getElementById('cars-update-info').textContent = 'Current: ' + count + ' cars. A newer version is available on GitHub.'
-    } else {
-      document.getElementById('cars-update-status').textContent = 'Car database is up to date.'
-      document.getElementById('cars-update-info').textContent = count + ' cars loaded.'
+    // Chain sub-update
+    if (key === 'fusions') {
+      if (statusEl) statusEl.textContent = 'Updating brand list...'
+      if (barFill) barFill.style.width = '70%'
+      await fetch('/csr2/fusion-brands-update', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(){})
+    } else if (key === 'stage6') {
+      if (statusEl) statusEl.textContent = 'Updating car list...'
+      if (barFill) barFill.style.width = '70%'
+      await fetch('/csr2/s6-car-list-update', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(){})
     }
-    document.getElementById('cars-update-go-btn').style.display = (count === 0 || res.hasUpdate) ? '' : 'none'
+    if (barFill) barFill.style.width = '100%'
+    // Post-update
+    if (key === 'cars') {
+      var carsData = await fetch('/csr2/cars').then(function(r){ return r.json() }).catch(function(){ return [] })
+      _csr2CarsDb = Array.isArray(carsData) ? carsData : []
+      updateCarDbCountBadge()
+      if (statusEl) { statusEl.textContent = res.count + ' cars loaded · Up to date'; statusEl.style.color = 'var(--green)' }
+    } else if (key === 'fusions') {
+      refreshFusionsDataStatus()
+      if (statusEl) { statusEl.textContent = res.count + ' entries cached · Up to date'; statusEl.style.color = 'var(--green)' }
+    } else if (key === 'stage6') {
+      refreshStage6DataStatus()
+      if (statusEl) { statusEl.textContent = res.count + ' entries cached · Up to date'; statusEl.style.color = 'var(--green)' }
+    }
+    _dataHubUpdates[key] = false
+    _dataHubErrors[key] = null
+    updateDataHubBadge()
+    // hide inline pack-creator dot
+    var dotIds = { cars: 'cars-update-dot', fusions: 'fusions-update-dot', stage6: 'stage6-update-dot' }
+    var dot = document.getElementById(dotIds[key])
+    if (dot) dot.style.display = 'none'
+    if (btnEl) btnEl.style.display = 'none'
   } catch (e) {
-    document.getElementById('cars-update-status').textContent = 'Check failed: ' + e.message
+    _dataHubErrors[key] = e.message
+    updateDataHubBadge()
+    if (statusEl) { statusEl.textContent = 'Failed: ' + e.message; statusEl.style.color = '#ef4444' }
+    if (btnEl) { btnEl.disabled = false; btnEl.style.display = '' }
   }
+  if (btnEl) btnEl.disabled = false
+  if (barEl) setTimeout(function(){ barEl.style.display = 'none' }, 2000)
 }
 
-async function doCarsUpdate() {
-  document.getElementById('cars-update-go-btn').style.display = 'none'
-  document.getElementById('cars-update-close-btn').textContent = 'Cancel'
-  document.getElementById('cars-update-status').textContent = 'Downloading car database from GitHub...'
-  document.getElementById('cars-update-bar-fill').style.width = '30%'
-  hideNotice('cars-update-notice')
-  try {
-    var res = await fetch('/csr2/cars-update', { method: 'POST' }).then(function(r){ return r.json() })
-    if (res.error) { showNotice('cars-update-notice', 'error', res.error); document.getElementById('cars-update-close-btn').textContent = 'Close'; return }
-    document.getElementById('cars-update-bar-fill').style.width = '100%'
-    document.getElementById('cars-update-status').textContent = 'Done! ' + res.count + ' cars loaded.'
-    document.getElementById('cars-update-close-btn').textContent = 'Close'
-    var dot = document.getElementById('cars-update-dot')
-    if (dot) dot.style.display = 'none'
-    // Reload car DB
-    var carsData = await fetch('/csr2/cars').then(function(r){ return r.json() }).catch(function(){ return [] })
-    _csr2CarsDb = Array.isArray(carsData) ? carsData : []
-    updateCarDbCountBadge()
-    showNotice('cars-update-notice', 'success', res.count + ' cars ready.')
-  } catch (e) {
-    showNotice('cars-update-notice', 'error', 'Update failed: ' + e.message)
-    document.getElementById('cars-update-close-btn').textContent = 'Close'
-  }
+async function dhUpdateAll() {
+  var btn = document.getElementById('dh-update-all-btn')
+  if (btn) btn.disabled = true
+  await dhUpdate('cars')
+  await dhUpdate('fusions')
+  await dhUpdate('stage6')
+  if (btn) btn.disabled = false
 }
+
+async function setDataHubAutoUpdate(on) {
+  _dataHubAutoUpdate = on
+  _dataHubErrors = { cars: null, fusions: null, stage6: null }
+  updateDataHubBadge()
+  var cfg = await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} })
+  cfg.autoUpdateData = on
+  await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) }).catch(function(){})
+}
+
+// Redirect old entry points to Data Hub
+function openCarsUpdate() { openDataHub('cars') }
+function openFusionsUpdate() { openDataHub('fusions') }
+function openStage6Update() { openDataHub('stage6') }
 
 async function checkCsr2CarsUpdate() {
-  if (_csr2CarsDb.length === 0) return
   try {
     var res = await fetch('/csr2/cars-check').then(function(r){ return r.json() })
+    _dataHubUpdates.cars = !!res.hasUpdate || (_csr2CarsDb.length === 0)
+    updateDataHubBadge()
     var dot = document.getElementById('cars-update-dot')
-    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
+    if (dot) dot.style.display = _dataHubUpdates.cars ? 'inline-block' : 'none'
   } catch {}
 }
 
 async function checkFusionBrandsUpdate() {
   try {
-    var res = await fetch('/csr2/fusion-brands-check').then(function(r){ return r.json() })
-    var dot = document.getElementById('fusion-brands-update-dot')
-    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
+    await fetch('/csr2/fusion-brands-check').then(function(r){ return r.json() })
   } catch {}
 }
 
 async function checkFusionsUpdate() {
   try {
     var res = await fetch('/csr2/fusions-check').then(function(r){ return r.json() })
+    _dataHubUpdates.fusions = !!res.hasUpdate
+    updateDataHubBadge()
     var dot = document.getElementById('fusions-update-dot')
-    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
+    if (dot) dot.style.display = _dataHubUpdates.fusions ? 'inline-block' : 'none'
   } catch {}
 }
 
 async function checkStage6Update() {
   try {
     var res = await fetch('/csr2/stage6-check').then(function(r){ return r.json() })
+    _dataHubUpdates.stage6 = !!res.hasUpdate
+    updateDataHubBadge()
     var dot = document.getElementById('stage6-update-dot')
-    if (dot) dot.style.display = res.hasUpdate ? 'inline-block' : 'none'
+    if (dot) dot.style.display = _dataHubUpdates.stage6 ? 'inline-block' : 'none'
   } catch {}
 }
 
@@ -4879,6 +5013,10 @@ function openEditNsb(packId) {
   var dupChk = document.getElementById('ansb-allow-dup')
   if (dupChk) dupChk.checked = false
   hideNotice('ansb-notice')
+  var svEl = document.getElementById('ansb-save-version')
+  if (svEl) svEl.value = ''
+  var gp = document.getElementById('ansb-grab-picker')
+  if (gp) gp.style.display = 'none'
   renderSelectedCars()
   _currencyOverride = {}
   _currencyOverrideSnapshot = null
@@ -5819,6 +5957,46 @@ function readNsbFile(file, which) {
   reader.readAsArrayBuffer(file)
 }
 
+async function autoGrabNsb() {
+  if (!_csr2GrabFolder) {
+    showNotice('ansb-notice', 'error', 'No grab folder set — configure it in CSR2 Settings first.')
+    return
+  }
+  var res = await fetch('/csr2/list-nsb-files').then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
+  if (!res.files || res.files.length === 0) { showNotice('ansb-notice', 'error', 'No .nsb files found in grab folder.'); return }
+  if (res.files.length === 1) { loadGrabbedNsb(res.files[0].name, res.files[0].mtime); return }
+  var list = document.getElementById('ansb-grab-list')
+  list.innerHTML = res.files.map(function(f) {
+    var d = new Date(f.mtime)
+    var dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    return '<div onclick="loadGrabbedNsb(' + JSON.stringify(f.name) + ',' + JSON.stringify(f.mtime) + ')" style="padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background=\\'var(--surf3)\\'" onmouseout="this.style.background=\\'\\'">'
+      + '<span style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' + escH(f.name) + '</span>'
+      + '<span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:10px">' + escH(dateStr) + '</span>'
+      + '</div>'
+  }).join('')
+  document.getElementById('ansb-grab-picker').style.display = ''
+}
+
+async function loadGrabbedNsb(filename, mtime) {
+  document.getElementById('ansb-grab-picker').style.display = 'none'
+  var res = await fetch('/csr2/grab-nsb-file?name=' + encodeURIComponent(filename)).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('ansb-notice', 'error', res.error); return }
+  _nsbData.ansb = { base64: res.base64, name: res.name }
+  var nameEl = document.getElementById('ansb-file-name')
+  var d = new Date(mtime)
+  var dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  nameEl.innerHTML = '<svg width="13" height="15" viewBox="0 0 13 15" fill="none" style="flex-shrink:0;margin-right:8px;opacity:.85" xmlns="http://www.w3.org/2000/svg"><path d="M2 1h6l3 3v10H2V1z" fill="rgba(126,101,81,.25)" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 1v3h3" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="7" x2="9" y2="7" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/><line x1="4" y1="9.5" x2="8" y2="9.5" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">' + escH(res.name) + '</span><span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px">' + escH(dateStr) + '</span><button onclick="event.stopPropagation();clearNsbFile(\\'ansb\\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 10px;flex-shrink:0;display:flex;align-items:center" title="Remove">×</button>'
+  nameEl.style.display = 'flex'
+  nameEl.style.alignItems = 'center'
+  var labelEl = document.getElementById('ansb-drop').querySelector('.file-drop-label')
+  if (labelEl) labelEl.style.display = 'none'
+  document.getElementById('ansb-drop').classList.add('has-file')
+  loadNsbComparison()
+  document.getElementById('ansb-apply-btn').disabled = false
+  _updateApplyTabsNsbState(true)
+}
+
 function clearNsbFile(which) {
   _nsbData[which] = null
   var nameEl = document.getElementById(which + '-file-name')
@@ -6142,7 +6320,8 @@ async function applyNsb() {
     currencyOverride: Object.keys(_currencyOverride).length > 0 ? _currencyOverride : undefined,
     selectedLegends: _selectedLegends.length > 0 ? _selectedLegends.map(function(l){ return l.crdb }) : undefined,
     selectedBrands: (_fusionS6Choice !== 'stage6' && _selectedBrands.length > 0) ? _selectedBrands.map(function(b){ return b.id }) : undefined,
-    selectedS6Cars: (_fusionS6Choice !== 'fusions' && _selectedS6Cars.length > 0) ? _selectedS6Cars.map(function(c){ return c.crdb }) : undefined
+    selectedS6Cars: (_fusionS6Choice !== 'fusions' && _selectedS6Cars.length > 0) ? _selectedS6Cars.map(function(c){ return c.crdb }) : undefined,
+    setPrvr: (document.getElementById('ansb-save-version').value.trim() || null)
   }
   if (_selectedCars.length > 0 && (_partialSelectionEnabled || (_applyPackRef && _applyPackRef.cars && _applyPackRef.cars.carMode === 'customizable'))) {
     payload.selectedCars = _selectedCars
@@ -7099,15 +7278,25 @@ async function confirmSaveToFolder() {
 
 function openCsr2Settings() {
   document.getElementById('csr2-folder-input').value = _csr2OutputFolder || ''
+  document.getElementById('csr2-grab-folder-input').value = _csr2GrabFolder || ''
   hideNotice('csr2-settings-notice')
   showModal('csr2-settings-modal')
 }
 
+async function browseFolder(inputId) {
+  var res = await fetch('/csr2/browse-folder', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error || !res.folder) return
+  document.getElementById(inputId).value = res.folder
+}
+
 async function saveCsr2Settings() {
   var folder = document.getElementById('csr2-folder-input').value.trim()
+  var grabFolder = document.getElementById('csr2-grab-folder-input').value.trim()
   _csr2OutputFolder = folder
+  _csr2GrabFolder = grabFolder
   var cfg = await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} })
   cfg.csr2OutputFolder = folder
+  cfg.csr2GrabFolder = grabFolder
   await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) }).catch(function(){})
   showNotice('csr2-settings-notice', 'success', 'Saved!')
   setTimeout(function(){ hideModal('csr2-settings-modal') }, 700)
@@ -7888,6 +8077,59 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // CSR2 browse folder dialog
+  if (req.method === 'POST' && pathname === '/csr2/browse-folder') {
+    const tmpPs1 = path.join(os.tmpdir(), 'browse-folder-' + Date.now() + '.ps1')
+    const ps = [
+      'Add-Type -AssemblyName System.Windows.Forms',
+      '$d = New-Object System.Windows.Forms.FolderBrowserDialog',
+      '$d.Description = "Select folder"',
+      '$d.ShowNewFolderButton = $true',
+      '$null = $d.ShowDialog()',
+      'Write-Output $d.SelectedPath'
+    ].join('\r\n')
+    fs.writeFileSync(tmpPs1, ps, 'utf8')
+    exec(`powershell -NoProfile -ExecutionPolicy Bypass -File "${tmpPs1}"`, (err, stdout) => {
+      try { fs.unlinkSync(tmpPs1) } catch {}
+      const folder = (stdout || '').trim()
+      return json(res, 200, { folder: folder || '' })
+    })
+    return
+  }
+
+  // CSR2 list nsb files in grab folder
+  if (req.method === 'GET' && pathname === '/csr2/list-nsb-files') {
+    const grabFolder = (loadConfig().csr2GrabFolder || '')
+    if (!grabFolder) return json(res, 400, { error: 'No grab folder configured' })
+    try {
+      const entries = fs.readdirSync(grabFolder)
+      const files = entries
+        .map(f => ({ name: f, stat: fs.statSync(path.join(grabFolder, f)) }))
+        .filter(({ name, stat }) => stat.isFile() && name.toLowerCase() === 'nsb')
+        .map(({ name, stat }) => ({ name, mtime: stat.mtime.toISOString() }))
+        .sort((a, b) => new Date(b.mtime) - new Date(a.mtime))
+      return json(res, 200, { files })
+    } catch (e) {
+      return json(res, 500, { error: 'Could not read folder: ' + e.message })
+    }
+  }
+
+  // CSR2 grab a specific nsb file from grab folder
+  if (req.method === 'GET' && pathname === '/csr2/grab-nsb-file') {
+    const grabFolder = (loadConfig().csr2GrabFolder || '')
+    if (!grabFolder) return json(res, 400, { error: 'No grab folder configured' })
+    const name = new URL(req.url, 'http://localhost').searchParams.get('name')
+    if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) return json(res, 400, { error: 'Invalid filename' })
+    try {
+      const filePath = path.join(grabFolder, name)
+      const buf = fs.readFileSync(filePath)
+      try { csr2ReadSave(buf) } catch (e) { return json(res, 400, { error: 'Not a valid CSR2 save file: ' + e.message }) }
+      return json(res, 200, { base64: buf.toString('base64'), name })
+    } catch (e) {
+      return json(res, 500, { error: 'Could not read file: ' + e.message })
+    }
+  }
+
   // CSR2 apply-nsb — starts async job, returns jobId immediately
   if (req.method === 'POST' && pathname === '/csr2/apply-nsb') {
     const body = await readBody(req)
@@ -7912,6 +8154,7 @@ const server = http.createServer(async (req, res) => {
           selectedS6Cars: body.selectedS6Cars || null,
         }
         const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false, jobId, opts)
+        if (body.setPrvr) { const v = String(body.setPrvr); data.prvr = v; data.adpvr = v }
         const out = csr2WriteSave(data)
         applyJobs.get(jobId).done = true
         applyJobs.get(jobId).result = { resultBase64: out.toString('base64'), note: note || null }
@@ -8468,15 +8711,24 @@ const server = http.createServer(async (req, res) => {
 
 let lastHeartbeat = Date.now()
 
+server.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    log(`Port ${PORT} in use, retrying in 800ms...`)
+    setTimeout(() => server.listen(PORT, '127.0.0.1'), 800)
+  }
+})
+
 server.listen(PORT, '127.0.0.1', () => {
   log(`AIO Tool v${VERSION} listening on http://localhost:${PORT}`)
   const appUrl = `http://localhost:${PORT}`
-  exec(`start msedge --app="${appUrl}" --window-size=1280,820`, (err) => {
-    if (err) {
-      log('Edge app mode failed, opening default browser: ' + err.message)
-      exec(`start "" "${appUrl}"`)
-    }
-  })
+  if (!process.env.DEV) {
+    exec(`start msedge --app="${appUrl}" --window-size=1280,820`, (err) => {
+      if (err) {
+        log('Edge app mode failed, opening default browser: ' + err.message)
+        exec(`start "" "${appUrl}"`)
+      }
+    })
+  }
   // Cache LCU status every 3s so /ping can return it instantly
   setInterval(async () => { try { _lcuOnline = await pingLcu() } catch { _lcuOnline = false } }, 3000)
   // Fallback: if no heartbeat or /shutdown for 60s after grace, exit (catches crash/force-close)
