@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.29'
+const VERSION = '0.7.30'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -4886,6 +4886,14 @@ async function dhLoadStatus(key) {
 }
 
 async function dhUpdate(key, silent) {
+  // When triggered silently by auto-update, skip if there's nothing to update
+  if (silent) {
+    try {
+      var checkUrl = key === 'cars' ? '/csr2/cars-check' : key === 'fusions' ? '/csr2/fusions-check' : '/csr2/stage6-check'
+      var chk = await fetch(checkUrl).then(function(r){ return r.json() })
+      if (!chk.hasUpdate) return
+    } catch (e) { return }
+  }
   var statusEl = document.getElementById('dh-' + key + '-status')
   var barEl = document.getElementById('dh-' + key + '-bar')
   var barFill = document.getElementById('dh-' + key + '-bar-fill')
@@ -8252,10 +8260,14 @@ const server = http.createServer(async (req, res) => {
       const commit = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits/Everything')
       const sha = commit.sha || ''
 
-      log('[csr2/cars-update] Fetching file tree...')
-      const treeData = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/Everything?recursive=1')
-      const tree = treeData.tree || []
-      log('[csr2/cars-update] Tree: ' + tree.length + ' items, truncated=' + treeData.truncated)
+      log('[csr2/cars-update] Fetching root tree...')
+      const rootTree = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/Everything')
+      const carsEntry = (rootTree.tree || []).find(e => e.path === '1.Cars' && e.type === 'tree')
+      if (!carsEntry) throw new Error('Could not find 1.Cars directory in repo tree')
+      log('[csr2/cars-update] Fetching 1.Cars subtree (sha=' + carsEntry.sha + ')...')
+      const carsTreeData = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/' + carsEntry.sha + '?recursive=1')
+      const tree = (carsTreeData.tree || []).map(e => ({ ...e, path: '1.Cars/' + e.path }))
+      log('[csr2/cars-update] 1.Cars tree: ' + tree.length + ' items, truncated=' + carsTreeData.truncated)
       const samplePaths = tree.slice(0, 10).map(x => x.path).join(' | ')
       if (samplePaths) log('[csr2/cars-update] Sample paths: ' + samplePaths)
 
