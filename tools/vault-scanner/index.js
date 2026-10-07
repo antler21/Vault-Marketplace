@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.30'
+const VERSION = '0.7.31'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1128,6 +1128,52 @@ function fetchGithubApi(apiPath) {
   })
 }
 
+// Traverse 1.Cars/ level by level to avoid GitHub's 100K-item recursive tree limit.
+// Non-recursive down to star-type dirs (Gold Stars/Purple Stars/Legends), then recursive
+// per star-type (each is only brand→model→color, a few thousand items at most).
+async function collectCarFiles(carsTreeSha) {
+  const base = '/repos/Nitro4CSR/CSR2-DataBase/git/trees/'
+  const carsLevel = await fetchGithubApi(base + carsTreeSha)
+  const starTypeInfos = [] // { sha, prefix }
+
+  for (const e1 of (carsLevel.tree || [])) {
+    if (e1.type !== 'tree') continue
+    const p1 = '1.Cars/' + e1.path
+    if (e1.path === '1.Stock' || e1.path === '2.Maxed') {
+      const level2 = await fetchGithubApi(base + e1.sha)
+      for (const e2 of (level2.tree || [])) {
+        if (e2.type === 'tree') starTypeInfos.push({ sha: e2.sha, prefix: p1 + '/' + e2.path })
+      }
+    } else {
+      // Update X.Y.Z subdir — one more level before stock/maxed
+      const level2 = await fetchGithubApi(base + e1.sha)
+      for (const e2 of (level2.tree || [])) {
+        if (e2.type !== 'tree' || (e2.path !== '1.Stock' && e2.path !== '2.Maxed')) continue
+        const p2 = p1 + '/' + e2.path
+        const level3 = await fetchGithubApi(base + e2.sha)
+        for (const e3 of (level3.tree || [])) {
+          if (e3.type === 'tree') starTypeInfos.push({ sha: e3.sha, prefix: p2 + '/' + e3.path })
+        }
+      }
+    }
+  }
+
+  log('[collectCarFiles] Fetching ' + starTypeInfos.length + ' star-type subtrees...')
+  const allFiles = []
+  // Fetch in batches of 5 to avoid flooding the API
+  for (let i = 0; i < starTypeInfos.length; i += 5) {
+    const batch = await Promise.all(
+      starTypeInfos.slice(i, i + 5).map(async ({ sha, prefix }) => {
+        const sub = await fetchGithubApi(base + sha + '?recursive=1')
+        return (sub.tree || []).map(e => ({ ...e, path: prefix + '/' + e.path }))
+      })
+    )
+    for (const files of batch) allFiles.push(...files)
+  }
+  log('[collectCarFiles] Total items collected: ' + allFiles.length)
+  return allFiles
+}
+
 function fetchRawGithub(rawUrl) {
   return new Promise((resolve, reject) => {
     const get = (url) => {
@@ -1906,7 +1952,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div class="main-hdr">
         <span class="main-title">CSR2 Services</span>
         <div class="spacer"></div>
-        <button class="btn btn-secondary btn-sm" id="data-hub-btn" onclick="openDataHub()" style="position:relative;display:flex;align-items:center;gap:5px">⬡ Data Hub<span id="data-hub-badge" style="display:none;position:absolute;top:-7px;right:-8px;background:#ef4444;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:10px;font-weight:700;align-items:center;justify-content:center;line-height:1;padding:0 2px;box-sizing:border-box"></span></button>
+        <button class="btn btn-secondary btn-sm" id="data-hub-btn" onclick="openDataHub()" style="position:relative;display:flex;align-items:center;gap:5px">⬡ Data Hub<span id="data-hub-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;min-width:11px;height:11px;font-size:6px;font-weight:700;align-items:center;justify-content:center;line-height:1;padding:0 2px;box-sizing:border-box"></span></button>
         <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
         <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
         <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
@@ -8264,11 +8310,9 @@ const server = http.createServer(async (req, res) => {
       const rootTree = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/Everything')
       const carsEntry = (rootTree.tree || []).find(e => e.path === '1.Cars' && e.type === 'tree')
       if (!carsEntry) throw new Error('Could not find 1.Cars directory in repo tree')
-      log('[csr2/cars-update] Fetching 1.Cars subtree (sha=' + carsEntry.sha + ')...')
-      const carsTreeData = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/git/trees/' + carsEntry.sha + '?recursive=1')
-      const tree = (carsTreeData.tree || []).map(e => ({ ...e, path: '1.Cars/' + e.path }))
-      log('[csr2/cars-update] 1.Cars tree: ' + tree.length + ' items, truncated=' + carsTreeData.truncated)
-      const samplePaths = tree.slice(0, 10).map(x => x.path).join(' | ')
+      log('[csr2/cars-update] Traversing 1.Cars by star-type to avoid 100K limit...')
+      const tree = await collectCarFiles(carsEntry.sha)
+      const samplePaths = tree.slice(0, 5).map(x => x.path).join(' | ')
       if (samplePaths) log('[csr2/cars-update] Sample paths: ' + samplePaths)
 
       const enc = (s) => encodeURIComponent(s)
