@@ -33,6 +33,16 @@ const CSR2_MAXING_FILE        = path.join(DATA_DIR, 'csr2-maxing.json')
 const INT32_MAX = 2147483647
 const applyJobs = new Map()
 
+// 1-hour cache for GitHub update-check results so repeated Data Hub opens don't burn the rate limit
+const _checkCache = {}
+const CHECK_CACHE_TTL = 60 * 60 * 1000
+function getCached(key) {
+  const e = _checkCache[key]
+  return (e && (Date.now() - e.ts) < CHECK_CACHE_TTL) ? e.result : null
+}
+function setCache(key, result) { _checkCache[key] = { result, ts: Date.now() } }
+function clearCache(key) { delete _checkCache[key] }
+
 const LEGEND_CARS = [
   { crdb: 'Ferrari_250GTOClassic_1962',            name: 'Ferrari 250 GTO',                amount: 14800 },
   { crdb: 'AstonMartin_DB5Classic_1964',            name: 'Aston Martin DB5',               amount: 17400 },
@@ -8200,6 +8210,8 @@ const server = http.createServer(async (req, res) => {
 
   // CSR2 car database — check if GitHub has newer version (commit SHA comparison)
   if (req.method === 'GET' && pathname === '/csr2/cars-check') {
+    const cached = getCached('cars-check')
+    if (cached) { log('[csr2/cars-check] returning cached result'); return json(res, 200, cached) }
     try {
       const commits = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits?path=' + encodeURIComponent('1.Cars/#AllCarCRDBs.txt') + '&per_page=1')
       const latestSha = commits && commits[0] ? commits[0].sha : null
@@ -8207,7 +8219,9 @@ const server = http.createServer(async (req, res) => {
       const carCount = loadCsr2Cars().length
       const hasUpdate = !!latestSha && latestSha !== (stored.carCrdbsCommit || '')
       log('[csr2/cars-check] stored=' + (stored.carCrdbsCommit || '') + ' latest=' + latestSha + ' hasUpdate=' + hasUpdate)
-      return json(res, 200, { hasUpdate, carCount })
+      const result = { hasUpdate, carCount }
+      setCache('cars-check', result)
+      return json(res, 200, result)
     } catch (e) {
       log('[csr2/cars-check] Error: ' + e.message)
       return json(res, 200, { hasUpdate: false, error: e.message, carCount: loadCsr2Cars().length })
@@ -8216,12 +8230,16 @@ const server = http.createServer(async (req, res) => {
 
   // Fusion brand list — check if GitHub has newer version (commit SHA comparison)
   if (req.method === 'GET' && pathname === '/csr2/fusion-brands-check') {
+    const cached = getCached('fusion-brands-check')
+    if (cached) { log('[csr2/fusion-brands-check] returning cached result'); return json(res, 200, cached) }
     try {
       const commits = await fetchGithubApi('/repos/Nitro4CSR/CSR2-DataBase/commits?path=' + encodeURIComponent('3.Fusions/##AllFusions.txt') + '&per_page=1')
       const latestSha = commits && commits[0] ? commits[0].sha : null
       const stored = loadFusionBrandsCommit()
       const hasUpdate = !!latestSha && latestSha !== (stored.sha || '')
-      return json(res, 200, { hasUpdate })
+      const result = { hasUpdate }
+      setCache('fusion-brands-check', result)
+      return json(res, 200, result)
     } catch (e) {
       return json(res, 200, { hasUpdate: false, error: e.message })
     }
@@ -8344,6 +8362,7 @@ const server = http.createServer(async (req, res) => {
         else saveCsr2Sha({ sha, crdbsEtag: crdbsEtag || '', updatedAt: new Date().toISOString() })
       } catch { saveCsr2Sha({ sha, crdbsEtag: crdbsEtag || '', updatedAt: new Date().toISOString() }) }
       log('[csr2/cars-update] Done — ' + result.length + ' cars saved, crdbsEtag=' + crdbsEtag)
+      clearCache('cars-check')
       return json(res, 200, { ok: true, count: result.length })
     } catch (e) {
       log('[csr2/cars-update] Error: ' + e.message)
@@ -8360,6 +8379,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/csr2/stage6-check') {
+    const cached = getCached('stage6-check')
+    if (cached) { log('[csr2/stage6-check] returning cached result'); return json(res, 200, cached) }
     try {
       const stored = loadStage6Sha()
       const cfg = loadConfig()
@@ -8372,7 +8393,9 @@ const server = http.createServer(async (req, res) => {
           resolve(r.headers['etag'] || r.headers['last-modified'] || '')
         }).on('error', () => resolve('')).end()
       })
-      return json(res, 200, { hasUpdate: headSha !== '' && headSha !== stored.sha })
+      const result = { hasUpdate: headSha !== '' && headSha !== stored.sha }
+      setCache('stage6-check', result)
+      return json(res, 200, result)
     } catch (e) {
       return json(res, 200, { hasUpdate: false, error: e.message })
     }
@@ -8393,6 +8416,7 @@ const server = http.createServer(async (req, res) => {
       saveStage6Sha({ sha: headSha || crypto.createHash('sha1').update(txt).digest('hex'), url: STAGE6_URL, fetchedAt: Date.now() })
       const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
       log('[csr2/stage6-update] Saved ' + count + ' entries (headSha=' + headSha + ')')
+      clearCache('stage6-check')
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/stage6-update] Error: ' + e.message)
@@ -8409,6 +8433,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/csr2/fusions-check') {
+    const cached = getCached('fusions-check')
+    if (cached) { log('[csr2/fusions-check] returning cached result'); return json(res, 200, cached) }
     try {
       const stored = loadFusionsSha()
       const cfg = loadConfig()
@@ -8422,7 +8448,9 @@ const server = http.createServer(async (req, res) => {
           resolve(r.headers['etag'] || r.headers['last-modified'] || '')
         }).on('error', () => resolve('')).end()
       })
-      return json(res, 200, { hasUpdate: headSha !== '' && headSha !== stored.sha })
+      const result = { hasUpdate: headSha !== '' && headSha !== stored.sha }
+      setCache('fusions-check', result)
+      return json(res, 200, result)
     } catch (e) {
       return json(res, 200, { hasUpdate: false, error: e.message })
     }
@@ -8443,6 +8471,7 @@ const server = http.createServer(async (req, res) => {
       saveFusionsSha({ sha: headSha || crypto.createHash('sha1').update(txt).digest('hex'), url: FUSIONS_URL, fetchedAt: Date.now() })
       const count = Array.isArray(parsed) ? parsed.filter(e => typeof e === 'object').length : Object.keys(parsed).length
       log('[csr2/fusions-update] Saved ' + count + ' entries (headSha=' + headSha + ')')
+      clearCache('fusions-check')
       return json(res, 200, { ok: true, count })
     } catch (e) {
       log('[csr2/fusions-update] Error: ' + e.message)
@@ -8500,6 +8529,7 @@ const server = http.createServer(async (req, res) => {
         const commits = await fetchGithubApi('/repos/' + REPO + '/commits?path=' + encodeURIComponent('3.Fusions/##AllFusions.txt') + '&per_page=1')
         if (commits && commits[0]) saveFusionBrandsCommit({ sha: commits[0].sha, date: commits[0].commit && commits[0].commit.committer ? commits[0].commit.committer.date : null })
       } catch {}
+      clearCache('fusion-brands-check')
       return json(res, 200, { ok: true, count: brands.length })
     } catch (e) {
       log('[csr2/fusion-brands-update] Error: ' + e.message)
