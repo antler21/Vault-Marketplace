@@ -1664,7 +1664,10 @@ header{display:flex;align-items:center;padding:0 16px;height:52px;border-bottom:
 .icon-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;transition:color .15s,background .15s}
 .icon-btn:hover{color:var(--text);background:var(--surf2)}
 .app-body{display:flex;flex:1;overflow:hidden}
-aside{width:176px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;padding:8px 0}
+aside{width:176px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.28s cubic-bezier(.4,0,.2,1),border-color 0.28s}
+aside.sb-collapsed{width:0;border-right-color:transparent}
+.sidebar-inner{width:176px;min-height:100%;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;flex-shrink:0;transition:opacity 0.18s ease}
+aside.sb-collapsed .sidebar-inner{opacity:0;pointer-events:none}
 .sidebar-label{padding:8px 14px 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
 .sidebar-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;color:var(--muted);font-size:13px;border-left:3px solid transparent;transition:background .12s}
 .sidebar-item:hover{background:var(--surf2);color:var(--text)}
@@ -1911,6 +1914,9 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <body>
 
 <header>
+  <button class="icon-btn" id="sb-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2.5"/><line x1="5.5" y1="1" x2="5.5" y2="15"/></svg>
+  </button>
   <span class="logo">AIO Tool</span>
   <span class="badge">v${VERSION}</span>
   <div class="spacer"></div>
@@ -1923,8 +1929,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 </header>
 
 <div class="app-body">
-  <aside>
-    <div id="sidebar-content"><div class="sidebar-item" style="font-size:12px;opacity:.5">Loading...</div></div>
+  <aside id="sidebar">
+    <div class="sidebar-inner">
+      <div id="sidebar-content"><div class="sidebar-item" style="font-size:12px;opacity:.5">Loading...</div></div>
+    </div>
   </aside>
   <main>
     <!-- Accounts panel -->
@@ -2996,6 +3004,12 @@ var _pendingCarPackId = null, _fusionS6Choice = null
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
+  try {
+    if (localStorage.getItem('sb-collapsed') === '1') {
+      var aside = document.getElementById('sidebar')
+      if (aside) { aside.style.transition = 'none'; aside.classList.add('sb-collapsed'); requestAnimationFrame(function(){ aside.style.transition = '' }) }
+    }
+  } catch(e) {}
   var cfg = await apiFetch('/local/config', {}).catch(function(){ return {} })
   _url = (cfg.webappUrl || '').replace(/\\/$/, '')
   _csr2OutputFolder = cfg.csr2OutputFolder || ''
@@ -3856,6 +3870,12 @@ async function deleteSel() {
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
+
+function toggleSidebar() {
+  var aside = document.getElementById('sidebar')
+  var collapsed = aside.classList.toggle('sb-collapsed')
+  try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '') } catch(e) {}
+}
 
 function openSettings() {
   document.getElementById('cfg-url').value = _url
