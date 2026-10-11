@@ -1699,9 +1699,6 @@ main{flex:1;overflow-y:auto;padding:20px}
 .card-corner-btn{background:rgba(0,0,0,.6);border:none;border-radius:5px;color:#fff;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1;transition:background .12s;backdrop-filter:blur(2px)}
 .card-corner-btn.ck-edit:hover{background:var(--accent)}
 .card-corner-btn.ck-del:hover{background:#ef4444}
-.card.dnd-dragging{opacity:.35;transform:none!important}
-.card.dnd-before{box-shadow:-3px 0 0 0 var(--accent)!important}
-.card.dnd-after{box-shadow:3px 0 0 0 var(--accent)!important}
 .ov-import{background:var(--accent);color:var(--text)}
 .ov-preview{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
 .ov-remove{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.4)}
@@ -2931,6 +2928,7 @@ var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection =
 var _packs = [], _nsbData = { ansb: null, unban: null, ensb: null }, _selectedCars = []
 var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
+var _pkDrag = null
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _csr2GrabFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _lastEditedNsb = null // { folder, filename } — session-only, cleared on app restart
@@ -3951,7 +3949,7 @@ function renderPacks() {
   var html = ''
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
-    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" draggable="true" onclick="openEditNsb(this.dataset.pid)" style="cursor:pointer">'
+    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:grab">'
     html += '<div class="card-thumb">' + thumb + '</div>'
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-corner-btns">'
@@ -3966,44 +3964,111 @@ function renderPacks() {
 function initPacksDnd() {
   var grid = document.getElementById('packs-grid')
   if (!grid) return
-  var cards = Array.from(grid.querySelectorAll('.card[data-pid]'))
-  var dragSrc = null, dropBefore = true
-  cards.forEach(function(card) {
-    card.addEventListener('dragstart', function(e) {
-      dragSrc = card
-      e.dataTransfer.effectAllowed = 'move'
-      setTimeout(function(){ card.classList.add('dnd-dragging') }, 0)
-    })
-    card.addEventListener('dragend', function() {
-      card.classList.remove('dnd-dragging')
-      cards.forEach(function(c) { c.classList.remove('dnd-before', 'dnd-after') })
-      dragSrc = null
-    })
-    card.addEventListener('dragover', function(e) {
-      e.preventDefault()
-      if (!dragSrc || card === dragSrc) return
-      var rect = card.getBoundingClientRect()
-      dropBefore = e.clientX < rect.left + rect.width / 2
-      cards.forEach(function(c) { c.classList.remove('dnd-before', 'dnd-after') })
-      card.classList.add(dropBefore ? 'dnd-before' : 'dnd-after')
-    })
-    card.addEventListener('dragleave', function(e) {
-      if (!card.contains(e.relatedTarget)) card.classList.remove('dnd-before', 'dnd-after')
-    })
-    card.addEventListener('drop', function(e) {
-      e.preventDefault()
-      if (!dragSrc || card === dragSrc) return
-      cards.forEach(function(c) { c.classList.remove('dnd-before', 'dnd-after') })
-      var srcId = dragSrc.dataset.pid, dstId = card.dataset.pid
-      var srcIdx = _packs.findIndex(function(p){ return p.id === srcId })
-      if (srcIdx === -1) return
-      var item = _packs.splice(srcIdx, 1)[0]
-      var dstIdx = _packs.findIndex(function(p){ return p.id === dstId })
-      _packs.splice(dstIdx === -1 ? _packs.length : (dropBefore ? dstIdx : dstIdx + 1), 0, item)
-      renderPacks()
-      savePacksOrder()
-    })
+  grid.querySelectorAll('.card[data-pid]').forEach(function(card) {
+    card.addEventListener('pointerdown', startPackDrag)
   })
+}
+
+function startPackDrag(e) {
+  if (e.button !== 0 || e.target.closest('.card-corner-btn')) return
+  e.preventDefault()
+  var card = e.currentTarget
+  var grid = document.getElementById('packs-grid')
+  var rect = card.getBoundingClientRect()
+  var ghost = card.cloneNode(true)
+  var cb = ghost.querySelector('.card-corner-btns')
+  if (cb) cb.remove()
+  ghost.removeAttribute('id')
+  ghost.style.position = 'fixed'
+  ghost.style.left = rect.left + 'px'
+  ghost.style.top = rect.top + 'px'
+  ghost.style.width = rect.width + 'px'
+  ghost.style.height = rect.height + 'px'
+  ghost.style.margin = '0'
+  ghost.style.pointerEvents = 'none'
+  ghost.style.zIndex = '9999'
+  ghost.style.transform = 'scale(1)'
+  ghost.style.boxShadow = '0 2px 8px rgba(0,0,0,.25)'
+  ghost.style.transition = 'transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.22s ease'
+  document.body.appendChild(ghost)
+  requestAnimationFrame(function() {
+    ghost.style.transform = 'scale(1.09)'
+    ghost.style.boxShadow = '0 24px 60px rgba(0,0,0,.55), 0 8px 20px rgba(0,0,0,.3)'
+  })
+  card.style.visibility = 'hidden'
+  card.style.pointerEvents = 'none'
+  _pkDrag = { card: card, ghost: ghost, grid: grid, srcPid: card.dataset.pid, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top, insertKey: null }
+  document.addEventListener('pointermove', onPkMove)
+  document.addEventListener('pointerup', onPkUp)
+  document.addEventListener('pointercancel', onPkUp)
+}
+
+function findPkTarget(cx, cy) {
+  var items = Array.from(_pkDrag.grid.querySelectorAll('.card[data-pid]')).filter(function(c) { return c.dataset.pid !== _pkDrag.srcPid })
+  if (!items.length) return { el: null, before: false }
+  var best = null, bestD = Infinity
+  items.forEach(function(c) {
+    var r = c.getBoundingClientRect()
+    var d = Math.hypot(cx - (r.left + r.width / 2), cy - (r.top + r.height / 2))
+    if (d < bestD) { bestD = d; best = c }
+  })
+  var br = best.getBoundingClientRect()
+  return { el: best, before: cx <= br.left + br.width / 2 }
+}
+
+function onPkMove(e) {
+  if (!_pkDrag) return
+  var d = _pkDrag
+  d.ghost.style.left = (e.clientX - d.offsetX) + 'px'
+  d.ghost.style.top = (e.clientY - d.offsetY) + 'px'
+  var t = findPkTarget(e.clientX, e.clientY)
+  var key = t.el ? (t.before ? 'b:' + t.el.dataset.pid : 'a:' + t.el.dataset.pid) : 'end'
+  if (key === d.insertKey) return
+  d.insertKey = key
+  var cards = Array.from(d.grid.querySelectorAll('.card[data-pid]'))
+  cards.forEach(function(c) { c.style.transition = 'none'; c.style.transform = '' })
+  var before = new Map()
+  cards.forEach(function(c) { before.set(c.dataset.pid, c.getBoundingClientRect()) })
+  if (!t.el) {
+    d.grid.appendChild(d.card)
+  } else if (t.before) {
+    d.grid.insertBefore(d.card, t.el)
+  } else {
+    d.grid.insertBefore(d.card, t.el.nextSibling || null)
+  }
+  cards.forEach(function(c) {
+    var b = before.get(c.dataset.pid), a = c.getBoundingClientRect()
+    var dx = b.left - a.left, dy = b.top - a.top
+    if (Math.abs(dx) + Math.abs(dy) > 0.5) c.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
+  })
+  requestAnimationFrame(function() {
+    cards.forEach(function(c) { c.style.transition = 'transform 0.2s cubic-bezier(.25,.1,.25,1)'; c.style.transform = '' })
+  })
+}
+
+function onPkUp() {
+  if (!_pkDrag) return
+  document.removeEventListener('pointermove', onPkMove)
+  document.removeEventListener('pointerup', onPkUp)
+  document.removeEventListener('pointercancel', onPkUp)
+  var d = _pkDrag
+  _pkDrag = null
+  Array.from(d.grid.querySelectorAll('.card')).forEach(function(c) { c.style.transition = 'none'; c.style.transform = '' })
+  var fr = d.card.getBoundingClientRect()
+  d.ghost.style.transition = 'left 0.2s cubic-bezier(.25,.1,.25,1), top 0.2s cubic-bezier(.25,.1,.25,1), transform 0.2s cubic-bezier(.25,.1,.25,1.2), box-shadow 0.2s ease'
+  d.ghost.style.left = fr.left + 'px'
+  d.ghost.style.top = fr.top + 'px'
+  d.ghost.style.transform = 'scale(1)'
+  d.ghost.style.boxShadow = '0 2px 6px rgba(0,0,0,.15)'
+  setTimeout(function() {
+    d.ghost.remove()
+    d.card.style.visibility = ''
+    d.card.style.pointerEvents = ''
+    var pids = Array.from(d.grid.querySelectorAll('.card[data-pid]')).map(function(c) { return c.dataset.pid })
+    _packs.sort(function(a, b) { return pids.indexOf(a.id) - pids.indexOf(b.id) })
+    renderPacks()
+    savePacksOrder()
+  }, 220)
 }
 
 async function savePacksOrder() {
