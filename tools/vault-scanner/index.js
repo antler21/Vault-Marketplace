@@ -2520,7 +2520,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <label style="margin-bottom:0">NSB File</label>
         <div style="display:flex;gap:6px">
           <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb('ensb')" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
-          <button id="ensb-last-edit-btn" class="btn btn-secondary btn-sm" onclick="grabLastEditedNsb('ensb')" style="display:none;font-size:11px;padding:3px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
+          <button id="ensb-last-edit-btn" onclick="grabLastEditedNsb('ensb')" style="display:none;font-size:11px;padding:3px 9px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(126,101,81,.2);border:1px solid var(--accent);color:var(--accent);border-radius:6px;cursor:pointer;font-weight:500"></button>
         </div>
       </div>
       <label class="file-drop" id="ensb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ensb')">
@@ -2646,7 +2646,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
           <label style="margin-bottom:0">NSB File</label>
           <div style="display:flex;gap:6px">
             <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb()" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
-            <button id="ansb-last-edit-btn" class="btn btn-secondary btn-sm" onclick="grabLastEditedNsb('ansb')" style="display:none;font-size:11px;padding:3px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
+            <button id="ansb-last-edit-btn" onclick="grabLastEditedNsb('ansb')" style="display:none;font-size:11px;padding:3px 9px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(126,101,81,.2);border:1px solid var(--accent);color:var(--accent);border-radius:6px;cursor:pointer;font-weight:500"></button>
           </div>
         </div>
         <label class="file-drop" id="ansb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
@@ -2940,7 +2940,7 @@ function updateLastEditBtns() {
     var el = document.getElementById(ids[i])
     if (!el) continue
     el.style.display = show ? '' : 'none'
-    el.title = show ? ('Re-grab last edited: ' + _lastEditedNsb.folder + '\\\\' + _lastEditedNsb.filename) : ''
+    el.title = ''
     el.textContent = label
   }
 }
@@ -6540,6 +6540,7 @@ async function openEnsbEditor() {
   var s6Owned = (res.stage6 && res.stage6.owned) || []
   for (var k = 0; k < s6Owned.length; k++) _ensbEditorState.stage6[s6Owned[k].esdb] = s6Owned[k].amount
   _ensbActiveTab = 'currency'
+  hideModal('edit-nsb-modal')
   showModal('ensb-editor-modal')
   renderEnsbLeftPanel()
   switchEnsbTab('currency')
