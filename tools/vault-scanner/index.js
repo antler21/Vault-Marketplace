@@ -4026,9 +4026,10 @@ function onPkMove(e) {
   if (key === d.insertKey) return
   d.insertKey = key
   var cards = Array.from(d.grid.querySelectorAll('.card[data-pid]'))
-  cards.forEach(function(c) { c.style.transition = 'none'; c.style.transform = '' })
+  // Read current visual positions FIRST (captures mid-animation state, no jumps)
   var before = new Map()
   cards.forEach(function(c) { before.set(c.dataset.pid, c.getBoundingClientRect()) })
+  // Move placeholder to new slot
   if (!t.el) {
     d.grid.appendChild(d.card)
   } else if (t.before) {
@@ -4036,13 +4037,26 @@ function onPkMove(e) {
   } else {
     d.grid.insertBefore(d.card, t.el.nextSibling || null)
   }
+  // Cancel in-progress animations and settle to natural positions
+  cards.forEach(function(c) { c.style.transition = 'none'; c.style.transform = '' })
+  // Read natural positions after DOM change (separate pass to avoid mid-set reads)
+  var after = new Map()
+  cards.forEach(function(c) { after.set(c.dataset.pid, c.getBoundingClientRect()) })
+  // Apply inverse transforms so cards appear at their visual before-positions
   cards.forEach(function(c) {
-    var b = before.get(c.dataset.pid), a = c.getBoundingClientRect()
+    var b = before.get(c.dataset.pid), a = after.get(c.dataset.pid)
+    if (!b || !a) return
     var dx = b.left - a.left, dy = b.top - a.top
     if (Math.abs(dx) + Math.abs(dy) > 0.5) c.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
   })
+  // Double rAF: ensures browser commits transforms before transition fires
   requestAnimationFrame(function() {
-    cards.forEach(function(c) { c.style.transition = 'transform 0.2s cubic-bezier(.25,.1,.25,1)'; c.style.transform = '' })
+    requestAnimationFrame(function() {
+      cards.forEach(function(c) {
+        c.style.transition = 'transform 0.3s cubic-bezier(.25,.1,.25,1)'
+        c.style.transform = ''
+      })
+    })
   })
 }
 
