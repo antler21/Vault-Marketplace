@@ -1682,6 +1682,9 @@ aside.sb-collapsed~.sb-toggle-wrap .sb-toggle-btn svg{transform:rotate(180deg)}
 .s-dot.on{background:var(--accent)}
 main{flex:1;overflow-y:auto;padding:20px}
 .main-hdr{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.panel-layout{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,220px));justify-content:center;gap:0}
+.panel-layout>.main-hdr{grid-column:1/-1}
+.panel-layout>.grid{grid-column:1/-1}
 .main-title{font-size:17px;font-weight:600}
 .btn{padding:7px 16px;border-radius:var(--r);border:none;cursor:pointer;font-size:13px;font-weight:500;transition:opacity .15s,background .15s}
 .btn-primary{background:var(--accent);color:var(--text)}
@@ -1969,15 +1972,17 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     </div>
     <!-- CSR2 Services panel -->
     <div id="csr2-panel" style="display:none">
-      <div class="main-hdr">
-        <span class="main-title">CSR2 Services</span>
-        <div class="spacer"></div>
-        <button class="btn btn-secondary btn-sm" id="data-hub-btn" onclick="openDataHub()" style="position:relative;display:flex;align-items:center;gap:5px">⬡ Data Hub<span id="data-hub-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;min-width:11px;height:11px;font-size:6px;font-weight:700;align-items:center;justify-content:center;line-height:1;padding:0 2px;box-sizing:border-box"></span></button>
-        <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
-        <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
-        <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
+      <div class="panel-layout">
+        <div class="main-hdr">
+          <span class="main-title">CSR2 Services</span>
+          <div class="spacer"></div>
+          <button class="btn btn-secondary btn-sm" id="data-hub-btn" onclick="openDataHub()" style="position:relative;display:flex;align-items:center;gap:5px">⬡ Data Hub<span id="data-hub-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;min-width:11px;height:11px;font-size:6px;font-weight:700;align-items:center;justify-content:center;line-height:1;padding:0 2px;box-sizing:border-box"></span></button>
+          <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
+          <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
+          <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
+        </div>
+        <div class="grid" id="packs-grid"></div>
       </div>
-      <div class="grid" id="packs-grid"></div>
     </div>
   </main>
 </div>
