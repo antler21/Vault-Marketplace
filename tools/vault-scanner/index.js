@@ -1664,7 +1664,7 @@ header{display:flex;align-items:center;padding:0 16px;height:52px;border-bottom:
 .icon-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;transition:color .15s,background .15s}
 .icon-btn:hover{color:var(--text);background:var(--surf2)}
 .app-body{display:flex;flex:1;overflow:hidden}
-aside{width:176px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.28s cubic-bezier(.4,0,.2,1),border-color 0.28s}
+aside{width:210px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.28s cubic-bezier(.4,0,.2,1),border-color 0.28s}
 aside.sb-collapsed{width:64px}
 .sidebar-inner{width:100%;min-height:100%;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;flex-shrink:0}
 .cat-icon{display:none;font-size:15px;line-height:1}
@@ -1933,10 +1933,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   <span class="logo">AIO Tool</span>
   <span class="badge">v${VERSION}</span>
   <div class="spacer"></div>
-  <button class="icon-btn" onclick="toggleDebug()" title="Debug logs">
+  <button class="icon-btn" onclick="toggleDebug()">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
   </button>
-  <button class="icon-btn" onclick="openSettings()" title="Settings">
+  <button class="icon-btn" onclick="openSettings()">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
   </button>
 </header>
@@ -1948,7 +1948,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     </div>
   </aside>
   <div class="sb-toggle-wrap">
-    <button class="sb-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar">
+    <button class="sb-toggle-btn" onclick="toggleSidebar()">
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,1 2,5 6,9"/></svg>
     </button>
   </div>
@@ -2146,7 +2146,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <button class="cp-tab" id="cp-tab-fusions" onclick="cpSwitchTab('fusions')" style="display:none">Fusions</button>
         <button class="cp-tab" id="cp-tab-stage6" onclick="cpSwitchTab('stage6')" style="display:none">Stage 6</button>
       </div>
-      <button class="cp-hdr-close" onclick="confirmClosePack()" title="Close">✕</button>
+      <button class="cp-hdr-close" onclick="confirmClosePack()">✕</button>
     </div>
     <div class="cp-divider"></div>
 
@@ -2418,7 +2418,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <div style="font-size:15px;font-weight:600" id="cpp-modal-title">Create Car Pack</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px" id="cpp-subtitle">Select cars to include</div>
       </div>
-      <button class="cp-hdr-close" onclick="closeCreateCarPack()" title="Close">✕</button>
+      <button class="cp-hdr-close" onclick="closeCreateCarPack()">✕</button>
     </div>
     <div class="cp-divider"></div>
     <div class="cpp-body">
@@ -2547,7 +2547,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <label style="margin-bottom:0">NSB File</label>
         <div style="display:flex;gap:6px">
-          <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb('ensb')" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+          <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb('ensb')" style="font-size:11px;padding:3px 10px">⚡ Auto Grab</button>
           <button id="ensb-last-edit-btn" onclick="grabLastEditedNsb('ensb')" style="display:none;font-size:11px;padding:3px 9px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(126,101,81,.2);border:1px solid var(--accent);color:var(--accent);border-radius:6px;cursor:pointer;font-weight:500"></button>
         </div>
       </div>
@@ -2587,7 +2587,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <button class="ensb-full-tab" id="ensb-tab-legends" onclick="switchEnsbTab('legends')">⭐ Legends</button>
         <button class="ensb-full-tab" id="ensb-tab-fusions" onclick="switchEnsbTab('fusions')">⚗️ Fusions</button>
         <button class="ensb-full-tab" id="ensb-tab-stage6" onclick="switchEnsbTab('stage6')">6️⃣ Stage 6</button>
-        <button onclick="hideModal('ensb-editor-modal')" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:0 4px;line-height:1;align-self:center" title="Close">✕</button>
+        <button onclick="hideModal('ensb-editor-modal')" style="margin-left:auto;background:none;border:none;color:var(--muted);cursor:pointer;font-size:20px;padding:0 4px;line-height:1;align-self:center">✕</button>
       </div>
       <!-- Tab content -->
       <div id="ensb-tab-content" style="flex:1;overflow-y:auto;padding:18px 20px"></div>
@@ -2640,7 +2640,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <button class="cp-tab" id="ap-tab-fusions" onclick="apSwitchTab('fusions')" style="display:none">Fusions</button>
         <button class="cp-tab" id="ap-tab-stage6" onclick="apSwitchTab('stage6')" style="display:none">Stage 6</button>
       </div>
-      <button class="cp-hdr-close" onclick="hideModal('apply-nsb-modal')" title="Close">✕</button>
+      <button class="cp-hdr-close" onclick="hideModal('apply-nsb-modal')">✕</button>
     </div>
     <div class="cp-divider"></div>
     <!-- Pack Preview tab -->
@@ -2673,7 +2673,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <label style="margin-bottom:0">NSB File</label>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb()" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+            <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb()" style="font-size:11px;padding:3px 10px">⚡ Auto Grab</button>
             <button id="ansb-last-edit-btn" onclick="grabLastEditedNsb('ansb')" style="display:none;font-size:11px;padding:3px 9px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(126,101,81,.2);border:1px solid var(--accent);color:var(--accent);border-radius:6px;cursor:pointer;font-weight:500"></button>
           </div>
         </div>
@@ -3994,8 +3994,8 @@ function renderPacks() {
     html += '<div class="card-thumb">' + thumb + '</div>'
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-corner-btns">'
-    html += '<button class="card-corner-btn ck-edit" title="Edit Pack" data-pid="' + p.id + '" onclick="event.stopPropagation();openEditPack(this.dataset.pid)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'
-    html += '<button class="card-corner-btn ck-del" title="Delete" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">✕</button>'
+    html += '<button class="card-corner-btn ck-edit" data-pid="' + p.id + '" onclick="event.stopPropagation();openEditPack(this.dataset.pid)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'
+    html += '<button class="card-corner-btn ck-del" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">✕</button>'
     html += '</div></div>'
   }
   grid.innerHTML = html
@@ -4825,8 +4825,8 @@ function renderCarPackCards() {
     html += '<div class="cp-pack-card-name">' + escH(p.name || 'Unnamed Pack') + '</div>'
     html += '<div class="cp-pack-card-meta">' + carCount + ' Car' + (carCount !== 1 ? 's' : '') + '</div>'
     html += '<div class="cp-pack-card-btns">'
-    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openViewCarPack(\\'' + p.id + '\\')" title="View">👁</button>'
-    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openEditCarPack(\\'' + p.id + '\\')" title="Edit">✏️</button>'
+    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openViewCarPack(\\'' + p.id + '\\')">👁</button>'
+    html += '<button class="cp-pack-card-btn" onclick="event.stopPropagation();openEditCarPack(\\'' + p.id + '\\')">✏️</button>'
     html += '</div>'
     html += '</div>'
   }
@@ -5050,7 +5050,7 @@ function renderCppSelectedCars() {
     html += '<div class="cpp-car-item-info"><div class="cpp-car-item-name">' + escH(car.name) + '</div>'
     if (car.colorName) html += '<div class="cpp-car-item-color">' + escH(car.colorName) + '</div>'
     html += '</div>'
-    html += '<button class="cpp-remove-btn" onclick="removeCarFromCarPack(\\'' + crdbEsc + '\\',\\'' + colEsc + '\\')" title="Remove">×</button>'
+    html += '<button class="cpp-remove-btn" onclick="removeCarFromCarPack(\\'' + crdbEsc + '\\',\\'' + colEsc + '\\')">×</button>'
     html += '</div>'
   }
   list.innerHTML = html
@@ -6568,7 +6568,7 @@ function renderSelectedCars() {
     html += '<div class="scar-name">' + escH(car.name) + '</div>'
     if (car.colorName) html += '<div class="scar-color">' + escH(car.colorName) + '</div>'
     html += '</div>'
-    html += '<button class="selected-car-remove" data-crdb="' + crdbEsc + '" data-col="' + colEsc + '" onclick="removeCarFromSelection(this.dataset.crdb,this.dataset.col)" title="Remove">&times;</button>'
+    html += '<button class="selected-car-remove" data-crdb="' + crdbEsc + '" data-col="' + colEsc + '" onclick="removeCarFromSelection(this.dataset.crdb,this.dataset.col)">&times;</button>'
     if (isOwned) html += '<div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none"><span style="font-size:11px;color:#ef4444;font-weight:600">Duplicate car</span><span style="font-size:10px;color:rgba(239,68,68,.8)">Enable Allow Duplicates</span></div>'
     html += '</div>'
   }
@@ -6934,8 +6934,8 @@ function renderEnsbGarageTab() {
     html += '<div style="display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--surf2);border:1px solid var(--border);border-radius:6px">'
     html += '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escH(oc.name || oc.crdb) + '</span>'
     if (isMaxed) html += '<span style="font-size:9px;color:#e5c040;white-space:nowrap;flex-shrink:0">maxed</span>'
-    html += '<button onclick="ensbMaxOutCar(\\'' + safeOcCrdb + '\\',' + oc.unid + ',\\'' + safeOcName + '\\')" title="Max Out" style="background:none;border:none;cursor:pointer;font-size:13px;line-height:1;padding:0 2px;color:' + (isMaxed ? '#e5c040' : 'var(--muted)') + ';flex-shrink:0">★</button>'
-    html += '<button onclick="ensbDeleteCar(\\'' + safeOcCrdb + '\\',' + oc.unid + ',\\'' + safeOcName + '\\')" title="Delete" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;color:var(--muted);flex-shrink:0">×</button>'
+    html += '<button onclick="ensbMaxOutCar(\\'' + safeOcCrdb + '\\',' + oc.unid + ',\\'' + safeOcName + '\\')" style="background:none;border:none;cursor:pointer;font-size:13px;line-height:1;padding:0 2px;color:' + (isMaxed ? '#e5c040' : 'var(--muted)') + ';flex-shrink:0">★</button>'
+    html += '<button onclick="ensbDeleteCar(\\'' + safeOcCrdb + '\\',' + oc.unid + ',\\'' + safeOcName + '\\')" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;color:var(--muted);flex-shrink:0">×</button>'
     html += '</div>'
   }
   for (var ai = 0; ai < _ensbEditorState.garageAdded.length; ai++) {
