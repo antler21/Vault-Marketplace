@@ -1664,7 +1664,7 @@ header{display:flex;align-items:center;padding:0 16px;height:52px;border-bottom:
 .icon-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px;display:flex;align-items:center;transition:color .15s,background .15s}
 .icon-btn:hover{color:var(--text);background:var(--surf2)}
 .app-body{display:flex;flex:1;overflow:hidden}
-aside{width:210px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.28s cubic-bezier(.4,0,.2,1),border-color 0.28s}
+aside{width:176px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.28s cubic-bezier(.4,0,.2,1),border-color 0.28s}
 aside.sb-collapsed{width:64px}
 .sidebar-inner{width:100%;min-height:100%;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;flex-shrink:0}
 .cat-icon{display:none;font-size:15px;line-height:1}
@@ -1677,7 +1677,7 @@ aside.sb-collapsed .sidebar-cat.collapsed .sidebar-cat-items{display:block!impor
 aside.sb-collapsed .sidebar-item{justify-content:center;padding:8px 4px;gap:0}
 aside.sb-collapsed .item-label{max-width:0;opacity:0}
 .sb-toggle-wrap{width:0;overflow:visible;position:relative;z-index:10;flex-shrink:0;align-self:stretch}
-.sb-toggle-btn{position:absolute;left:-12px;top:50%;transform:translateY(-50%);width:24px;height:24px;background:var(--surf);border:1px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .15s,color .15s,box-shadow .15s;box-shadow:0 1px 4px rgba(0,0,0,.35);padding:0}
+.sb-toggle-btn{position:absolute;left:-16px;top:50%;transform:translateY(-50%);width:32px;height:32px;background:var(--surf);border:1px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .15s,color .15s,box-shadow .15s;box-shadow:0 1px 4px rgba(0,0,0,.35);padding:0}
 .sb-toggle-btn:hover{background:var(--surf2);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.45)}
 .sb-toggle-btn svg{transition:transform 0.28s cubic-bezier(.4,0,.2,1)}
 aside.sb-collapsed~.sb-toggle-wrap .sb-toggle-btn svg{transform:rotate(180deg)}
