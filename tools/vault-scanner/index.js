@@ -1668,6 +1668,11 @@ aside{width:176px;background:var(--surf);border-right:1px solid var(--border);di
 aside.sb-collapsed{width:0;border-right-color:transparent}
 .sidebar-inner{width:176px;min-height:100%;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;flex-shrink:0;transition:opacity 0.18s ease}
 aside.sb-collapsed .sidebar-inner{opacity:0;pointer-events:none}
+.sb-toggle-wrap{width:0;overflow:visible;position:relative;z-index:10;flex-shrink:0;align-self:stretch}
+.sb-toggle-btn{position:absolute;left:-12px;top:50%;transform:translateY(-50%);width:24px;height:24px;background:var(--surf);border:1px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .15s,color .15s,box-shadow .15s;box-shadow:0 1px 4px rgba(0,0,0,.35);padding:0}
+.sb-toggle-btn:hover{background:var(--surf2);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.45)}
+.sb-toggle-btn svg{transition:transform 0.28s cubic-bezier(.4,0,.2,1)}
+aside.sb-collapsed~.sb-toggle-wrap .sb-toggle-btn svg{transform:rotate(180deg)}
 .sidebar-label{padding:8px 14px 4px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
 .sidebar-item{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;color:var(--muted);font-size:13px;border-left:3px solid transparent;transition:background .12s}
 .sidebar-item:hover{background:var(--surf2);color:var(--text)}
@@ -1686,7 +1691,7 @@ main{flex:1;overflow-y:auto;padding:20px}
 .btn-danger{background:var(--red);color:#fff}
 .btn-danger:hover{opacity:.85}
 .btn-sm{padding:5px 12px;font-size:12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,220px));gap:13px}
 .card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;position:relative;transition:border-color .15s,transform .1s}
 .card:hover{border-color:var(--accent);transform:translateY(-1px)}
 .card.sel{border-color:var(--accent);outline:2px solid var(--accent)}
@@ -1914,9 +1919,6 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 <body>
 
 <header>
-  <button class="icon-btn" id="sb-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="14" height="14" rx="2.5"/><line x1="5.5" y1="1" x2="5.5" y2="15"/></svg>
-  </button>
   <span class="logo">AIO Tool</span>
   <span class="badge">v${VERSION}</span>
   <div class="spacer"></div>
@@ -1934,6 +1936,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div id="sidebar-content"><div class="sidebar-item" style="font-size:12px;opacity:.5">Loading...</div></div>
     </div>
   </aside>
+  <div class="sb-toggle-wrap">
+    <button class="sb-toggle-btn" onclick="toggleSidebar()" title="Toggle sidebar">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6,1 2,5 6,9"/></svg>
+    </button>
+  </div>
   <main>
     <!-- Accounts panel -->
     <div id="accounts-panel">
