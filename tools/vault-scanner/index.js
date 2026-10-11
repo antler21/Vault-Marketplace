@@ -1665,9 +1665,17 @@ header{display:flex;align-items:center;padding:0 16px;height:52px;border-bottom:
 .icon-btn:hover{color:var(--text);background:var(--surf2)}
 .app-body{display:flex;flex:1;overflow:hidden}
 aside{width:176px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;transition:width 0.28s cubic-bezier(.4,0,.2,1),border-color 0.28s}
-aside.sb-collapsed{width:0;border-right-color:transparent}
-.sidebar-inner{width:176px;min-height:100%;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;flex-shrink:0;transition:opacity 0.18s ease}
-aside.sb-collapsed .sidebar-inner{opacity:0;pointer-events:none}
+aside.sb-collapsed{width:64px}
+.sidebar-inner{width:100%;min-height:100%;overflow-y:auto;padding:8px 0;display:flex;flex-direction:column;flex-shrink:0}
+.cat-icon{display:none;font-size:15px;line-height:1}
+.item-label{overflow:hidden;white-space:nowrap;max-width:160px;transition:max-width 0.25s cubic-bezier(.4,0,.2,1),opacity 0.18s ease}
+aside.sb-collapsed .sidebar-cat-hdr{justify-content:center;padding:8px 4px}
+aside.sb-collapsed .cat-label{display:none}
+aside.sb-collapsed .cat-icon{display:inline}
+aside.sb-collapsed .sidebar-cat-hdr>svg{display:none}
+aside.sb-collapsed .sidebar-cat.collapsed .sidebar-cat-items{display:block!important}
+aside.sb-collapsed .sidebar-item{justify-content:center;padding:8px 4px;gap:0}
+aside.sb-collapsed .item-label{max-width:0;opacity:0}
 .sb-toggle-wrap{width:0;overflow:visible;position:relative;z-index:10;flex-shrink:0;align-self:stretch}
 .sb-toggle-btn{position:absolute;left:-12px;top:50%;transform:translateY(-50%);width:24px;height:24px;background:var(--surf);border:1px solid var(--border);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .15s,color .15s,box-shadow .15s;box-shadow:0 1px 4px rgba(0,0,0,.35);padding:0}
 .sb-toggle-btn:hover{background:var(--surf2);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.45)}
@@ -1682,7 +1690,7 @@ aside.sb-collapsed~.sb-toggle-wrap .sb-toggle-btn svg{transform:rotate(180deg)}
 .s-dot.on{background:var(--accent)}
 main{flex:1;overflow-y:auto;padding:20px}
 .main-hdr{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
-.panel-layout{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,220px));justify-content:center;gap:0}
+.panel-layout{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,220px));justify-content:center;gap:0 13px}
 .panel-layout>.main-hdr{grid-column:1/-1}
 .panel-layout>.grid{grid-column:1/-1}
 .main-title{font-size:17px;font-weight:600}
@@ -3104,10 +3112,10 @@ async function fetchGames() {
 }
 
 var SIDEBAR_CATS = [
-  { key: 'accounts', label: 'Accounts' },
-  { key: 'gacha',    label: 'Gacha Accounts' },
-  { key: 'services', label: 'Services' },
-  { key: 'tools',    label: 'Tools' },
+  { key: 'accounts', label: 'Accounts',       icon: '👤' },
+  { key: 'gacha',    label: 'Gacha Accounts', icon: '🎲' },
+  { key: 'services', label: 'Services',       icon: '🛠' },
+  { key: 'tools',    label: 'Tools',          icon: '🔧' },
 ]
 
 function renderGames(list, err) {
@@ -3133,15 +3141,16 @@ function renderGames(list, err) {
     var games = catGames[cat.key] || []
     if (!games.length) continue
     html += '<div class="sidebar-cat" id="scat-' + cat.key + '">'
-    html += '<div class="sidebar-cat-hdr" data-key="' + cat.key + '" onclick="toggleCat(this.dataset.key)">'
-    html += '<span>' + cat.label + '</span>'
+    html += '<div class="sidebar-cat-hdr" data-key="' + cat.key + '" onclick="toggleCat(this.dataset.key)" title="' + cat.label + '">'
+    html += '<span class="cat-label">' + cat.label + '</span>'
+    html += '<span class="cat-icon">' + cat.icon + '</span>'
     html += '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>'
     html += '</div><div class="sidebar-cat-items">'
     for (var gi = 0; gi < games.length; gi++) {
       var g = games[gi]
       var isActive = _activeGame && _activeGame.id === g.id && _activeSection === cat.key
-      html += '<div class="sidebar-item' + (isActive ? ' active' : '') + '" data-gid="' + escH(g.id) + '" data-sec="' + cat.key + '" onclick="pickGame(this.dataset.gid,this.dataset.sec)">'
-      html += gameIconHtml(g, 18) + escH(g.name || g.id) + '</div>'
+      html += '<div class="sidebar-item' + (isActive ? ' active' : '') + '" data-gid="' + escH(g.id) + '" data-sec="' + cat.key + '" onclick="pickGame(this.dataset.gid,this.dataset.sec)" title="' + escH(g.name || g.id) + '">'
+      html += gameIconHtml(g, 18) + '<span class="item-label">' + escH(g.name || g.id) + '</span></div>'
     }
     html += '</div></div>'
   }
