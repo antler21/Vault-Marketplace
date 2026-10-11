@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.32'
+const VERSION = '0.7.33'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -2518,7 +2518,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div class="field">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <label style="margin-bottom:0">NSB File</label>
-        <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb('ensb')" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb('ensb')" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+          <button id="ensb-last-edit-btn" class="btn btn-secondary btn-sm" onclick="grabLastEditedNsb('ensb')" style="display:none;font-size:11px;padding:3px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
+        </div>
       </div>
       <label class="file-drop" id="ensb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ensb')">
         <input type="file" id="ensb-file" style="display:none" onchange="handleNsbFile(event,'ensb')">
@@ -2641,7 +2644,10 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div class="field" style="margin-bottom:0">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <label style="margin-bottom:0">NSB File</label>
-          <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb()" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" onclick="autoGrabNsb()" style="font-size:11px;padding:3px 10px" title="Pick an NSB file from your configured grab folder">⚡ Auto Grab</button>
+            <button id="ansb-last-edit-btn" class="btn btn-secondary btn-sm" onclick="grabLastEditedNsb('ansb')" style="display:none;font-size:11px;padding:3px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></button>
+          </div>
         </div>
         <label class="file-drop" id="ansb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'ansb')">
           <input type="file" id="ansb-file" style="display:none" onchange="handleNsbFile(event,'ansb')">
@@ -2924,6 +2930,20 @@ var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _csr2GrabFolder = '', _ensbCurrent = {}, _pendingSavePack = null
+var _lastEditedNsb = null // { folder, filename } — session-only, cleared on app restart
+
+function updateLastEditBtns() {
+  var show = !!((_lastEditedNsb && _lastEditedNsb.folder))
+  var label = show ? ('↩ ' + _lastEditedNsb.filename) : ''
+  var ids = ['ansb-last-edit-btn', 'ensb-last-edit-btn']
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i])
+    if (!el) continue
+    el.style.display = show ? '' : 'none'
+    el.title = show ? ('Re-grab last edited: ' + _lastEditedNsb.folder + '\\' + _lastEditedNsb.filename) : ''
+    el.textContent = label
+  }
+}
 var _ensbFullData = null
 var _ensbEditorState = { currency: {}, garageQueue: [], garageAdded: [], garageDeleted: [], garageMaxout: {}, legends: {}, fusions: {}, stage6: {}, fusionsAll: null, s6All: null, setPrvr: null }
 var _ensbGarageUndoStack = [], _ensbOwnedSearch = '', _ensbS6UpdateStatus = null
@@ -3928,11 +3948,11 @@ function renderPacks() {
   var html = ''
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
-    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:pointer" title="Apply Pack">'
+    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:pointer">'
     html += '<div class="card-thumb">' + thumb + '</div>'
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-corner-btns">'
-    html += '<button class="card-corner-btn ck-edit" title="Edit Pack" data-pid="' + p.id + '" onclick="event.stopPropagation();openEditPack(this.dataset.pid)">✏</button>'
+    html += '<button class="card-corner-btn ck-edit" title="Edit Pack" data-pid="' + p.id + '" onclick="event.stopPropagation();openEditPack(this.dataset.pid)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'
     html += '<button class="card-corner-btn ck-del" title="Delete" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">✕</button>'
     html += '</div></div>'
   }
@@ -6086,6 +6106,30 @@ async function loadGrabbedNsb(filename, mtime, ctx) {
   }
 }
 
+async function grabLastEditedNsb(ctx) {
+  if (!ctx) ctx = 'ansb'
+  if (!_lastEditedNsb || !_lastEditedNsb.folder) return
+  var noticeId = ctx === 'ensb' ? 'ensb-notice' : 'ansb-notice'
+  var fullPath = _lastEditedNsb.folder + '\\' + _lastEditedNsb.filename
+  var res = await fetch('/csr2/grab-nsb-from-path?path=' + encodeURIComponent(fullPath)).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice(noticeId, 'error', 'Could not load last edit: ' + res.error); return }
+  _nsbData[ctx] = { base64: res.base64, name: res.name }
+  var nameEl = document.getElementById(ctx + '-file-name')
+  nameEl.innerHTML = '<svg width="13" height="15" viewBox="0 0 13 15" fill="none" style="flex-shrink:0;margin-right:8px;opacity:.85" xmlns="http://www.w3.org/2000/svg"><path d="M2 1h6l3 3v10H2V1z" fill="rgba(126,101,81,.25)" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 1v3h3" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="7" x2="9" y2="7" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/><line x1="4" y1="9.5" x2="8" y2="9.5" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">' + escH(res.name) + '</span><button onclick="event.stopPropagation();clearNsbFile(' + JSON.stringify(ctx) + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 10px;flex-shrink:0;display:flex;align-items:center" title="Remove">×</button>'
+  nameEl.style.display = 'flex'
+  nameEl.style.alignItems = 'center'
+  var labelEl = document.getElementById(ctx + '-drop').querySelector('.file-drop-label')
+  if (labelEl) labelEl.style.display = 'none'
+  document.getElementById(ctx + '-drop').classList.add('has-file')
+  if (ctx === 'ensb') {
+    loadEnsbCurrent()
+  } else {
+    loadNsbComparison()
+    document.getElementById('ansb-apply-btn').disabled = false
+    _updateApplyTabsNsbState(true)
+  }
+}
+
 function clearNsbFile(which) {
   _nsbData[which] = null
   var nameEl = document.getElementById(which + '-file-name')
@@ -6429,7 +6473,11 @@ async function applyNsb() {
   if (ansbInput) ansbInput.value = ''
   if (_csr2OutputFolder) {
     var saved = await saveNsbToFolder(res.resultBase64, fname, { title: 'Pack Applied!', desc: res.note || '', folderMode: true, whichNsb: 'ansb' })
-    if (!saved.conflict) showApplyResult(true, 'Pack Applied!', res.note || '', true, 'ansb')
+    if (!saved.conflict) {
+      _lastEditedNsb = { folder: _csr2OutputFolder, filename: fname }
+      updateLastEditBtns()
+      showApplyResult(true, 'Pack Applied!', res.note || '', true, 'ansb')
+    }
   } else {
     downloadNsb(res.resultBase64, fname)
     showApplyResult(true, 'Pack Applied!', 'The modified save file has been downloaded.' + (res.note ? '\\n\\n' + res.note : ''), false, 'ansb')
@@ -7272,6 +7320,8 @@ async function downloadEnsbFull() {
   if (_csr2OutputFolder) {
     var saved = await saveNsbToFolder(result.resultBase64, fname, { title: 'Edits Applied!', desc: result.note || '', folderMode: true, whichNsb: 'ensb' })
     if (!saved.conflict) {
+      _lastEditedNsb = { folder: _csr2OutputFolder, filename: fname }
+      updateLastEditBtns()
       hideModal('ensb-editor-modal')
       showApplyResult(true, 'Edits Applied!', result.note || '', true, 'ensb')
     }
@@ -7362,6 +7412,10 @@ async function confirmSaveToFolder() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ base64: p.b64, filename: p.filename, forceOverwrite: true })
   }).catch(function(){})
+  if (_csr2OutputFolder && p.filename) {
+    _lastEditedNsb = { folder: _csr2OutputFolder, filename: p.filename }
+    updateLastEditBtns()
+  }
   if (p.title) showApplyResult(true, p.title, p.desc || '', p.folderMode, p.whichNsb)
 }
 
@@ -8214,6 +8268,23 @@ const server = http.createServer(async (req, res) => {
       const buf = fs.readFileSync(filePath)
       try { csr2ReadSave(buf) } catch (e) { return json(res, 400, { error: 'Not a valid CSR2 save file: ' + e.message }) }
       return json(res, 200, { base64: buf.toString('base64'), name })
+    } catch (e) {
+      return json(res, 500, { error: 'Could not read file: ' + e.message })
+    }
+  }
+
+  // Re-grab a previously edited NSB from its full saved path (session tracker)
+  if (req.method === 'GET' && pathname === '/csr2/grab-nsb-from-path') {
+    const fullPath = new URL(req.url, 'http://localhost').searchParams.get('path')
+    if (!fullPath) return json(res, 400, { error: 'Missing path' })
+    const cfg = loadConfig()
+    const allowed = [cfg.csr2OutputFolder, cfg.csr2GrabFolder].filter(Boolean)
+    const safe = allowed.some(f => fullPath.startsWith(f))
+    if (!safe) return json(res, 403, { error: 'Path is outside configured folders' })
+    try {
+      const buf = fs.readFileSync(fullPath)
+      try { csr2ReadSave(buf) } catch (e) { return json(res, 400, { error: 'Not a valid CSR2 save file: ' + e.message }) }
+      return json(res, 200, { base64: buf.toString('base64'), name: path.basename(fullPath) })
     } catch (e) {
       return json(res, 500, { error: 'Could not read file: ' + e.message })
     }
