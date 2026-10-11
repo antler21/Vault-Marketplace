@@ -1699,6 +1699,9 @@ main{flex:1;overflow-y:auto;padding:20px}
 .card-corner-btn{background:rgba(0,0,0,.6);border:none;border-radius:5px;color:#fff;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1;transition:background .12s;backdrop-filter:blur(2px)}
 .card-corner-btn.ck-edit:hover{background:var(--accent)}
 .card-corner-btn.ck-del:hover{background:#ef4444}
+.card.dnd-dragging{opacity:.35;transform:none!important}
+.card.dnd-before{box-shadow:-3px 0 0 0 var(--accent)!important}
+.card.dnd-after{box-shadow:3px 0 0 0 var(--accent)!important}
 .ov-import{background:var(--accent);color:var(--text)}
 .ov-preview{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
 .ov-remove{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.4)}
@@ -3948,7 +3951,7 @@ function renderPacks() {
   var html = ''
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
-    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:pointer">'
+    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" draggable="true" onclick="openEditNsb(this.dataset.pid)" style="cursor:pointer">'
     html += '<div class="card-thumb">' + thumb + '</div>'
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-corner-btns">'
@@ -3957,6 +3960,59 @@ function renderPacks() {
     html += '</div></div>'
   }
   grid.innerHTML = html
+  initPacksDnd()
+}
+
+function initPacksDnd() {
+  var grid = document.getElementById('packs-grid')
+  if (!grid) return
+  var cards = Array.from(grid.querySelectorAll('.card[data-pid]'))
+  var dragSrc = null, dropBefore = true
+  cards.forEach(function(card) {
+    card.addEventListener('dragstart', function(e) {
+      dragSrc = card
+      e.dataTransfer.effectAllowed = 'move'
+      setTimeout(function(){ card.classList.add('dnd-dragging') }, 0)
+    })
+    card.addEventListener('dragend', function() {
+      card.classList.remove('dnd-dragging')
+      cards.forEach(function(c) { c.classList.remove('dnd-before', 'dnd-after') })
+      dragSrc = null
+    })
+    card.addEventListener('dragover', function(e) {
+      e.preventDefault()
+      if (!dragSrc || card === dragSrc) return
+      var rect = card.getBoundingClientRect()
+      dropBefore = e.clientX < rect.left + rect.width / 2
+      cards.forEach(function(c) { c.classList.remove('dnd-before', 'dnd-after') })
+      card.classList.add(dropBefore ? 'dnd-before' : 'dnd-after')
+    })
+    card.addEventListener('dragleave', function(e) {
+      if (!card.contains(e.relatedTarget)) card.classList.remove('dnd-before', 'dnd-after')
+    })
+    card.addEventListener('drop', function(e) {
+      e.preventDefault()
+      if (!dragSrc || card === dragSrc) return
+      cards.forEach(function(c) { c.classList.remove('dnd-before', 'dnd-after') })
+      var srcId = dragSrc.dataset.pid, dstId = card.dataset.pid
+      var srcIdx = _packs.findIndex(function(p){ return p.id === srcId })
+      if (srcIdx === -1) return
+      var item = _packs.splice(srcIdx, 1)[0]
+      var dstIdx = _packs.findIndex(function(p){ return p.id === dstId })
+      _packs.splice(dstIdx === -1 ? _packs.length : (dropBefore ? dstIdx : dstIdx + 1), 0, item)
+      renderPacks()
+      savePacksOrder()
+    })
+  })
+}
+
+async function savePacksOrder() {
+  var ids = _packs.map(function(p){ return p.id })
+  await fetch('/csr2/packs/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: ids })
+  }).catch(function(){})
 }
 
 function fmtN(n) {
@@ -7808,6 +7864,17 @@ const server = http.createServer(async (req, res) => {
     savePacks(packs)
     syncPackToWebapp(body)
     return json(res, 200, body)
+  }
+
+  if (req.method === 'POST' && pathname === '/csr2/packs/reorder') {
+    const body = await readBody(req)
+    const ids = body.ids
+    if (!Array.isArray(ids)) return json(res, 400, { error: 'ids required' })
+    const packs = loadPacks()
+    const ordered = ids.map(id => packs.find(p => p.id === id)).filter(Boolean)
+    packs.forEach(p => { if (!ids.includes(p.id)) ordered.push(p) })
+    savePacks(ordered)
+    return json(res, 200, { ok: true })
   }
 
   const packM = pathname.match(/^\/csr2\/packs\/(.+)$/)
