@@ -2940,7 +2940,7 @@ function updateLastEditBtns() {
     var el = document.getElementById(ids[i])
     if (!el) continue
     el.style.display = show ? '' : 'none'
-    el.title = show ? ('Re-grab last edited: ' + _lastEditedNsb.folder + '\\' + _lastEditedNsb.filename) : ''
+    el.title = show ? ('Re-grab last edited: ' + _lastEditedNsb.folder + '\\\\' + _lastEditedNsb.filename) : ''
     el.textContent = label
   }
 }
@@ -6110,7 +6110,7 @@ async function grabLastEditedNsb(ctx) {
   if (!ctx) ctx = 'ansb'
   if (!_lastEditedNsb || !_lastEditedNsb.folder) return
   var noticeId = ctx === 'ensb' ? 'ensb-notice' : 'ansb-notice'
-  var fullPath = _lastEditedNsb.folder + '\\' + _lastEditedNsb.filename
+  var fullPath = _lastEditedNsb.folder + '\\\\' + _lastEditedNsb.filename
   var res = await fetch('/csr2/grab-nsb-from-path?path=' + encodeURIComponent(fullPath)).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (res.error) { showNotice(noticeId, 'error', 'Could not load last edit: ' + res.error); return }
   _nsbData[ctx] = { base64: res.base64, name: res.name }
