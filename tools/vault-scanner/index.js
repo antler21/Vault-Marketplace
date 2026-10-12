@@ -3052,14 +3052,6 @@ async function init() {
   setTimeout(checkStage6Update, 6000)
   setTimeout(checkForDataUpdates, 7500)
   setTimeout(checkToolVersion, 9000)
-  var _resizeSnap = null, _resizeTimer = null
-  window.addEventListener('resize', function() {
-    if (!_resizeSnap) _resizeSnap = snapCardPositions()
-    clearTimeout(_resizeTimer)
-    _resizeTimer = setTimeout(function() {
-      if (_resizeSnap) { animateCardFlip(_resizeSnap); _resizeSnap = null }
-    }, 50)
-  })
 }
 
 async function checkForDataUpdates() {
@@ -3909,39 +3901,46 @@ function snapCardPositions() {
 
 function animateCardFlip(before) {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-  requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      before.forEach(function(b) {
-        var r = b.el.getBoundingClientRect()
-        var dx = b.x - r.left
-        var dy = b.y - r.top
-        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
-        b.el.style.transition = 'none'
-        b.el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
-      })
-      requestAnimationFrame(function() {
-        before.forEach(function(b) {
-          if (!b.el.style.transform) return
-          b.el.style.transition = 'transform 0.28s cubic-bezier(.4,0,.2,1)'
-          b.el.style.transform = ''
-        })
-        setTimeout(function() {
-          before.forEach(function(b) {
-            b.el.style.transition = ''
-            b.el.style.transform = ''
-          })
-        }, 300)
-      })
-    })
+  before.forEach(function(b) {
+    var r = b.el.getBoundingClientRect()
+    var dx = b.x - r.left
+    var dy = b.y - r.top
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+    b.el.animate(
+      [{transform: 'translate(' + dx + 'px,' + dy + 'px)'}, {transform: 'none'}],
+      {duration: 280, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'none'}
+    )
   })
 }
 
+var _sbFlipSnap = null
+var _sbFlipRo = null
+
 function toggleSidebar() {
   var aside = document.getElementById('sidebar')
-  var before = snapCardPositions()
+  if (_sbFlipRo) { _sbFlipRo.disconnect(); _sbFlipRo = null }
+  _sbFlipSnap = snapCardPositions()
   var collapsed = aside.classList.toggle('sb-collapsed')
   try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '') } catch(e) {}
-  animateCardFlip(before)
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { _sbFlipSnap = null; return }
+  var main = document.querySelector('main')
+  if (!main) { _sbFlipSnap = null; return }
+  _sbFlipRo = new ResizeObserver(function() {
+    if (!_sbFlipSnap) return
+    var anyMoved = _sbFlipSnap.some(function(b) {
+      var r = b.el.getBoundingClientRect()
+      return Math.abs(r.left - b.x) > 1 || Math.abs(r.top - b.y) > 1
+    })
+    if (!anyMoved) return
+    _sbFlipRo.disconnect(); _sbFlipRo = null
+    var snap = _sbFlipSnap; _sbFlipSnap = null
+    animateCardFlip(snap)
+  })
+  _sbFlipRo.observe(main)
+  setTimeout(function() {
+    if (_sbFlipRo) { _sbFlipRo.disconnect(); _sbFlipRo = null }
+    _sbFlipSnap = null
+  }, 400)
 }
 
 function openSettings() {
