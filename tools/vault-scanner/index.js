@@ -2488,17 +2488,6 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
 </div>
 
-<!-- Unban Confirm Modal -->
-<div class="modal-bg" id="unban-confirm-modal" style="z-index:150">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-title">Apply Unban?</div>
-    <p class="confirm-desc">This will apply ban-reversal fixes to the loaded NSB file and download the modified save. Continue?</p>
-    <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="hideModal('unban-confirm-modal')">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmApplyUnban()">Unban &amp; Download</button>
-    </div>
-  </div>
-</div>
 
 <!-- NSB Output Folder Conflict Modal -->
 <div class="modal-bg" id="nsb-conflict-modal" style="z-index:150">
@@ -2578,7 +2567,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div id="ensb-notice" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('edit-nsb-modal')">Cancel</button>
-      <button class="btn btn-secondary" id="ensb-unban-btn" onclick="showModal('unban-confirm-modal')" disabled style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#ef4444">🚫 Unban</button>
+      <button class="btn btn-secondary" id="ensb-unban-btn" onclick="startUnbanFromEnsb()" disabled style="background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.4);color:#ef4444">🚫 Unban</button>
       <button class="btn btn-primary" id="ensb-apply-btn" onclick="openEnsbEditor()" disabled>Edit NSB →</button>
     </div>
   </div>
@@ -3028,7 +3017,7 @@ var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackId
 var _pkDrag = null
 var _pkPend = null
 var _carFilter = { tier: null, brand: null, starType: null }
-var _csr2OutputFolder = '', _csr2GrabFolder = '', _csr2UnbanFolder = '', _ensbCurrent = {}, _pendingSavePack = null, _pendingUnbanSave = null
+var _csr2OutputFolder = '', _csr2GrabFolder = '', _csr2UnbanFolder = '', _ensbCurrent = {}, _pendingSavePack = null, _pendingUnbanSave = null, _unbanPreloadedNsb = null
 var _unbanPlatform = 'android'
 var _lastEditedNsb = null // { folder, filename } — session-only, cleared on app restart
 
@@ -6421,6 +6410,7 @@ async function grabLastEditedNsb(ctx) {
 
 function clearNsbFile(which) {
   _nsbData[which] = null
+  if (which === 'unban') _unbanPreloadedNsb = null
   var nameEl = document.getElementById(which + '-file-name')
   nameEl.innerHTML = ''
   nameEl.style.display = 'none'
@@ -7741,39 +7731,18 @@ async function saveCsr2Settings() {
   setTimeout(function(){ hideModal('csr2-settings-modal') }, 700)
 }
 
-function confirmApplyUnban() {
-  hideModal('unban-confirm-modal')
-  if (_nsbData.ensb) {
-    applyUnbanFromManual()
-  } else {
-    applyUnban()
-  }
-}
-
-async function applyUnbanFromManual() {
+function startUnbanFromEnsb() {
   if (!_nsbData.ensb) return
-  showLoading('Applying unban...')
-  var res = await fetch('/csr2/unban', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nsbBase64: _nsbData.ensb.base64 })
-  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
-  hideLoading()
-  if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
-  var fname = _nsbData.ensb.name || 'PlayerProfile'
-  if (_csr2OutputFolder) {
-    var savedU = await saveNsbToFolder(res.nsbResultBase64, fname, { title: 'Unban Applied!', desc: 'The account has been unbanned.', folderMode: true, whichNsb: 'ensb' })
-    if (!savedU.conflict) showApplyResult(true, 'Unban Applied!', 'The account has been unbanned.', true, 'ensb')
-  } else {
-    downloadNsb(res.nsbResultBase64, fname)
-    showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.', false, 'ensb')
-  }
+  _unbanPreloadedNsb = _nsbData.ensb
+  hideModal('edit-nsb-modal')
+  showModal('unban-platform-modal')
 }
 
 
 // ─── Unban Modal ──────────────────────────────────────────────────────────────
 
 function openUnban() {
+  _unbanPreloadedNsb = null
   showModal('unban-platform-modal')
 }
 
@@ -7803,7 +7772,12 @@ function selectUnbanPlatform(platform) {
   document.getElementById('unban-scb-field').style.display = isIos ? '' : 'none'
   document.getElementById('unban-scb-info').style.display = isIos ? '' : 'none'
   document.getElementById('unban-platform-badge').textContent = isIos ? '🍎 iOS' : '🤖 Android'
+  if (_unbanPreloadedNsb) {
+    _nsbData['unban'] = _unbanPreloadedNsb
+    setUnbanFileDisplay('unban', _unbanPreloadedNsb.name, null)
+  }
   showModal('unban-modal')
+  checkUnbanReady()
 }
 
 function checkUnbanReady() {
@@ -8827,12 +8801,6 @@ const server = http.createServer(async (req, res) => {
     try {
       const nsbBuf = Buffer.from(body.nsbBase64, 'base64')
       const nsbData = csr2ReadSave(nsbBuf)
-      csr2Unban(nsbData)
-      if (body.version) { const v = String(body.version); nsbData.prvr = v; nsbData.adpvr = v }
-      const nsbOut = csr2WriteSave(nsbData)
-      if (platform === 'android') {
-        return json(res, 200, { nsbResultBase64: nsbOut.toString('base64') })
-      }
       // iOS: sync SCB from final NSB values
       const SCB_MAP = [
         { nsbPath: ['caea'],           scbKey: 'CashEarned' },
@@ -8857,15 +8825,32 @@ const server = http.createServer(async (req, res) => {
         }
         return cur
       }
-      for (const m of SCB_MAP) {
-        if (getNsbVal(nsbData, m.nsbPath) === undefined)
-          return json(res, 400, { error: 'NSB missing required key: ' + m.nsbPath.join('.') })
+      let scbData = null
+      if (platform === 'ios') {
+        for (const m of SCB_MAP) {
+          if (getNsbVal(nsbData, m.nsbPath) === undefined)
+            return json(res, 400, { error: 'NSB missing required key: ' + m.nsbPath.join('.') })
+        }
+        const scbBuf = Buffer.from(body.scbBase64, 'base64')
+        scbData = csr2ReadSave(scbBuf)
+        for (const m of SCB_MAP) {
+          if (!(m.scbKey in scbData))
+            return json(res, 400, { error: 'SCB missing required key: ' + m.scbKey })
+        }
+        // Verify NSB and SCB belong to the same account — compare lifetime "Earned"
+        // totals BEFORE any unban mutation (csr2Unban reduces these, so this must
+        // run first). A mismatched pair means the files aren't from the same account.
+        const MATCH_FIELDS = SCB_MAP.filter(m => m.scbKey.endsWith('Earned'))
+        const mismatch = MATCH_FIELDS.find(m => getNsbVal(nsbData, m.nsbPath) !== scbData[m.scbKey])
+        if (mismatch) {
+          return json(res, 409, { error: 'NSB and SCB do not appear to belong to the same account (mismatch on ' + mismatch.scbKey + '). Load the matching pair and try again.' })
+        }
       }
-      const scbBuf = Buffer.from(body.scbBase64, 'base64')
-      const scbData = csr2ReadSave(scbBuf)
-      for (const m of SCB_MAP) {
-        if (!(m.scbKey in scbData))
-          return json(res, 400, { error: 'SCB missing required key: ' + m.scbKey })
+      csr2Unban(nsbData)
+      if (body.version) { const v = String(body.version); nsbData.prvr = v; nsbData.adpvr = v }
+      const nsbOut = csr2WriteSave(nsbData)
+      if (platform === 'android') {
+        return json(res, 200, { nsbResultBase64: nsbOut.toString('base64') })
       }
       for (const m of SCB_MAP) scbData[m.scbKey] = getNsbVal(nsbData, m.nsbPath)
       const scbOut = csr2WriteSave(scbData)
