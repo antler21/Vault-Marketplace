@@ -1690,7 +1690,7 @@ aside.sb-collapsed~.sb-toggle-wrap .sb-toggle-btn svg{transform:rotate(180deg)}
 .s-dot.on{background:var(--accent)}
 main{flex:1;overflow-y:auto;padding:20px}
 .main-hdr{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
-.panel-layout{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,220px));justify-content:center;gap:0 13px}
+.panel-layout{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,220px));justify-content:center;gap:0 13px;padding-inline:16px}
 .panel-layout>.main-hdr{grid-column:1/-1}
 .panel-layout>.grid{grid-column:1/-1}
 .main-title{font-size:17px;font-weight:600}
@@ -3894,8 +3894,38 @@ async function deleteSel() {
 
 function toggleSidebar() {
   var aside = document.getElementById('sidebar')
+  var cards = Array.from(document.querySelectorAll('.card'))
+  var before = cards.map(function(el) {
+    var r = el.getBoundingClientRect()
+    return { el: el, x: r.left, y: r.top }
+  })
   var collapsed = aside.classList.toggle('sb-collapsed')
   try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '') } catch(e) {}
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      before.forEach(function(b) {
+        var r = b.el.getBoundingClientRect()
+        var dx = b.x - r.left
+        var dy = b.y - r.top
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
+        b.el.style.transition = 'none'
+        b.el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)'
+      })
+      requestAnimationFrame(function() {
+        before.forEach(function(b) {
+          if (!b.el.style.transform) return
+          b.el.style.transition = 'transform 0.28s cubic-bezier(.4,0,.2,1)'
+          b.el.style.transform = ''
+        })
+        setTimeout(function() {
+          before.forEach(function(b) {
+            b.el.style.transition = ''
+            b.el.style.transform = ''
+          })
+        }, 300)
+      })
+    })
+  })
 }
 
 function openSettings() {
