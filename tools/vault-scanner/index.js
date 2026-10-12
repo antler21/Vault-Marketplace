@@ -2533,6 +2533,14 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       </div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Leave empty to only download (no auto-save). Files in the folder are replaced on each apply.</div>
+    <div class="field">
+      <label>Unban Output Folder</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="csr2-unban-folder-input" placeholder="e.g. C:\Users\You\Documents\CSR2\Unban" style="flex:1">
+        <button class="btn btn-secondary btn-sm" onclick="browseFolder('csr2-unban-folder-input')" style="flex-shrink:0;white-space:nowrap">Browse…</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Where unban output is saved. Originals go to <em>Unban Folder/Original/</em>. Leave empty to download only.</div>
     <div id="csr2-settings-notice" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('csr2-settings-modal')">Cancel</button>
@@ -2818,18 +2826,63 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
 </div>
 
+<!-- Unban Platform Modal -->
+<div class="modal-bg" id="unban-platform-modal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Unban Save File</div>
+    <div class="modal-sub">Which platform is this account on?</div>
+    <div style="display:flex;gap:12px;margin-top:4px">
+      <button class="btn btn-secondary" style="flex:1;padding:16px;font-size:15px;display:flex;flex-direction:column;align-items:center;gap:4px" onclick="selectUnbanPlatform('ios')">
+        <span>🍎 iOS</span>
+        <span style="font-size:11px;color:var(--muted)">NSB + SCB required</span>
+      </button>
+      <button class="btn btn-secondary" style="flex:1;padding:16px;font-size:15px;display:flex;flex-direction:column;align-items:center;gap:4px" onclick="selectUnbanPlatform('android')">
+        <span>🤖 Android</span>
+        <span style="font-size:11px;color:var(--muted)">NSB only</span>
+      </button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('unban-platform-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Unban Modal -->
 <div class="modal-bg" id="unban-modal">
-  <div class="modal" style="max-width:440px">
-    <div class="modal-title">Unban NSB</div>
-    <div class="modal-sub">Upload the NSB file to apply unban fixes</div>
+  <div class="modal" style="max-width:460px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
+      <div class="modal-title" style="margin-bottom:0">Unban NSB</div>
+      <span id="unban-platform-badge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--surf2);border:1px solid var(--border);color:var(--muted)">🤖 Android</span>
+      <button onclick="hideModal('unban-modal');showModal('unban-platform-modal')" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline;margin-left:auto;padding:0">Change</button>
+    </div>
+    <div class="modal-sub">Apply ban-reversal fixes to the save file</div>
     <div class="field">
-      <label>NSB File</label>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin-bottom:0">NSB File</label>
+        <button class="btn btn-secondary btn-sm" onclick="autoGrabUnbanFile('nsb')" style="font-size:11px;padding:3px 10px">⚡ Auto Grab</button>
+      </div>
       <label class="file-drop" id="unban-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'unban')">
         <input type="file" id="unban-file" style="display:none" onchange="handleNsbFile(event,'unban')">
-        <div class="file-drop-label">Click to select or drag & drop your NSB file</div>
+        <div class="file-drop-label">Click to select or drag &amp; drop your NSB file</div>
         <div class="file-drop-name" id="unban-file-name" style="display:none"></div>
       </label>
+      <div id="unban-grab-nsb-picker" style="display:none;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:150px;overflow-y:auto;margin-top:6px"><div id="unban-grab-nsb-list"></div></div>
+    </div>
+    <div class="field" id="unban-scb-field" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin-bottom:0">SCB File</label>
+        <button class="btn btn-secondary btn-sm" onclick="autoGrabUnbanFile('scb')" style="font-size:11px;padding:3px 10px">⚡ Auto Grab</button>
+      </div>
+      <label class="file-drop" id="unban-scb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'unban-scb')">
+        <input type="file" id="unban-scb-file" style="display:none" onchange="handleNsbFile(event,'unban-scb')">
+        <div class="file-drop-label">Click to select or drag &amp; drop your SCB file</div>
+        <div class="file-drop-name" id="unban-scb-file-name" style="display:none"></div>
+      </label>
+      <div id="unban-grab-scb-picker" style="display:none;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:150px;overflow-y:auto;margin-top:6px"><div id="unban-grab-scb-list"></div></div>
+    </div>
+    <div class="field" style="margin-bottom:8px">
+      <label>Save Version <span style="font-weight:400;color:var(--muted);font-size:11px">(optional)</span></label>
+      <input type="text" id="unban-version" placeholder="e.g. 5.7.0" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px">
     </div>
     <div style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:4px">
       <div style="color:var(--text);font-weight:500;margin-bottom:6px">What this does:</div>
@@ -2839,12 +2892,25 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div>• Removes restricted account sections</div>
       <div>• Resets event ticket counts to 0</div>
       <div>• Reduces resource balances by 30%</div>
-      <div>• Halves aftermarket parts, zeros spent</div>
+      <div>• Halves aftermarket parts, zeros fusion stars</div>
+      <div id="unban-scb-info" style="display:none">• Syncs SCB to match final NSB resource values</div>
     </div>
     <div id="unban-notice" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('unban-modal')">Cancel</button>
-      <button class="btn btn-primary" id="unban-apply-btn" onclick="applyUnban()" disabled>Apply & Download</button>
+      <button class="btn btn-primary" id="unban-apply-btn" onclick="applyUnban()" disabled>Apply &amp; Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Unban Folder Overwrite Modal -->
+<div class="modal-bg" id="unban-overwrite-modal" style="z-index:150">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">⚠️ Files Already Exist</div>
+    <p class="confirm-desc" id="unban-overwrite-desc">The unban output folder already contains files. Proceeding will delete them before saving the new ones.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('unban-overwrite-modal')">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmUnbanFolderOverwrite()">Delete &amp; Save</button>
     </div>
   </div>
 </div>
@@ -2956,13 +3022,14 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 
 <script>
 var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection = null
-var _packs = [], _nsbData = { ansb: null, unban: null, ensb: null }, _selectedCars = []
+var _packs = [], _nsbData = { ansb: null, unban: null, 'unban-scb': null, ensb: null }, _selectedCars = []
 var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _pkDrag = null
 var _pkPend = null
 var _carFilter = { tier: null, brand: null, starType: null }
-var _csr2OutputFolder = '', _csr2GrabFolder = '', _ensbCurrent = {}, _pendingSavePack = null
+var _csr2OutputFolder = '', _csr2GrabFolder = '', _csr2UnbanFolder = '', _ensbCurrent = {}, _pendingSavePack = null, _pendingUnbanSave = null
+var _unbanPlatform = 'android'
 var _lastEditedNsb = null // { folder, filename } — session-only, cleared on app restart
 
 function updateLastEditBtns() {
@@ -3038,6 +3105,7 @@ async function init() {
   _url = (cfg.webappUrl || '').replace(/\\/$/, '')
   _csr2OutputFolder = cfg.csr2OutputFolder || ''
   _csr2GrabFolder = cfg.csr2GrabFolder || ''
+  _csr2UnbanFolder = cfg.csr2UnbanFolder || ''
   _dataHubAutoUpdate = !!cfg.autoUpdateData
   if (cfg.autoUpdateData) setTimeout(function(){ dhUpdate('cars', true); dhUpdate('fusions', true); dhUpdate('stage6', true) }, 15000)
   await fetchGames()
@@ -6263,6 +6331,8 @@ function readNsbFile(file, which) {
       _updateApplyTabsNsbState(true)
     } else if (which === 'ensb') {
       loadEnsbCurrent()
+    } else if (which === 'unban' || which === 'unban-scb') {
+      checkUnbanReady()
     } else {
       document.getElementById('unban-apply-btn').disabled = false
     }
@@ -6374,6 +6444,8 @@ function clearNsbFile(which) {
     document.getElementById('ensb-unban-btn').disabled = true
     _ensbCurrent = {}
     _ensbFullData = null
+  } else if (which === 'unban' || which === 'unban-scb') {
+    checkUnbanReady()
   } else {
     document.getElementById('unban-apply-btn').disabled = true
   }
@@ -7642,6 +7714,7 @@ async function confirmSaveToFolder() {
 function openCsr2Settings() {
   document.getElementById('csr2-folder-input').value = _csr2OutputFolder || ''
   document.getElementById('csr2-grab-folder-input').value = _csr2GrabFolder || ''
+  document.getElementById('csr2-unban-folder-input').value = _csr2UnbanFolder || ''
   hideNotice('csr2-settings-notice')
   showModal('csr2-settings-modal')
 }
@@ -7655,11 +7728,14 @@ async function browseFolder(inputId) {
 async function saveCsr2Settings() {
   var folder = document.getElementById('csr2-folder-input').value.trim()
   var grabFolder = document.getElementById('csr2-grab-folder-input').value.trim()
+  var unbanFolder = document.getElementById('csr2-unban-folder-input').value.trim()
   _csr2OutputFolder = folder
   _csr2GrabFolder = grabFolder
+  _csr2UnbanFolder = unbanFolder
   var cfg = await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} })
   cfg.csr2OutputFolder = folder
   cfg.csr2GrabFolder = grabFolder
+  cfg.csr2UnbanFolder = unbanFolder
   await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) }).catch(function(){})
   showNotice('csr2-settings-notice', 'success', 'Saved!')
   setTimeout(function(){ hideModal('csr2-settings-modal') }, 700)
@@ -7686,10 +7762,10 @@ async function applyUnbanFromManual() {
   if (res.error) { showNotice('ensb-notice', 'error', res.error); return }
   var fname = _nsbData.ensb.name || 'PlayerProfile'
   if (_csr2OutputFolder) {
-    var savedU = await saveNsbToFolder(res.resultBase64, fname, { title: 'Unban Applied!', desc: 'The account has been unbanned.', folderMode: true, whichNsb: 'ensb' })
+    var savedU = await saveNsbToFolder(res.nsbResultBase64, fname, { title: 'Unban Applied!', desc: 'The account has been unbanned.', folderMode: true, whichNsb: 'ensb' })
     if (!savedU.conflict) showApplyResult(true, 'Unban Applied!', 'The account has been unbanned.', true, 'ensb')
   } else {
-    downloadNsb(res.resultBase64, fname)
+    downloadNsb(res.nsbResultBase64, fname)
     showApplyResult(true, 'Unban Applied!', 'The modified save file has been downloaded. The account has been unbanned.', false, 'ensb')
   }
 }
@@ -7698,27 +7774,155 @@ async function applyUnbanFromManual() {
 // ─── Unban Modal ──────────────────────────────────────────────────────────────
 
 function openUnban() {
-  _nsbData.unban = null
-  document.getElementById('unban-file-name').style.display = 'none'
+  showModal('unban-platform-modal')
+}
+
+function selectUnbanPlatform(platform) {
+  _unbanPlatform = platform
+  hideModal('unban-platform-modal')
+  _nsbData['unban'] = null
+  _nsbData['unban-scb'] = null
+  ;['unban', 'unban-scb'].forEach(function(which) {
+    var nameEl = document.getElementById(which + '-file-name')
+    if (nameEl) { nameEl.innerHTML = ''; nameEl.style.display = 'none' }
+    var dropEl = document.getElementById(which + '-drop')
+    if (dropEl) {
+      dropEl.classList.remove('has-file', 'over')
+      var lbl = dropEl.querySelector('.file-drop-label')
+      if (lbl) lbl.style.display = ''
+    }
+    var fi = document.getElementById(which + '-file')
+    if (fi) fi.value = ''
+  })
+  document.getElementById('unban-grab-nsb-picker').style.display = 'none'
+  document.getElementById('unban-grab-scb-picker').style.display = 'none'
   document.getElementById('unban-apply-btn').disabled = true
-  document.getElementById('unban-drop').classList.remove('over')
+  document.getElementById('unban-version').value = ''
   hideNotice('unban-notice')
+  var isIos = platform === 'ios'
+  document.getElementById('unban-scb-field').style.display = isIos ? '' : 'none'
+  document.getElementById('unban-scb-info').style.display = isIos ? '' : 'none'
+  document.getElementById('unban-platform-badge').textContent = isIos ? '🍎 iOS' : '🤖 Android'
   showModal('unban-modal')
 }
 
+function checkUnbanReady() {
+  var nsbReady = !!_nsbData['unban']
+  var scbReady = _unbanPlatform === 'android' || !!_nsbData['unban-scb']
+  document.getElementById('unban-apply-btn').disabled = !(nsbReady && scbReady)
+}
+
+async function autoGrabUnbanFile(fileType) {
+  if (!_csr2GrabFolder) { showNotice('unban-notice', 'error', 'No grab folder set — configure it in CSR2 Settings first.'); return }
+  var res = await fetch('/csr2/list-nsb-files?type=' + fileType).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('unban-notice', 'error', res.error); return }
+  var typeName = fileType.toUpperCase()
+  if (!res.files || res.files.length === 0) { showNotice('unban-notice', 'error', 'No ' + typeName + ' file found in grab folder.'); return }
+  var ctx = fileType === 'scb' ? 'unban-scb' : 'unban'
+  if (res.files.length === 1) { loadGrabbedUnbanFile(res.files[0].name, res.files[0].mtime, ctx); return }
+  var pickerSuffix = fileType === 'scb' ? 'scb' : 'nsb'
+  var list = document.getElementById('unban-grab-' + pickerSuffix + '-list')
+  list.innerHTML = res.files.map(function(f) {
+    var d = new Date(f.mtime)
+    var ds = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    return '<div onclick="loadGrabbedUnbanFile(' + JSON.stringify(f.name) + ',' + JSON.stringify(f.mtime) + ',' + JSON.stringify(ctx) + ')" style="padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background=\\'var(--surf3)\\'" onmouseout="this.style.background=\\'\\'">'
+      + '<span style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' + escH(f.name) + '</span>'
+      + '<span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:10px">' + escH(ds) + '</span></div>'
+  }).join('')
+  document.getElementById('unban-grab-' + pickerSuffix + '-picker').style.display = ''
+}
+
+async function loadGrabbedUnbanFile(filename, mtime, ctx) {
+  var pickerSuffix = ctx === 'unban-scb' ? 'scb' : 'nsb'
+  document.getElementById('unban-grab-' + pickerSuffix + '-picker').style.display = 'none'
+  var res = await fetch('/csr2/grab-nsb-file?name=' + encodeURIComponent(filename)).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('unban-notice', 'error', res.error); return }
+  _nsbData[ctx] = { base64: res.base64, name: res.name }
+  var d = new Date(mtime)
+  var ds = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  setUnbanFileDisplay(ctx, res.name, ds)
+  checkUnbanReady()
+}
+
+function setUnbanFileDisplay(ctx, filename, dateStr) {
+  var nameEl = document.getElementById(ctx + '-file-name')
+  if (!nameEl) return
+  nameEl.innerHTML = '<svg width="13" height="15" viewBox="0 0 13 15" fill="none" style="flex-shrink:0;margin-right:8px;opacity:.85" xmlns="http://www.w3.org/2000/svg"><path d="M2 1h6l3 3v10H2V1z" fill="rgba(126,101,81,.25)" stroke="var(--accent)" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 1v3h3" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><line x1="4" y1="7" x2="9" y2="7" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/><line x1="4" y1="9.5" x2="8" y2="9.5" stroke="var(--accent)" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">' + escH(filename) + '</span>' + (dateStr ? '<span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:8px">' + escH(dateStr) + '</span>' : '') + '<button onclick="event.stopPropagation();clearNsbFile(' + JSON.stringify(ctx) + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 10px;flex-shrink:0;display:flex;align-items:center">×</button>'
+  nameEl.style.display = 'flex'
+  nameEl.style.alignItems = 'center'
+  var dropEl = document.getElementById(ctx + '-drop')
+  if (dropEl) {
+    var lbl = dropEl.querySelector('.file-drop-label')
+    if (lbl) lbl.style.display = 'none'
+    dropEl.classList.add('has-file')
+  }
+}
+
 async function applyUnban() {
-  if (!_nsbData.unban) return
+  if (!_nsbData['unban']) return
+  if (_unbanPlatform === 'ios' && !_nsbData['unban-scb']) return
   showLoading('Applying unban...')
+  var payload = {
+    nsbBase64: _nsbData['unban'].base64,
+    platform: _unbanPlatform,
+    version: document.getElementById('unban-version').value.trim() || null
+  }
+  if (_unbanPlatform === 'ios') payload.scbBase64 = _nsbData['unban-scb'].base64
   var res = await fetch('/csr2/unban', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nsbBase64: _nsbData.unban.base64 })
+    body: JSON.stringify(payload)
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   hideLoading()
   if (res.error) { showNotice('unban-notice', 'error', res.error); return }
-  downloadNsb(res.resultBase64, _nsbData.unban.name || 'PlayerProfile')
+  if (_csr2UnbanFolder) {
+    var savePayload = {
+      nsbName: _nsbData['unban'].name || 'NSB',
+      nsbOrigBase64: _nsbData['unban'].base64,
+      nsbModBase64: res.nsbResultBase64
+    }
+    if (_unbanPlatform === 'ios') {
+      savePayload.scbName = _nsbData['unban-scb'].name || 'SCB'
+      savePayload.scbOrigBase64 = _nsbData['unban-scb'].base64
+      savePayload.scbModBase64 = res.scbResultBase64
+    }
+    var saveRes = await fetch('/csr2/save-unban', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(savePayload)
+    }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+    if (saveRes.conflict) {
+      _pendingUnbanSave = { payload: savePayload, res: res }
+      document.getElementById('unban-overwrite-desc').textContent = 'The unban output folder already contains files (' + saveRes.existingFiles.join(', ') + '). Proceeding will delete them before saving the new ones.'
+      showModal('unban-overwrite-modal')
+      return
+    }
+    if (saveRes.error) { showNotice('unban-notice', 'error', saveRes.error); return }
+    hideModal('unban-modal')
+    showApplyResult(true, 'Unban Applied!', 'Files saved to unban folder. Originals in Original/ subfolder.')
+  } else {
+    downloadNsb(res.nsbResultBase64, _nsbData['unban'].name || 'NSB')
+    if (_unbanPlatform === 'ios' && res.scbResultBase64) downloadNsb(res.scbResultBase64, _nsbData['unban-scb'].name || 'SCB')
+    hideModal('unban-modal')
+    showApplyResult(true, 'Unban Applied!', 'Modified save file' + (_unbanPlatform === 'ios' ? 's have' : ' has') + ' been downloaded.')
+  }
+}
+
+async function confirmUnbanFolderOverwrite() {
+  hideModal('unban-overwrite-modal')
+  if (!_pendingUnbanSave) return
+  var p = _pendingUnbanSave
+  _pendingUnbanSave = null
+  showLoading('Saving files...')
+  var saveRes = await fetch('/csr2/save-unban', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({}, p.payload, { forceOverwrite: true }))
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  hideLoading()
+  if (saveRes.error) { showNotice('unban-notice', 'error', saveRes.error); return }
   hideModal('unban-modal')
-  showApplyResult(true, 'Unban Applied!', 'The account has been unbanned. The modified save file has been downloaded.')
+  showApplyResult(true, 'Unban Applied!', 'Files saved to unban folder. Originals in Original/ subfolder.')
 }
 
 // ─── Loading + Download utils ─────────────────────────────────────────────────
@@ -8125,6 +8329,51 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // CSR2 save-unban — writes originals to Unban/Original/ and modified to Unban/
+  if (req.method === 'POST' && pathname === '/csr2/save-unban') {
+    const body = await readBody(req)
+    const cfg = loadConfig()
+    const folder = cfg.csr2UnbanFolder
+    if (!folder) return json(res, 400, { error: 'No unban output folder configured' })
+    if (!fs.existsSync(folder)) return json(res, 400, { error: 'Unban folder not found: ' + folder })
+    const origFolder = path.join(folder, 'Original')
+    const nsbName = body.nsbName || 'NSB'
+    const scbName = body.scbName || 'SCB'
+    const hasScb = !!body.scbOrigBase64
+    try {
+      if (!body.forceOverwrite) {
+        const toCheck = [path.join(folder, nsbName), path.join(origFolder, nsbName)]
+        if (hasScb) { toCheck.push(path.join(folder, scbName)); toCheck.push(path.join(origFolder, scbName)) }
+        const existing = toCheck.filter(p => fs.existsSync(p)).map(p => path.basename(p) + (p.includes('Original') ? ' (Original/)' : ''))
+        if (existing.length > 0) return json(res, 200, { conflict: true, existingFiles: existing })
+      }
+      if (!fs.existsSync(origFolder)) fs.mkdirSync(origFolder)
+      // Backup then delete existing files before writing
+      ;[path.join(folder, nsbName), path.join(origFolder, nsbName)].forEach(function(p) {
+        if (!fs.existsSync(p)) return
+        const bak = p + '.bak'
+        if (!fs.existsSync(bak)) { try { fs.renameSync(p, bak) } catch {} } else { try { fs.unlinkSync(p) } catch {} }
+      })
+      if (hasScb) {
+        ;[path.join(folder, scbName), path.join(origFolder, scbName)].forEach(function(p) {
+          if (!fs.existsSync(p)) return
+          const bak = p + '.bak'
+          if (!fs.existsSync(bak)) { try { fs.renameSync(p, bak) } catch {} } else { try { fs.unlinkSync(p) } catch {} }
+        })
+      }
+      fs.writeFileSync(path.join(origFolder, nsbName), Buffer.from(body.nsbOrigBase64, 'base64'))
+      fs.writeFileSync(path.join(folder, nsbName), Buffer.from(body.nsbModBase64, 'base64'))
+      if (hasScb) {
+        fs.writeFileSync(path.join(origFolder, scbName), Buffer.from(body.scbOrigBase64, 'base64'))
+        fs.writeFileSync(path.join(folder, scbName), Buffer.from(body.scbModBase64, 'base64'))
+      }
+      log('[csr2/save-unban] Saved to: ' + folder)
+      return json(res, 200, { ok: true })
+    } catch (e) {
+      return json(res, 500, { error: e.message })
+    }
+  }
+
   // CSR2 open output folder in Explorer
   if (req.method === 'POST' && pathname === '/csr2/open-folder') {
     const cfg = loadConfig()
@@ -8471,15 +8720,16 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
-  // CSR2 list nsb files in grab folder
+  // CSR2 list nsb/scb files in grab folder (?type=nsb|scb, default nsb)
   if (req.method === 'GET' && pathname === '/csr2/list-nsb-files') {
     const grabFolder = (loadConfig().csr2GrabFolder || '')
     if (!grabFolder) return json(res, 400, { error: 'No grab folder configured' })
+    const fileType = (new URL(req.url, 'http://localhost').searchParams.get('type') || 'nsb').toLowerCase()
     try {
       const entries = fs.readdirSync(grabFolder)
       const files = entries
         .map(f => ({ name: f, stat: fs.statSync(path.join(grabFolder, f)) }))
-        .filter(({ name, stat }) => stat.isFile() && name.toLowerCase() === 'nsb')
+        .filter(({ name, stat }) => stat.isFile() && name.toLowerCase() === fileType)
         .map(({ name, stat }) => ({ name, mtime: stat.mtime.toISOString() }))
         .sort((a, b) => new Date(b.mtime) - new Date(a.mtime))
       return json(res, 200, { files })
@@ -8509,7 +8759,7 @@ const server = http.createServer(async (req, res) => {
     const fullPath = new URL(req.url, 'http://localhost').searchParams.get('path')
     if (!fullPath) return json(res, 400, { error: 'Missing path' })
     const cfg = loadConfig()
-    const allowed = [cfg.csr2OutputFolder, cfg.csr2GrabFolder].filter(Boolean)
+    const allowed = [cfg.csr2OutputFolder, cfg.csr2GrabFolder, cfg.csr2UnbanFolder].filter(Boolean)
     const safe = allowed.some(f => fullPath.startsWith(f))
     if (!safe) return json(res, 403, { error: 'Path is outside configured folders' })
     try {
@@ -8572,12 +8822,63 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/csr2/unban') {
     const body = await readBody(req)
     if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
+    const platform = body.platform || 'android'
+    if (platform === 'ios' && !body.scbBase64) return json(res, 400, { error: 'Missing scbBase64 for iOS' })
     try {
-      const buf = Buffer.from(body.nsbBase64, 'base64')
-      const data = csr2ReadSave(buf)
-      csr2Unban(data)
-      const out = csr2WriteSave(data)
-      return json(res, 200, { resultBase64: out.toString('base64') })
+      const nsbBuf = Buffer.from(body.nsbBase64, 'base64')
+      const nsbData = csr2ReadSave(nsbBuf)
+      csr2Unban(nsbData)
+      if (body.version) { const v = String(body.version); nsbData.prvr = v; nsbData.adpvr = v }
+      const nsbOut = csr2WriteSave(nsbData)
+      if (platform === 'android') {
+        return json(res, 200, { nsbResultBase64: nsbOut.toString('base64') })
+      }
+      // iOS: sync SCB from final NSB values
+      const SCB_MAP = [
+        { nsbPath: ['caea'],           scbKey: 'CashEarned' },
+        { nsbPath: ['goea'],           scbKey: 'GoldEarned' },
+        { nsbPath: ['gbke'],           scbKey: 'GachaBronzeKeysEarned' },
+        { nsbPath: ['gske'],           scbKey: 'GachaSilverKeysEarned' },
+        { nsbPath: ['ggke'],           scbKey: 'GachaGoldKeysEarned' },
+        { nsbPath: ['afme', 'Green'],  scbKey: 'AMPartGreenEarned' },
+        { nsbPath: ['afme', 'Blue'],   scbKey: 'AMPartBlueEarned' },
+        { nsbPath: ['afme', 'Red'],    scbKey: 'AMPartRedEarned' },
+        { nsbPath: ['afme', 'Yellow'], scbKey: 'AMPartYellowEarned' },
+        { nsbPath: ['afms', 'Green'],  scbKey: 'AMPartGreenSpent' },
+        { nsbPath: ['afms', 'Blue'],   scbKey: 'AMPartBlueSpent' },
+        { nsbPath: ['afms', 'Red'],    scbKey: 'AMPartRedSpent' },
+        { nsbPath: ['afms', 'Yellow'], scbKey: 'AMPartYellowSpent' },
+      ]
+      function getNsbVal(data, path) {
+        let cur = data
+        for (const k of path) {
+          if (cur === null || typeof cur !== 'object' || !(k in cur)) return undefined
+          cur = cur[k]
+        }
+        return cur
+      }
+      for (const m of SCB_MAP) {
+        if (getNsbVal(nsbData, m.nsbPath) === undefined)
+          return json(res, 400, { error: 'NSB missing required key: ' + m.nsbPath.join('.') })
+      }
+      const scbBuf = Buffer.from(body.scbBase64, 'base64')
+      const scbData = csr2ReadSave(scbBuf)
+      for (const m of SCB_MAP) {
+        if (!(m.scbKey in scbData))
+          return json(res, 400, { error: 'SCB missing required key: ' + m.scbKey })
+      }
+      for (const m of SCB_MAP) scbData[m.scbKey] = getNsbVal(nsbData, m.nsbPath)
+      const scbOut = csr2WriteSave(scbData)
+      // Verify by re-reading both outputs
+      const nsbV = csr2ReadSave(nsbOut), scbV = csr2ReadSave(scbOut)
+      const verifyTable = SCB_MAP.map(function(m) {
+        const nsbVal = getNsbVal(nsbV, m.nsbPath), scbVal = scbV[m.scbKey]
+        return { nsbKey: m.nsbPath.join('.'), scbKey: m.scbKey, value: nsbVal, scbValue: scbVal, match: nsbVal === scbVal }
+      })
+      const mismatch = verifyTable.find(r => !r.match)
+      if (mismatch) return json(res, 500, { error: 'Verification failed: ' + mismatch.nsbKey + '=' + mismatch.value + ' vs SCB ' + mismatch.scbKey + '=' + mismatch.scbValue, verifyTable })
+      log('[csr2/unban] SCB verified — ' + SCB_MAP.length + ' pairs matched')
+      return json(res, 200, { nsbResultBase64: nsbOut.toString('base64'), scbResultBase64: scbOut.toString('base64'), verifyTable })
     } catch (e) {
       log('[csr2/unban] Error: ' + e.message)
       return json(res, 500, { error: e.message })
