@@ -2489,7 +2489,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 </div>
 
 <!-- Unban Confirm Modal -->
-<div class="modal-bg" id="unban-confirm-modal">
+<div class="modal-bg" id="unban-confirm-modal" style="z-index:150">
   <div class="modal" style="max-width:400px">
     <div class="modal-title">Apply Unban?</div>
     <p class="confirm-desc">This will apply ban-reversal fixes to the loaded NSB file and download the modified save. Continue?</p>
