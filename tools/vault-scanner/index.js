@@ -1945,7 +1945,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 </header>
 
 <div class="app-body">
-  <aside id="sidebar" style="view-transition-name:sidebar">
+  <aside id="sidebar">
     <div class="sidebar-inner">
       <div id="sidebar-content"><div class="sidebar-item" style="font-size:12px;opacity:.5">Loading...</div></div>
     </div>
