@@ -1691,6 +1691,9 @@ aside.sb-collapsed~.sb-toggle-wrap .sb-toggle-btn svg{transform:rotate(180deg)}
 main{flex:1;overflow-y:auto;padding:20px}
 .main-hdr{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
 .panel-layout{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,220px));justify-content:center;gap:0 13px;padding-inline:16px}
+::view-transition-old(root),::view-transition-new(root){animation:none}
+::view-transition-group(*){animation-duration:300ms;animation-timing-function:ease-in-out}
+@media(prefers-reduced-motion:reduce){::view-transition-group(*){animation:none}}
 .panel-layout>.main-hdr{grid-column:1/-1}
 .panel-layout>.grid{grid-column:1/-1}
 .main-title{font-size:17px;font-weight:600}
@@ -1942,7 +1945,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 </header>
 
 <div class="app-body">
-  <aside id="sidebar">
+  <aside id="sidebar" style="view-transition-name:sidebar">
     <div class="sidebar-inner">
       <div id="sidebar-content"><div class="sidebar-item" style="font-size:12px;opacity:.5">Loading...</div></div>
     </div>
@@ -3892,55 +3895,18 @@ async function deleteSel() {
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
-function snapCardPositions() {
-  return Array.from(document.querySelectorAll('.card')).map(function(el) {
-    var r = el.getBoundingClientRect()
-    return { el: el, x: r.left, y: r.top }
-  })
-}
-
-function animateCardFlip(before) {
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-  before.forEach(function(b) {
-    var r = b.el.getBoundingClientRect()
-    var dx = b.x - r.left
-    var dy = b.y - r.top
-    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return
-    b.el.animate(
-      [{transform: 'translate(' + dx + 'px,' + dy + 'px)'}, {transform: 'none'}],
-      {duration: 280, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'none'}
-    )
-  })
-}
-
-var _sbFlipSnap = null
-var _sbFlipRo = null
-
 function toggleSidebar() {
   var aside = document.getElementById('sidebar')
-  if (_sbFlipRo) { _sbFlipRo.disconnect(); _sbFlipRo = null }
-  _sbFlipSnap = snapCardPositions()
-  var collapsed = aside.classList.toggle('sb-collapsed')
-  try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '') } catch(e) {}
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { _sbFlipSnap = null; return }
-  var main = document.querySelector('main')
-  if (!main) { _sbFlipSnap = null; return }
-  _sbFlipRo = new ResizeObserver(function() {
-    if (!_sbFlipSnap) return
-    var anyMoved = _sbFlipSnap.some(function(b) {
-      var r = b.el.getBoundingClientRect()
-      return Math.abs(r.left - b.x) > 1 || Math.abs(r.top - b.y) > 1
-    })
-    if (!anyMoved) return
-    _sbFlipRo.disconnect(); _sbFlipRo = null
-    var snap = _sbFlipSnap; _sbFlipSnap = null
-    animateCardFlip(snap)
-  })
-  _sbFlipRo.observe(main)
-  setTimeout(function() {
-    if (_sbFlipRo) { _sbFlipRo.disconnect(); _sbFlipRo = null }
-    _sbFlipSnap = null
-  }, 400)
+  var doToggle = function() {
+    var collapsed = aside.classList.toggle('sb-collapsed')
+    try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '') } catch(e) {}
+  }
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (!reduced && document.startViewTransition) {
+    document.startViewTransition(doToggle)
+  } else {
+    doToggle()
+  }
 }
 
 function openSettings() {
@@ -4035,7 +4001,7 @@ function renderPacks() {
   var html = ''
   for (var i = 0; i < _packs.length; i++) {
     var p = _packs[i]
-    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:grab">'
+    html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:grab;view-transition-name:card-' + p.id + '">'
     html += '<div class="card-thumb">' + thumb + '</div>'
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-corner-btns">'
