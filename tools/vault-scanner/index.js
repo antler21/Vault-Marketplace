@@ -2960,6 +2960,7 @@ var _packs = [], _nsbData = { ansb: null, unban: null, ensb: null }, _selectedCa
 var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _pkDrag = null
+var _pkPend = null
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _csr2GrabFolder = '', _ensbCurrent = {}, _pendingSavePack = null
 var _lastEditedNsb = null // { folder, filename } — session-only, cleared on app restart
@@ -4017,14 +4018,45 @@ function initPacksDnd() {
   var grid = document.getElementById('packs-grid')
   if (!grid) return
   grid.querySelectorAll('.card[data-pid]').forEach(function(card) {
-    card.addEventListener('pointerdown', startPackDrag)
+    card.addEventListener('pointerdown', onPkDown)
   })
 }
 
-function startPackDrag(e) {
+function onPkDown(e) {
   if (e.button !== 0 || e.target.closest('.card-corner-btn')) return
-  e.preventDefault()
-  var card = e.currentTarget
+  _pkPend = { card: e.currentTarget, startX: e.clientX, startY: e.clientY,
+    timer: setTimeout(activatePackDrag, 250) }
+  document.addEventListener('pointermove', onPkPendMove)
+  document.addEventListener('pointerup', onPkPendUp)
+  document.addEventListener('pointercancel', onPkPendUp)
+}
+
+function onPkPendMove(e) {
+  if (!_pkPend) return
+  if (Math.hypot(e.clientX - _pkPend.startX, e.clientY - _pkPend.startY) > 6) {
+    activatePackDrag()
+    onPkMove(e)
+  }
+}
+
+function onPkPendUp() {
+  if (!_pkPend) return
+  clearTimeout(_pkPend.timer)
+  _pkPend = null
+  document.removeEventListener('pointermove', onPkPendMove)
+  document.removeEventListener('pointerup', onPkPendUp)
+  document.removeEventListener('pointercancel', onPkPendUp)
+}
+
+function activatePackDrag() {
+  if (!_pkPend) return
+  clearTimeout(_pkPend.timer)
+  document.removeEventListener('pointermove', onPkPendMove)
+  document.removeEventListener('pointerup', onPkPendUp)
+  document.removeEventListener('pointercancel', onPkPendUp)
+  var card = _pkPend.card
+  var startX = _pkPend.startX, startY = _pkPend.startY
+  _pkPend = null
   var grid = document.getElementById('packs-grid')
   var rect = card.getBoundingClientRect()
   var ghost = card.cloneNode(true)
@@ -4049,7 +4081,7 @@ function startPackDrag(e) {
   })
   card.style.visibility = 'hidden'
   card.style.pointerEvents = 'none'
-  _pkDrag = { card: card, ghost: ghost, grid: grid, srcPid: card.dataset.pid, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top, insertKey: null }
+  _pkDrag = { card: card, ghost: ghost, grid: grid, srcPid: card.dataset.pid, offsetX: startX - rect.left, offsetY: startY - rect.top, insertKey: null }
   document.addEventListener('pointermove', onPkMove)
   document.addEventListener('pointerup', onPkUp)
   document.addEventListener('pointercancel', onPkUp)
