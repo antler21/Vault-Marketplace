@@ -3052,6 +3052,14 @@ async function init() {
   setTimeout(checkStage6Update, 6000)
   setTimeout(checkForDataUpdates, 7500)
   setTimeout(checkToolVersion, 9000)
+  var _resizeSnap = null, _resizeTimer = null
+  window.addEventListener('resize', function() {
+    if (!_resizeSnap) _resizeSnap = snapCardPositions()
+    clearTimeout(_resizeTimer)
+    _resizeTimer = setTimeout(function() {
+      if (_resizeSnap) { animateCardFlip(_resizeSnap); _resizeSnap = null }
+    }, 50)
+  })
 }
 
 async function checkForDataUpdates() {
@@ -3892,15 +3900,15 @@ async function deleteSel() {
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
-function toggleSidebar() {
-  var aside = document.getElementById('sidebar')
-  var cards = Array.from(document.querySelectorAll('.card'))
-  var before = cards.map(function(el) {
+function snapCardPositions() {
+  return Array.from(document.querySelectorAll('.card')).map(function(el) {
     var r = el.getBoundingClientRect()
     return { el: el, x: r.left, y: r.top }
   })
-  var collapsed = aside.classList.toggle('sb-collapsed')
-  try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '') } catch(e) {}
+}
+
+function animateCardFlip(before) {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
       before.forEach(function(b) {
@@ -3926,6 +3934,14 @@ function toggleSidebar() {
       })
     })
   })
+}
+
+function toggleSidebar() {
+  var aside = document.getElementById('sidebar')
+  var before = snapCardPositions()
+  var collapsed = aside.classList.toggle('sb-collapsed')
+  try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '') } catch(e) {}
+  animateCardFlip(before)
 }
 
 function openSettings() {
