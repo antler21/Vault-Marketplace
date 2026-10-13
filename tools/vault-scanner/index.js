@@ -1645,6 +1645,31 @@ function csr2Unban(data) {
   }
 }
 
+// NSB <-> SCB key mapping used by both /csr2/unban (iOS sync) and /csr2/sync-scb
+const SCB_SYNC_MAP = [
+  { nsbPath: ['caea'],           scbKey: 'CashEarned' },
+  { nsbPath: ['goea'],           scbKey: 'GoldEarned' },
+  { nsbPath: ['gbke'],           scbKey: 'GachaBronzeKeysEarned' },
+  { nsbPath: ['gske'],           scbKey: 'GachaSilverKeysEarned' },
+  { nsbPath: ['ggke'],           scbKey: 'GachaGoldKeysEarned' },
+  { nsbPath: ['afme', 'Green'],  scbKey: 'AMPartGreenEarned' },
+  { nsbPath: ['afme', 'Blue'],   scbKey: 'AMPartBlueEarned' },
+  { nsbPath: ['afme', 'Red'],    scbKey: 'AMPartRedEarned' },
+  { nsbPath: ['afme', 'Yellow'], scbKey: 'AMPartYellowEarned' },
+  { nsbPath: ['afms', 'Green'],  scbKey: 'AMPartGreenSpent' },
+  { nsbPath: ['afms', 'Blue'],   scbKey: 'AMPartBlueSpent' },
+  { nsbPath: ['afms', 'Red'],    scbKey: 'AMPartRedSpent' },
+  { nsbPath: ['afms', 'Yellow'], scbKey: 'AMPartYellowSpent' },
+]
+function getNsbVal(data, path) {
+  let cur = data
+  for (const k of path) {
+    if (cur === null || typeof cur !== 'object' || !(k in cur)) return undefined
+    cur = cur[k]
+  }
+  return cur
+}
+
 // ─── UI HTML ─────────────────────────────────────────────────────────────────
 
 const UI_HTML = `<!DOCTYPE html>
@@ -1990,6 +2015,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
           <button class="btn btn-secondary btn-sm" id="data-hub-btn" onclick="openDataHub()" style="position:relative;display:flex;align-items:center;gap:5px">⬡ Data Hub<span id="data-hub-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;min-width:11px;height:11px;font-size:6px;font-weight:700;align-items:center;justify-content:center;line-height:1;padding:0 2px;box-sizing:border-box"></span></button>
           <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
           <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
+          <button class="btn btn-secondary btn-sm" onclick="openSyncScb()">Sync SCB</button>
           <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
         </div>
         <div class="grid" id="packs-grid"></div>
@@ -2573,6 +2599,49 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
   </div>
 </div>
 
+<!-- Sync SCB Modal -->
+<div class="modal-bg" id="sync-scb-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title">Sync SCB</div>
+    <div class="modal-sub">Copy resource values from NSB into SCB so both stay in sync</div>
+    <div class="field">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin-bottom:0">NSB File</label>
+        <button class="btn btn-secondary btn-sm" onclick="autoGrabSyncScb('nsb')" style="font-size:11px;padding:3px 10px">⚡ Auto Grab</button>
+      </div>
+      <label class="file-drop" id="syncscb-nsb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'syncscb-nsb')">
+        <input type="file" id="syncscb-nsb-file" style="display:none" onchange="handleNsbFile(event,'syncscb-nsb')">
+        <div class="file-drop-label">Click to select or drag &amp; drop your NSB file</div>
+        <div class="file-drop-name" id="syncscb-nsb-file-name" style="display:none"></div>
+      </label>
+      <div id="syncscb-nsb-grab-picker" style="display:none;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:150px;overflow-y:auto;margin-top:6px"><div id="syncscb-nsb-grab-list"></div></div>
+    </div>
+    <div class="field">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin-bottom:0">SCB File</label>
+        <button class="btn btn-secondary btn-sm" onclick="autoGrabSyncScb('scb')" style="font-size:11px;padding:3px 10px">⚡ Auto Grab</button>
+      </div>
+      <label class="file-drop" id="syncscb-scb-drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="handleNsbDrop(event,'syncscb-scb')">
+        <input type="file" id="syncscb-scb-file" style="display:none" onchange="handleNsbFile(event,'syncscb-scb')">
+        <div class="file-drop-label">Click to select or drag &amp; drop your SCB file</div>
+        <div class="file-drop-name" id="syncscb-scb-file-name" style="display:none"></div>
+      </label>
+      <div id="syncscb-scb-grab-picker" style="display:none;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:150px;overflow-y:auto;margin-top:6px"><div id="syncscb-scb-grab-list"></div></div>
+    </div>
+    <div style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:4px">
+      <div style="color:var(--text);font-weight:500;margin-bottom:6px">What this does:</div>
+      <div>• Verifies the NSB and SCB belong to the same account</div>
+      <div>• Copies currency, gacha key, and aftermarket part totals from NSB into SCB</div>
+      <div>• Does not modify the NSB file</div>
+    </div>
+    <div id="sync-scb-notice" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('sync-scb-modal')">Cancel</button>
+      <button class="btn btn-primary" id="sync-scb-apply-btn" onclick="applySyncScb()" disabled>Sync &amp; Download</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit NSB Full Editor Modal -->
 <div class="modal-bg" id="ensb-editor-modal" style="align-items:stretch;padding:16px">
   <div style="display:flex;width:100%;height:100%;max-width:1100px;margin:auto;background:var(--surf);border-radius:12px;border:1px solid var(--border);overflow:hidden">
@@ -3011,7 +3080,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 
 <script>
 var _url = '', _games = [], _accounts = [], _activeGame = null, _activeSection = null
-var _packs = [], _nsbData = { ansb: null, unban: null, 'unban-scb': null, ensb: null }, _selectedCars = []
+var _packs = [], _nsbData = { ansb: null, unban: null, 'unban-scb': null, ensb: null, 'syncscb-nsb': null, 'syncscb-scb': null }, _selectedCars = []
 var _editingPackId = null, _deletingPackId = null
 var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackIds = new Set(), _cppAllowDupes = false
 var _pkDrag = null
@@ -6322,12 +6391,14 @@ function readNsbFile(file, which) {
       loadEnsbCurrent()
     } else if (which === 'unban' || which === 'unban-scb') {
       checkUnbanReady()
+    } else if (which === 'syncscb-nsb' || which === 'syncscb-scb') {
+      checkSyncScbReady()
     } else {
       document.getElementById('unban-apply-btn').disabled = false
     }
   }
   reader.onerror = function() {
-    var noticeId = which === 'ansb' ? 'ansb-notice' : which === 'ensb' ? 'ensb-notice' : 'unban-notice'
+    var noticeId = which === 'ansb' ? 'ansb-notice' : which === 'ensb' ? 'ensb-notice' : (which === 'syncscb-nsb' || which === 'syncscb-scb') ? 'sync-scb-notice' : 'unban-notice'
     showNotice(noticeId, 'error', 'Could not read file: ' + (reader.error ? reader.error.message : 'unknown error'))
   }
   reader.readAsArrayBuffer(file)
@@ -6436,6 +6507,8 @@ function clearNsbFile(which) {
     _ensbFullData = null
   } else if (which === 'unban' || which === 'unban-scb') {
     checkUnbanReady()
+  } else if (which === 'syncscb-nsb' || which === 'syncscb-scb') {
+    checkSyncScbReady()
   } else {
     document.getElementById('unban-apply-btn').disabled = true
   }
@@ -7738,6 +7811,79 @@ function startUnbanFromEnsb() {
   showModal('unban-platform-modal')
 }
 
+function openSyncScb() {
+  _nsbData['syncscb-nsb'] = null
+  _nsbData['syncscb-scb'] = null
+  ;['syncscb-nsb', 'syncscb-scb'].forEach(function(which) {
+    var nameEl = document.getElementById(which + '-file-name')
+    if (nameEl) { nameEl.innerHTML = ''; nameEl.style.display = 'none' }
+    var dropEl = document.getElementById(which + '-drop')
+    if (dropEl) {
+      dropEl.classList.remove('has-file', 'over')
+      var lbl = dropEl.querySelector('.file-drop-label')
+      if (lbl) lbl.style.display = ''
+    }
+    var fi = document.getElementById(which + '-file')
+    if (fi) fi.value = ''
+  })
+  document.getElementById('syncscb-nsb-grab-picker').style.display = 'none'
+  document.getElementById('syncscb-scb-grab-picker').style.display = 'none'
+  document.getElementById('sync-scb-apply-btn').disabled = true
+  hideNotice('sync-scb-notice')
+  showModal('sync-scb-modal')
+}
+
+function checkSyncScbReady() {
+  document.getElementById('sync-scb-apply-btn').disabled = !(_nsbData['syncscb-nsb'] && _nsbData['syncscb-scb'])
+}
+
+async function autoGrabSyncScb(fileType) {
+  if (!_csr2GrabFolder) { showNotice('sync-scb-notice', 'error', 'No grab folder set — configure it in CSR2 Settings first.'); return }
+  var res = await fetch('/csr2/list-nsb-files?type=' + fileType).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('sync-scb-notice', 'error', res.error); return }
+  var typeName = fileType.toUpperCase()
+  if (!res.files || res.files.length === 0) { showNotice('sync-scb-notice', 'error', 'No ' + typeName + ' file found in grab folder.'); return }
+  var ctx = fileType === 'scb' ? 'syncscb-scb' : 'syncscb-nsb'
+  var pickerSuffix = fileType === 'scb' ? 'scb' : 'nsb'
+  if (res.files.length === 1) { loadGrabbedSyncScb(res.files[0].name, res.files[0].mtime, ctx); return }
+  var list = document.getElementById('syncscb-' + pickerSuffix + '-grab-list')
+  list.innerHTML = res.files.map(function(f) {
+    var d = new Date(f.mtime)
+    var ds = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    return '<div onclick="loadGrabbedSyncScb(' + JSON.stringify(f.name) + ',' + JSON.stringify(f.mtime) + ',' + JSON.stringify(ctx) + ')" style="padding:9px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);transition:background .1s" onmouseover="this.style.background=\\'var(--surf3)\\'" onmouseout="this.style.background=\\'\\'">'
+      + '<span style="font-size:13px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">' + escH(f.name) + '</span>'
+      + '<span style="font-size:11px;color:var(--muted);flex-shrink:0;margin-left:10px">' + escH(ds) + '</span></div>'
+  }).join('')
+  document.getElementById('syncscb-' + pickerSuffix + '-grab-picker').style.display = ''
+}
+
+async function loadGrabbedSyncScb(filename, mtime, ctx) {
+  var pickerSuffix = ctx === 'syncscb-scb' ? 'scb' : 'nsb'
+  document.getElementById('syncscb-' + pickerSuffix + '-grab-picker').style.display = 'none'
+  var res = await fetch('/csr2/grab-nsb-file?name=' + encodeURIComponent(filename)).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('sync-scb-notice', 'error', res.error); return }
+  _nsbData[ctx] = { base64: res.base64, name: res.name }
+  var d = new Date(mtime)
+  var ds = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  setUnbanFileDisplay(ctx, res.name, ds)
+  checkSyncScbReady()
+}
+
+async function applySyncScb() {
+  if (!_nsbData['syncscb-nsb'] || !_nsbData['syncscb-scb']) return
+  showLoading('Syncing SCB...')
+  var res = await fetch('/csr2/sync-scb', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nsbBase64: _nsbData['syncscb-nsb'].base64, scbBase64: _nsbData['syncscb-scb'].base64 })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  hideLoading()
+  if (res.error) { showNotice('sync-scb-notice', 'error', res.error); return }
+  downloadNsb(res.scbResultBase64, _nsbData['syncscb-scb'].name || 'SCB')
+  hideModal('sync-scb-modal')
+  showApplyResult(true, 'SCB Synced!', 'The SCB file has been updated to match the NSB and downloaded.')
+}
+
 
 // ─── Unban Modal ──────────────────────────────────────────────────────────────
 
@@ -8801,49 +8947,25 @@ const server = http.createServer(async (req, res) => {
     try {
       const nsbBuf = Buffer.from(body.nsbBase64, 'base64')
       const nsbData = csr2ReadSave(nsbBuf)
-      // iOS: sync SCB from final NSB values
-      const SCB_MAP = [
-        { nsbPath: ['caea'],           scbKey: 'CashEarned' },
-        { nsbPath: ['goea'],           scbKey: 'GoldEarned' },
-        { nsbPath: ['gbke'],           scbKey: 'GachaBronzeKeysEarned' },
-        { nsbPath: ['gske'],           scbKey: 'GachaSilverKeysEarned' },
-        { nsbPath: ['ggke'],           scbKey: 'GachaGoldKeysEarned' },
-        { nsbPath: ['afme', 'Green'],  scbKey: 'AMPartGreenEarned' },
-        { nsbPath: ['afme', 'Blue'],   scbKey: 'AMPartBlueEarned' },
-        { nsbPath: ['afme', 'Red'],    scbKey: 'AMPartRedEarned' },
-        { nsbPath: ['afme', 'Yellow'], scbKey: 'AMPartYellowEarned' },
-        { nsbPath: ['afms', 'Green'],  scbKey: 'AMPartGreenSpent' },
-        { nsbPath: ['afms', 'Blue'],   scbKey: 'AMPartBlueSpent' },
-        { nsbPath: ['afms', 'Red'],    scbKey: 'AMPartRedSpent' },
-        { nsbPath: ['afms', 'Yellow'], scbKey: 'AMPartYellowSpent' },
-      ]
-      function getNsbVal(data, path) {
-        let cur = data
-        for (const k of path) {
-          if (cur === null || typeof cur !== 'object' || !(k in cur)) return undefined
-          cur = cur[k]
-        }
-        return cur
-      }
       let scbData = null
       if (platform === 'ios') {
-        for (const m of SCB_MAP) {
+        for (const m of SCB_SYNC_MAP) {
           if (getNsbVal(nsbData, m.nsbPath) === undefined)
             return json(res, 400, { error: 'NSB missing required key: ' + m.nsbPath.join('.') })
         }
         const scbBuf = Buffer.from(body.scbBase64, 'base64')
         scbData = csr2ReadSave(scbBuf)
-        for (const m of SCB_MAP) {
+        for (const m of SCB_SYNC_MAP) {
           if (!(m.scbKey in scbData))
             return json(res, 400, { error: 'SCB missing required key: ' + m.scbKey })
         }
         // Verify NSB and SCB belong to the same account — compare lifetime "Earned"
         // totals BEFORE any unban mutation (csr2Unban reduces these, so this must
         // run first). A mismatched pair means the files aren't from the same account.
-        const MATCH_FIELDS = SCB_MAP.filter(m => m.scbKey.endsWith('Earned'))
-        const mismatch = MATCH_FIELDS.find(m => getNsbVal(nsbData, m.nsbPath) !== scbData[m.scbKey])
-        if (mismatch) {
-          return json(res, 409, { error: 'NSB and SCB do not appear to belong to the same account (mismatch on ' + mismatch.scbKey + '). Load the matching pair and try again.' })
+        const matchFields = SCB_SYNC_MAP.filter(m => m.scbKey.endsWith('Earned'))
+        const acctMismatch = matchFields.find(m => getNsbVal(nsbData, m.nsbPath) !== scbData[m.scbKey])
+        if (acctMismatch) {
+          return json(res, 409, { error: 'NSB and SCB do not appear to belong to the same account (mismatch on ' + acctMismatch.scbKey + '). Load the matching pair and try again.' })
         }
       }
       csr2Unban(nsbData)
@@ -8852,20 +8974,57 @@ const server = http.createServer(async (req, res) => {
       if (platform === 'android') {
         return json(res, 200, { nsbResultBase64: nsbOut.toString('base64') })
       }
-      for (const m of SCB_MAP) scbData[m.scbKey] = getNsbVal(nsbData, m.nsbPath)
+      for (const m of SCB_SYNC_MAP) scbData[m.scbKey] = getNsbVal(nsbData, m.nsbPath)
       const scbOut = csr2WriteSave(scbData)
       // Verify by re-reading both outputs
       const nsbV = csr2ReadSave(nsbOut), scbV = csr2ReadSave(scbOut)
-      const verifyTable = SCB_MAP.map(function(m) {
+      const verifyTable = SCB_SYNC_MAP.map(function(m) {
         const nsbVal = getNsbVal(nsbV, m.nsbPath), scbVal = scbV[m.scbKey]
         return { nsbKey: m.nsbPath.join('.'), scbKey: m.scbKey, value: nsbVal, scbValue: scbVal, match: nsbVal === scbVal }
       })
       const mismatch = verifyTable.find(r => !r.match)
       if (mismatch) return json(res, 500, { error: 'Verification failed: ' + mismatch.nsbKey + '=' + mismatch.value + ' vs SCB ' + mismatch.scbKey + '=' + mismatch.scbValue, verifyTable })
-      log('[csr2/unban] SCB verified — ' + SCB_MAP.length + ' pairs matched')
+      log('[csr2/unban] SCB verified — ' + SCB_SYNC_MAP.length + ' pairs matched')
       return json(res, 200, { nsbResultBase64: nsbOut.toString('base64'), scbResultBase64: scbOut.toString('base64'), verifyTable })
     } catch (e) {
       log('[csr2/unban] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // CSR2 sync-scb — copy current NSB resource values into SCB (no ban reversal)
+  if (req.method === 'POST' && pathname === '/csr2/sync-scb') {
+    const body = await readBody(req)
+    if (!body.nsbBase64) return json(res, 400, { error: 'Missing nsbBase64' })
+    if (!body.scbBase64) return json(res, 400, { error: 'Missing scbBase64' })
+    try {
+      const nsbData = csr2ReadSave(Buffer.from(body.nsbBase64, 'base64'))
+      const scbData = csr2ReadSave(Buffer.from(body.scbBase64, 'base64'))
+      for (const m of SCB_SYNC_MAP) {
+        if (getNsbVal(nsbData, m.nsbPath) === undefined)
+          return json(res, 400, { error: 'NSB missing required key: ' + m.nsbPath.join('.') })
+        if (!(m.scbKey in scbData))
+          return json(res, 400, { error: 'SCB missing required key: ' + m.scbKey })
+      }
+      // Verify NSB and SCB belong to the same account before syncing anything
+      const matchFields = SCB_SYNC_MAP.filter(m => m.scbKey.endsWith('Earned'))
+      const acctMismatch = matchFields.find(m => getNsbVal(nsbData, m.nsbPath) !== scbData[m.scbKey])
+      if (acctMismatch) {
+        return json(res, 409, { error: 'NSB and SCB do not appear to belong to the same account (mismatch on ' + acctMismatch.scbKey + '). Load the matching pair and try again.' })
+      }
+      for (const m of SCB_SYNC_MAP) scbData[m.scbKey] = getNsbVal(nsbData, m.nsbPath)
+      const scbOut = csr2WriteSave(scbData)
+      const scbV = csr2ReadSave(scbOut)
+      const verifyTable = SCB_SYNC_MAP.map(function(m) {
+        const nsbVal = getNsbVal(nsbData, m.nsbPath), scbVal = scbV[m.scbKey]
+        return { nsbKey: m.nsbPath.join('.'), scbKey: m.scbKey, value: nsbVal, scbValue: scbVal, match: nsbVal === scbVal }
+      })
+      const mismatch = verifyTable.find(r => !r.match)
+      if (mismatch) return json(res, 500, { error: 'Verification failed: ' + mismatch.nsbKey + '=' + mismatch.value + ' vs SCB ' + mismatch.scbKey + '=' + mismatch.scbValue, verifyTable })
+      log('[csr2/sync-scb] SCB verified — ' + SCB_SYNC_MAP.length + ' pairs matched')
+      return json(res, 200, { scbResultBase64: scbOut.toString('base64'), verifyTable })
+    } catch (e) {
+      log('[csr2/sync-scb] Error: ' + e.message)
       return json(res, 500, { error: e.message })
     }
   }
