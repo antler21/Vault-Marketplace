@@ -8134,7 +8134,11 @@ async function confirmToggleCodeStatus() {
     body: JSON.stringify({ used: p.nextUsed })
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (res.error) { showNotice('codes-notice', 'error', res.error); return }
-  loadCodesList()
+  // Patch the one row in local state and re-render from memory — no refetch,
+  // so this is instant instead of a full list reload against the webapp.
+  var c = _codesList.find(function(x){ return x.id === p.id })
+  if (c && res.code) c.used_at = res.code.used_at
+  renderCodesList()
 }
 
 async function openCodeDetail(id) {
@@ -8149,9 +8153,12 @@ async function openCodeDetail(id) {
   var fmt = function(iso) { return iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—' }
   var rows = [['Code', c.plaintext_code || '—'], ['Pack', c.pack_name], ['Created', fmt(c.created_at)], ['Used At', fmt(c.used_at)]]
   if (c.job) {
+    rows.push(['Redeemed By', 'Customer'])
     rows.push(['Redeemed Email', c.job.email || '—'])
     rows.push(['Platform', c.job.platform || '—'])
     rows.push(['Job Status', c.job.status || '—'])
+  } else if (c.used_at) {
+    rows.push(['Redeemed By', 'Manually marked (no customer redemption)'])
   }
   document.getElementById('code-detail-body').innerHTML = rows.map(function(r) {
     return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">' + escH(r[0]) + '</span><span style="font-weight:500;text-align:right">' + escH(String(r[1])) + '</span></div>'
