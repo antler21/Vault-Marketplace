@@ -8043,7 +8043,7 @@ async function generateCodes() {
   if (res.error) { showNotice('codes-notice', 'error', res.error); return }
   var resultEl = document.getElementById('codes-gen-result')
   resultEl.innerHTML = '<span style="font-size:12px;color:var(--text)">✅ Generated ' + res.codes.length + ' code' + (res.codes.length !== 1 ? 's' : '') + ' for <b>' + escH(packName) + '</b> — see History below</span>'
-    + '<button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="copyCodeText(' + JSON.stringify(res.codes.join('\\n')) + ', this)">Copy All</button>'
+    + '<button class="btn btn-secondary btn-sm" style="flex-shrink:0" data-codes="' + escH(res.codes.join(',')) + '" onclick="copyCodeText(this.dataset.codes.split(\',\').join(String.fromCharCode(10)), this)">Copy All</button>'
   resultEl.style.display = 'flex'
   loadCodesList()
 }
@@ -8105,8 +8105,8 @@ function renderCodesList() {
       + '<code style="flex:1;font-size:13px;' + (used ? 'color:var(--muted);text-decoration:line-through' : 'color:var(--text)') + '">' + escH(c.plaintext_code || '—') + '</code>'
       + (_codesPack ? '' : '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + escH(c.pack_name) + '</span>')
       + '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + dateStr + '</span>'
-      + '<span onclick="openCodeToggleConfirm(' + JSON.stringify(c.id) + ')" title="Click to toggle" style="cursor:pointer;font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:8px;' + (used ? 'background:rgba(224,82,82,.15);color:var(--red)' : 'background:rgba(76,175,80,.15);color:var(--green)') + '">' + (used ? 'Used ' + usedStr : 'Available') + '</span>'
-      + '<button onclick="' + (used ? 'openCodeDetail(' + JSON.stringify(c.id) + ')' : 'copyCodeText(' + JSON.stringify(c.plaintext_code || '') + ', this)') + '" title="' + (used ? 'View detail' : 'Copy code') + '" style="background:none;border:none;color:var(--muted);cursor:pointer;flex-shrink:0;display:flex;align-items:center;padding:2px">' + (used ? EYE_ICON_SVG : COPY_ICON_SVG) + '</button>'
+      + '<span data-id="' + escH(c.id) + '" onclick="openCodeToggleConfirm(this.dataset.id)" title="Click to toggle" style="cursor:pointer;font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:8px;' + (used ? 'background:rgba(224,82,82,.15);color:var(--red)' : 'background:rgba(76,175,80,.15);color:var(--green)') + '">' + (used ? 'Used ' + usedStr : 'Available') + '</span>'
+      + '<button data-id="' + escH(c.id) + '" data-code="' + escH(c.plaintext_code || '') + '" onclick="' + (used ? 'openCodeDetail(this.dataset.id)' : 'copyCodeText(this.dataset.code, this)') + '" title="' + (used ? 'View detail' : 'Copy code') + '" style="background:none;border:none;color:var(--muted);cursor:pointer;flex-shrink:0;display:flex;align-items:center;padding:2px">' + (used ? EYE_ICON_SVG : COPY_ICON_SVG) + '</button>'
       + '</div>'
   }).join('')
 }
