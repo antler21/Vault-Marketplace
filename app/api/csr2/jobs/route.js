@@ -42,5 +42,8 @@ export async function POST(request) {
     return Response.json({ error: error.message }, { status: 500 })
   }
 
+  // Link the code back to its job so the Codes detail view can show who redeemed it.
+  await supabase.from('csr2_codes').update({ used_by_job_id: job.id }).eq('id', codeId)
+
   return Response.json({ ok: true, jobId: job.id })
 }

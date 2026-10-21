@@ -2687,16 +2687,16 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 
 <!-- Codes Modal -->
 <div class="modal-bg" id="codes-modal">
-  <div class="modal" style="max-width:600px">
-    <div class="modal-title">🎫 Redeem Codes</div>
-    <div class="modal-sub">Generate single-use codes for a pack, and track which are still available</div>
+  <div class="modal" style="max-width:600px;height:620px;display:flex;flex-direction:column;overflow:hidden">
+    <div class="modal-title" style="flex-shrink:0">🎫 Redeem Codes</div>
+    <div class="modal-sub" style="flex-shrink:0">Generate single-use codes for a pack, and track which are still available</div>
 
-    <div class="field">
+    <div class="field" style="flex-shrink:0">
       <label>Pack</label>
       <select id="codes-pack-select" onchange="onCodesPackChange()" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px"></select>
     </div>
 
-    <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-shrink:0">
       <div style="flex:1">
         <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Count</label>
         <input type="number" id="codes-gen-count" value="1" min="1" max="500" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px">
@@ -2704,11 +2704,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <button class="btn btn-primary" id="codes-gen-btn" onclick="generateCodes()">Generate</button>
     </div>
 
-    <div id="codes-gen-result" style="display:none;background:var(--surf2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;margin-bottom:10px"></div>
+    <div id="codes-gen-result" style="display:none;flex-shrink:0;background:var(--surf2);border:1px solid var(--accent);border-radius:8px;padding:9px 12px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px"></div>
 
-    <div id="codes-notice" style="display:none"></div>
+    <div id="codes-notice" style="display:none;flex-shrink:0"></div>
 
-    <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;flex-shrink:0">
       <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">History</div>
       <div style="display:flex;gap:6px">
         <button class="btn btn-secondary btn-sm" data-filter="all" onclick="setCodesFilter('all')" style="padding:3px 10px;font-size:11px">All</button>
@@ -2716,10 +2716,33 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <button class="btn btn-secondary btn-sm" data-filter="used" onclick="setCodesFilter('used')" style="padding:3px 10px;font-size:11px">Used</button>
       </div>
     </div>
-    <div id="codes-list" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+    <div id="codes-list" style="flex:1;min-height:0;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
 
-    <div class="modal-actions">
+    <div class="modal-actions" style="flex-shrink:0">
       <button class="btn btn-secondary" onclick="hideModal('codes-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Code Status Toggle Confirm Modal -->
+<div class="modal-bg" id="code-toggle-confirm-modal" style="z-index:150">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title">Change Code Status?</div>
+    <p class="confirm-desc" id="code-toggle-confirm-desc"></p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('code-toggle-confirm-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmToggleCodeStatus()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- Code Detail Modal -->
+<div class="modal-bg" id="code-detail-modal" style="z-index:150">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">Code Detail</div>
+    <div id="code-detail-body" style="font-size:13px;color:var(--text);line-height:1.9"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('code-detail-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -8018,24 +8041,19 @@ async function generateCodes() {
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   btn.disabled = false
   if (res.error) { showNotice('codes-notice', 'error', res.error); return }
-  var html = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Generated ' + res.codes.length + ' code' + (res.codes.length !== 1 ? 's' : '') + ' for <b style="color:var(--text)">' + escH(packName) + '</b>:</div>'
-  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
-  res.codes.forEach(function(c) {
-    html += '<code onclick="copyCodeText(' + JSON.stringify(c) + ', this)" title="Click to copy" style="background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer">' + escH(c) + '</code>'
-  })
-  html += '</div><button class="btn btn-secondary btn-sm" onclick="copyCodeText(' + JSON.stringify(res.codes.join('\\n')) + ', this)">Copy All</button>'
   var resultEl = document.getElementById('codes-gen-result')
-  resultEl.innerHTML = html
-  resultEl.style.display = ''
+  resultEl.innerHTML = '<span style="font-size:12px;color:var(--text)">✅ Generated ' + res.codes.length + ' code' + (res.codes.length !== 1 ? 's' : '') + ' for <b>' + escH(packName) + '</b> — see History below</span>'
+    + '<button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="copyCodeText(' + JSON.stringify(res.codes.join('\\n')) + ', this)">Copy All</button>'
+  resultEl.style.display = 'flex'
   loadCodesList()
 }
 
 function copyCodeText(text, btnEl) {
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function(){})
   if (!btnEl) return
-  var orig = btnEl.textContent
-  btnEl.textContent = 'Copied!'
-  setTimeout(function(){ btnEl.textContent = orig }, 1200)
+  var orig = btnEl.innerHTML
+  btnEl.innerHTML = '<span style="color:var(--green);font-size:12px;font-weight:700">✓</span>'
+  setTimeout(function(){ btnEl.innerHTML = orig }, 1200)
 }
 
 function setCodesFilter(f) {
@@ -8065,6 +8083,9 @@ async function loadCodesList() {
   renderCodesList()
 }
 
+var COPY_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+var EYE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+
 function renderCodesList() {
   var list = _codesList.filter(function(c) {
     if (_codesFilter === 'available') return !c.used_at
@@ -8084,9 +8105,56 @@ function renderCodesList() {
       + '<code style="flex:1;font-size:13px;' + (used ? 'color:var(--muted);text-decoration:line-through' : 'color:var(--text)') + '">' + escH(c.plaintext_code || '—') + '</code>'
       + (_codesPack ? '' : '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + escH(c.pack_name) + '</span>')
       + '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + dateStr + '</span>'
-      + '<span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:8px;' + (used ? 'background:rgba(224,82,82,.15);color:var(--red)' : 'background:rgba(76,175,80,.15);color:var(--green)') + '">' + (used ? 'Used ' + usedStr : 'Available') + '</span>'
-      + (used ? '' : '<button onclick="copyCodeText(' + JSON.stringify(c.plaintext_code || '') + ', this)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;flex-shrink:0;text-decoration:underline">Copy</button>')
+      + '<span onclick="openCodeToggleConfirm(' + JSON.stringify(c.id) + ')" title="Click to toggle" style="cursor:pointer;font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:8px;' + (used ? 'background:rgba(224,82,82,.15);color:var(--red)' : 'background:rgba(76,175,80,.15);color:var(--green)') + '">' + (used ? 'Used ' + usedStr : 'Available') + '</span>'
+      + '<button onclick="' + (used ? 'openCodeDetail(' + JSON.stringify(c.id) + ')' : 'copyCodeText(' + JSON.stringify(c.plaintext_code || '') + ', this)') + '" title="' + (used ? 'View detail' : 'Copy code') + '" style="background:none;border:none;color:var(--muted);cursor:pointer;flex-shrink:0;display:flex;align-items:center;padding:2px">' + (used ? EYE_ICON_SVG : COPY_ICON_SVG) + '</button>'
       + '</div>'
+  }).join('')
+}
+
+var _pendingToggleCode = null
+
+function openCodeToggleConfirm(id) {
+  var c = _codesList.find(function(x){ return x.id === id })
+  if (!c) return
+  var used = !!c.used_at
+  _pendingToggleCode = { id: id, nextUsed: !used }
+  document.getElementById('code-toggle-confirm-desc').textContent = used
+    ? 'Mark code "' + (c.plaintext_code || '') + '" as available again? This clears its used/redeemed record.'
+    : 'Mark code "' + (c.plaintext_code || '') + '" as used? It will no longer be redeemable by a customer.'
+  showModal('code-toggle-confirm-modal')
+}
+
+async function confirmToggleCodeStatus() {
+  if (!_pendingToggleCode) return
+  var p = _pendingToggleCode
+  _pendingToggleCode = null
+  hideModal('code-toggle-confirm-modal')
+  var res = await fetch('/csr2/codes/' + p.id, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ used: p.nextUsed })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { showNotice('codes-notice', 'error', res.error); return }
+  loadCodesList()
+}
+
+async function openCodeDetail(id) {
+  document.getElementById('code-detail-body').innerHTML = '<div style="text-align:center;color:var(--muted);padding:10px 0">Loading…</div>'
+  showModal('code-detail-modal')
+  var res = await fetch('/csr2/codes/' + id).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error || !res.code) {
+    document.getElementById('code-detail-body').innerHTML = '<div style="color:var(--red)">' + escH(res.error || 'Not found') + '</div>'
+    return
+  }
+  var c = res.code
+  var fmt = function(iso) { return iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—' }
+  var rows = [['Code', c.plaintext_code || '—'], ['Pack', c.pack_name], ['Created', fmt(c.created_at)], ['Used At', fmt(c.used_at)]]
+  if (c.job) {
+    rows.push(['Redeemed Email', c.job.email || '—'])
+    rows.push(['Platform', c.job.platform || '—'])
+    rows.push(['Job Status', c.job.status || '—'])
+  }
+  document.getElementById('code-detail-body').innerHTML = rows.map(function(r) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">' + escH(r[0]) + '</span><span style="font-weight:500;text-align:right">' + escH(String(r[1])) + '</span></div>'
   }).join('')
 }
 
@@ -9259,6 +9327,32 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       log('[csr2/codes POST] Error: ' + e.message)
       return json(res, 500, { error: e.message })
+    }
+  }
+
+  // Single code — detail (GET) and manual available/used toggle (PATCH)
+  const codeIdM = pathname.match(/^\/csr2\/codes\/([^/]+)$/)
+  if (codeIdM) {
+    const cfg = loadConfig()
+    if (!cfg.csr2AdminToken) return json(res, 400, { error: 'No admin token configured — set it in CSR2 Settings.' })
+    if (req.method === 'GET') {
+      try {
+        const data = await fetchWebappApi('GET', '/api/csr2/codes/' + codeIdM[1], null, cfg.csr2AdminToken)
+        return json(res, 200, data)
+      } catch (e) {
+        log('[csr2/codes/:id GET] Error: ' + e.message)
+        return json(res, 500, { error: e.message })
+      }
+    }
+    if (req.method === 'PATCH') {
+      const body = await readBody(req)
+      try {
+        const data = await fetchWebappApi('PATCH', '/api/csr2/codes/' + codeIdM[1], body, cfg.csr2AdminToken)
+        return json(res, 200, data)
+      } catch (e) {
+        log('[csr2/codes/:id PATCH] Error: ' + e.message)
+        return json(res, 500, { error: e.message })
+      }
     }
   }
 

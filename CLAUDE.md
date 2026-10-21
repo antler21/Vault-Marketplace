@@ -91,9 +91,18 @@ PUT + DELETE for individual accounts. Standard Supabase update/delete.
 - GET: `?packName=X` (optional) lists codes with `plaintext_code`, `pack_name`, `created_at`, `used_at` — used by the AIO Tool's Codes modal for the available/used history view.
 - Admin UI lives in the **AIO Tool** (`tools/vault-scanner/index.js`), not the webapp — see below.
 
+### `app/api/csr2/codes/[id]/route.js`
+- Admin-only, same dual auth. GET returns one code's detail PLUS its associated job's `email`/`platform`/`status` (looked up via `used_by_job_id`, falling back to a `code_id` match for any code redeemed before that column was populated) — **only when the code is actually `used_at`-set**. A code manually toggled back to available must show `job: null` even though an old job row sharing its `code_id` may still physically exist — don't remove that `if (code.used_at)` guard, it was a real bug once.
+- PATCH `{ used: boolean }` manually flips a code's available/used state — `used:false` also clears `used_by_job_id` (disconnects it from whatever job last touched it).
+
+### `app/api/csr2/jobs/route.js`
+- POST also writes `csr2_codes.used_by_job_id = job.id` right after creating the job — without this, the Codes detail view has no way to know which job (and therefore which email) redeemed a given code.
+
 ### `tools/vault-scanner/index.js` — CSR2 Codes UI
 - "🎫 Codes" button in the CSR2 Services panel header (opens unfiltered) and a per-pack-card corner button (`ck-codes`, opens pre-filtered to that pack) both call `openCodes(packName)`.
-- The Codes modal's generate/list actions hit the TOOL's own local `GET`/`POST /csr2/codes` — these are server-side proxy routes (`fetchWebappApi()` helper) that forward to the webapp's `/api/csr2/codes` with the admin token attached server-side. The browser-side JS in the tool never sees the token.
+- The Codes modal's generate/list/detail/toggle actions hit the TOOL's own local `GET`/`POST /csr2/codes` and `GET`/`PATCH /csr2/codes/:id` — server-side proxy routes (`fetchWebappApi()` helper) that forward to the webapp with the admin token attached server-side. The browser-side JS in the tool never sees the token.
+- `#codes-modal` is a fixed-height (`620px`) flex column so only the History list scrolls internally (`flex:1;min-height:0;overflow-y:auto`) — the modal itself never grows/scrolls. Keep new sections `flex-shrink:0` or this breaks.
+- History row actions: clicking the Available/Used badge opens a confirm modal (`openCodeToggleConfirm` → `confirmToggleCodeStatus`) that PATCHes the toggle. Available codes get a copy-icon button; used codes get an eye-icon button (`openCodeDetail`) showing created/used/email/platform/status in `code-detail-modal`.
 - `csr2AdminToken` is a CSR2 Settings field, persisted via `/local/config` like the other CSR2 folder settings. Must match the webapp's `CSR2_ADMIN_TOKEN` env var.
 - `fetchWebappApi()` picks `http`/`https` based on the configured `webappUrl`'s protocol — don't hardcode `https` here, `webappUrl` can be `http://localhost:3000` during local testing.
 
