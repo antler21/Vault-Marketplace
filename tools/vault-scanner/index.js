@@ -8023,9 +8023,11 @@ function populateCodesPackSelect() {
 }
 
 function onCodesPackChange() {
+  // _codesList already holds every pack's codes (fetched once in loadCodesList) —
+  // switching packs is just a client-side filter, no refetch needed.
   _codesPack = document.getElementById('codes-pack-select').value
   document.getElementById('codes-gen-result').style.display = 'none'
-  loadCodesList()
+  renderCodesList()
 }
 
 async function generateCodes() {
@@ -8071,9 +8073,11 @@ function updateCodesFilterBtns() {
 }
 
 async function loadCodesList() {
+  // Always fetches every pack's codes, unfiltered — the pack selector and
+  // Available/Used tabs filter this in memory (see renderCodesList), so
+  // switching either is instant with no network round-trip.
   document.getElementById('codes-list').innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Loading…</div>'
-  var qs = _codesPack ? ('?packName=' + encodeURIComponent(_codesPack)) : ''
-  var res = await fetch('/csr2/codes' + qs).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  var res = await fetch('/csr2/codes').then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   if (res.error) {
     document.getElementById('codes-list').innerHTML = ''
     showNotice('codes-notice', 'error', res.error)
@@ -8088,6 +8092,7 @@ var EYE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" 
 
 function renderCodesList() {
   var list = _codesList.filter(function(c) {
+    if (_codesPack && c.pack_name !== _codesPack) return false
     if (_codesFilter === 'available') return !c.used_at
     if (_codesFilter === 'used') return !!c.used_at
     return true
