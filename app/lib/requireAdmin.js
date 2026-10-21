@@ -24,3 +24,18 @@ export async function getSessionUser() {
   const { data: { user } } = await supabase.auth.getUser()
   return user
 }
+
+// Separate bearer-token auth for the local AIO Tool (not a browser session) —
+// same shared-secret pattern as CSR2_WORKER_TOKEN, just a distinct token so a
+// leak of one doesn't also expose the other's capability.
+export function isAdminToolAuthed(request) {
+  const auth = request.headers.get('authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  return !!process.env.CSR2_ADMIN_TOKEN && token === process.env.CSR2_ADMIN_TOKEN
+}
+
+// True if either a logged-in admin session or the tool's bearer token is present.
+export async function isAdminAuthed(request) {
+  if (isAdminToolAuthed(request)) return true
+  return !!(await getSessionUser())
+}

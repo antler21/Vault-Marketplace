@@ -15,7 +15,7 @@ Next.js webapp for managing League of Legends accounts for resale. Deployed on V
 ### `app/components/Accounts.js`
 The main and most complex component. Contains:
 - **Checker flow** (steps 0–5): ping → game select → scan → results → save → success
-- `EXPECTED_SCANNER_VERSION = '0.6.0'` — blocks scan if tool version doesn't match
+- `EXPECTED_SCANNER_VERSION = '0.7.34'` — blocks scan if tool version doesn't match
 - `handleScan`: version check, retry loop (5s gaps, 60s max, cancel after 20s)
 - `handleOpenAdd(prefillFields, prefillSoldFor, prefillSoldForCurrency)`: closes checker modal, opens account form
 - `pendingScanDataRef`: ref that snapshots scanData before checker modal closes, used in handleSave
@@ -23,7 +23,7 @@ The main and most complex component. Contains:
 - Step 5: success state showing Preview Link (Open/Copy) + Owner Link (Open/Copy with warning modal)
 - Account cards: Copy Link button (top-right of image) when `account.fields._scanId` exists
 - Account detail view (eye button): Preview Link row appears at TOP of scrollable section (before custom fields), highlighted in amber
-- Download link: `/aio-tool-v0.6.0.exe`
+- Download link: `/aio-tool-v0.7.34.exe`
 
 ### `app/api/accounts/[id]/route.js`
 PUT + DELETE for individual accounts. Standard Supabase update/delete.
@@ -49,7 +49,7 @@ PUT + DELETE for individual accounts. Standard Supabase update/delete.
 - `addAccount` returns the saved account object (needed for post-save scan linking)
 
 ### `tools/vault-scanner/index.js`
-- VERSION = `'0.6.0'`
+- VERSION = `'0.7.34'`
 - Serves HTTP on port 35199
 - `/scan` endpoint: scans LoL account via LCU API
 - `/local/accounts` GET/POST: local account CRUD (stored in %APPDATA%/aio-tool/accounts.json)
@@ -59,9 +59,9 @@ PUT + DELETE for individual accounts. Standard Supabase update/delete.
 - On startup: launches `msedge --app="http://localhost:35199"` for native-looking window (falls back to default browser)
 
 ### `tools/vault-scanner/package.json`
-- Build output: `aio-tool-v0.6.0.exe`
+- Build output: `aio-tool-v0.7.34.exe`
 
-### `public/aio-tool-v0.6.0.exe`
+### `public/aio-tool-v0.7.34.exe`
 - Latest compiled tool. Always copy here after building.
 
 ### `app/csr2-redeem/page.js`
@@ -86,8 +86,16 @@ PUT + DELETE for individual accounts. Standard Supabase update/delete.
 - PATCH `/jobs/[id]`: worker-driven status updates. Auto-nulls `password_enc` on entering `logging_in`, auto-nulls `twofa_code` on leaving `awaiting_2fa`, sets/clears `error_message`.
 
 ### `app/api/csr2/codes/route.js`
-- POST: **admin-only** — checks the Supabase session itself via `app/lib/requireAdmin.js` (since `/api/csr2` is a public middleware prefix for the customer flow, this route can't rely on middleware). Body `{ packName, count }`, generates `count` Crockford-base32 codes (`app/lib/csr2Codes.js`), stores only the SHA-256 hash, returns the plaintext codes once.
-- No admin UI wired up yet — call it directly (e.g. from the browser console while logged in) until one's built.
+- **Admin-only** via `app/lib/requireAdmin.js`'s `isAdminAuthed()` — either a logged-in Supabase session OR the AIO Tool's `CSR2_ADMIN_TOKEN` bearer token (since `/api/csr2` is a public middleware prefix for the customer flow, this route can't rely on middleware).
+- POST: body `{ packName, count }`, generates `count` codes (5 chars, Crockford base32 — see `app/lib/csr2Codes.js`), stores both the SHA-256 hash AND the plaintext (`plaintext_code` column) and returns the plaintext codes. Retries per-code on a hash collision (`error.code === '23505'`) instead of failing the whole batch — the 5-char keyspace is small enough (~33M) that collisions aren't negligible over the product's lifetime.
+- GET: `?packName=X` (optional) lists codes with `plaintext_code`, `pack_name`, `created_at`, `used_at` — used by the AIO Tool's Codes modal for the available/used history view.
+- Admin UI lives in the **AIO Tool** (`tools/vault-scanner/index.js`), not the webapp — see below.
+
+### `tools/vault-scanner/index.js` — CSR2 Codes UI
+- "🎫 Codes" button in the CSR2 Services panel header (opens unfiltered) and a per-pack-card corner button (`ck-codes`, opens pre-filtered to that pack) both call `openCodes(packName)`.
+- The Codes modal's generate/list actions hit the TOOL's own local `GET`/`POST /csr2/codes` — these are server-side proxy routes (`fetchWebappApi()` helper) that forward to the webapp's `/api/csr2/codes` with the admin token attached server-side. The browser-side JS in the tool never sees the token.
+- `csr2AdminToken` is a CSR2 Settings field, persisted via `/local/config` like the other CSR2 folder settings. Must match the webapp's `CSR2_ADMIN_TOKEN` env var.
+- `fetchWebappApi()` picks `http`/`https` based on the configured `webappUrl`'s protocol — don't hardcode `https` here, `webappUrl` can be `http://localhost:3000` during local testing.
 
 ### `app/lib/csr2Crypto.js`
 - **Encrypt-only.** The webapp only ever holds `CSR2_CRED_PUBLIC_KEY` (an RSA public key) — it can lock credentials away but can never read them back. Only the local Python worker holds the matching private key and can decrypt.
@@ -115,7 +123,7 @@ Dark-themed single-page app with:
 - `game_section_configs` — per-game config (custom fields, title templates, etc.)
 - `platforms` — platform definitions
 - `games` — game definitions
-- `csr2_codes` — redeemable codes. `id, code_hash (sha256, unique), pack_name (FK csr2_packs.name), created_at, used_at, used_by_job_id`. Plaintext code is never stored.
+- `csr2_codes` — redeemable codes. `id, code_hash (sha256, unique), plaintext_code, pack_name (FK csr2_packs.name), created_at, used_at, used_by_job_id`. Codes are short (5 chars) by design — `plaintext_code` is stored (not just the hash) so the AIO Tool's Codes view can show/copy still-unredeemed codes; see migration 004 for the tradeoff this accepts.
 - `csr2_jobs` — one per redeemed code. `id, code_id (FK), platform ('ios'|'android'), status (enum, see `app/api/csr2/worker/jobs/[id]/route.js` for the full list), email, password_enc, twofa_code, error_message, created_at, updated_at`. `password_enc`/`twofa_code` are encrypted blobs (see `app/lib/csr2Crypto.js`), nulled out once consumed.
 - `csr2_redeem_attempts` — rate-limit log for `/api/csr2/redeem`. `id, ip, attempted_at`.
 
@@ -124,7 +132,7 @@ Dark-themed single-page app with:
 ALTER TABLE lol_skin_scans ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
 ALTER TABLE lol_skin_scans ADD COLUMN IF NOT EXISTS account_title TEXT;
 ```
-See `supabase/migrations/002_csr2_redeem.sql` for the `csr2_codes` / `csr2_jobs` / `csr2_redeem_attempts` migration — run it in the Supabase SQL editor.
+See `supabase/migrations/002_csr2_redeem.sql` for the `csr2_codes` / `csr2_jobs` / `csr2_redeem_attempts` migration, `003_csr2_redeem_rate_limit.sql` for the global rate-limit `success` column, and `004_csr2_codes_plaintext.sql` for the `plaintext_code` column — run each in the Supabase SQL editor.
 
 ---
 
@@ -138,6 +146,7 @@ All preview links use `https://lolprev.site/preview/lol/{id}` — never `window.
 
 - `CSR2_CRED_PUBLIC_KEY` (Vercel env var) — RSA public key, PEM format. Generate the pair with `node scripts/csr2-gen-worker-keypair.js`; only the public half goes here.
 - `CSR2_WORKER_TOKEN` (Vercel env var) — static bearer token the local Python worker sends as `Authorization: Bearer <token>` to `/api/csr2/worker/*`. Not a Supabase session — just a shared secret.
+- `CSR2_ADMIN_TOKEN` (Vercel env var) — static bearer token the AIO Tool sends to `/api/csr2/codes` for codegen/listing. Deliberately a separate secret from `CSR2_WORKER_TOKEN` (different capability, least-privilege). Must match the AIO Tool's `csr2AdminToken` setting (CSR2 Settings modal).
 - The RSA **private** key (other half of `CSR2_CRED_PUBLIC_KEY`) is NOT a webapp env var at all — it lives only in the local worker's own config, on the PC that runs it.
 
 ---

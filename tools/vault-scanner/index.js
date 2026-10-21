@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.33'
+const VERSION = '0.7.34'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1128,6 +1128,42 @@ function fetchGithubApi(apiPath) {
   })
 }
 
+// Generic authenticated call to the deployed webapp's /api/csr2/* routes — used
+// for codegen, which needs the admin token kept server-side (never sent to the
+// tool's own browser-side JS / network tab).
+function fetchWebappApi(method, apiPath, body, authToken) {
+  return new Promise((resolve, reject) => {
+    const cfg = loadConfig()
+    const base = (cfg.webappUrl || '').replace(/\/$/, '')
+    if (!base) return reject(new Error('No webapp URL configured'))
+    let u
+    try { u = new URL(base + apiPath) } catch (e) { return reject(new Error('Invalid webapp URL')) }
+    const payload = body ? JSON.stringify(body) : null
+    const headers = { 'User-Agent': 'aio-tool-v' + VERSION }
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken
+    if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(payload) }
+    const mod = u.protocol === 'https:' ? https : require('http')
+    const req = mod.request({
+      hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: u.pathname + u.search, method, headers,
+    }, (res) => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => {
+        let parsed
+        try { parsed = JSON.parse(data) } catch (e) {
+          return reject(new Error('Webapp returned non-JSON (HTTP ' + res.statusCode + '): ' + data.slice(0, 150)))
+        }
+        if (res.statusCode >= 400) return reject(new Error(parsed.error || ('Webapp error (HTTP ' + res.statusCode + ')')))
+        resolve(parsed)
+      })
+    })
+    req.on('error', reject)
+    req.setTimeout(20000, () => { req.destroy(); reject(new Error('Webapp request timed out')) })
+    if (payload) req.write(payload)
+    req.end()
+  })
+}
+
 // Traverse 1.Cars/ level by level to avoid GitHub's 100K-item recursive tree limit.
 // Non-recursive down to star-type dirs (Gold Stars/Purple Stars/Legends), then recursive
 // per star-type (each is only brand→model→color, a few thousand items at most).
@@ -1744,6 +1780,7 @@ main{flex:1;overflow-y:auto;padding:20px}
 .card-corner-btns{position:absolute;top:6px;right:6px;display:flex;gap:4px;opacity:0;transition:opacity .15s;z-index:2}
 .card:hover .card-corner-btns{opacity:1}
 .card-corner-btn{background:rgba(0,0,0,.6);border:none;border-radius:5px;color:#fff;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1;transition:background .12s;backdrop-filter:blur(2px)}
+.card-corner-btn.ck-codes:hover{background:var(--accent)}
 .card-corner-btn.ck-edit:hover{background:var(--accent)}
 .card-corner-btn.ck-del:hover{background:#ef4444}
 .ov-import{background:var(--accent);color:var(--text)}
@@ -2016,6 +2053,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
           <button class="btn btn-secondary btn-sm" onclick="openCsr2Settings()">⚙ Settings</button>
           <button class="btn btn-secondary btn-sm" onclick="openEditNsbManual()">Edit NSB</button>
           <button class="btn btn-secondary btn-sm" onclick="openSyncScb()">Sync SCB</button>
+          <button class="btn btn-secondary btn-sm" onclick="openCodes(null)">🎫 Codes</button>
           <button class="btn btn-primary btn-sm" onclick="openCreatePack()">+ Create Pack</button>
         </div>
         <div class="grid" id="packs-grid"></div>
@@ -2556,6 +2594,11 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       </div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Where unban output is saved. Originals go to <em>Unban Folder/Original/</em>. Leave empty to download only.</div>
+    <div class="field">
+      <label>Admin Token</label>
+      <input type="password" id="csr2-admin-token-input" placeholder="Paste the webapp's CSR2_ADMIN_TOKEN">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Used to generate and view redeem codes from this tool. Matches the <code>CSR2_ADMIN_TOKEN</code> env var on the webapp.</div>
     <div id="csr2-settings-notice" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('csr2-settings-modal')">Cancel</button>
@@ -2638,6 +2681,45 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('sync-scb-modal')">Cancel</button>
       <button class="btn btn-primary" id="sync-scb-apply-btn" onclick="applySyncScb()" disabled>Sync &amp; Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- Codes Modal -->
+<div class="modal-bg" id="codes-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">🎫 Redeem Codes</div>
+    <div class="modal-sub">Generate single-use codes for a pack, and track which are still available</div>
+
+    <div class="field">
+      <label>Pack</label>
+      <select id="codes-pack-select" onchange="onCodesPackChange()" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px"></select>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px">
+      <div style="flex:1">
+        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Count</label>
+        <input type="number" id="codes-gen-count" value="1" min="1" max="500" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px">
+      </div>
+      <button class="btn btn-primary" id="codes-gen-btn" onclick="generateCodes()">Generate</button>
+    </div>
+
+    <div id="codes-gen-result" style="display:none;background:var(--surf2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;margin-bottom:10px"></div>
+
+    <div id="codes-notice" style="display:none"></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px">
+      <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">History</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-sm" data-filter="all" onclick="setCodesFilter('all')" style="padding:3px 10px;font-size:11px">All</button>
+        <button class="btn btn-secondary btn-sm" data-filter="available" onclick="setCodesFilter('available')" style="padding:3px 10px;font-size:11px">Available</button>
+        <button class="btn btn-secondary btn-sm" data-filter="used" onclick="setCodesFilter('used')" style="padding:3px 10px;font-size:11px">Used</button>
+      </div>
+    </div>
+    <div id="codes-list" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideModal('codes-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -3086,7 +3168,8 @@ var _carPacks = [], _carPackCars = [], _carPackEditId = null, _selectedCarPackId
 var _pkDrag = null
 var _pkPend = null
 var _carFilter = { tier: null, brand: null, starType: null }
-var _csr2OutputFolder = '', _csr2GrabFolder = '', _csr2UnbanFolder = '', _ensbCurrent = {}, _pendingSavePack = null, _pendingUnbanSave = null, _unbanPreloadedNsb = null
+var _csr2OutputFolder = '', _csr2GrabFolder = '', _csr2UnbanFolder = '', _csr2AdminToken = '', _ensbCurrent = {}, _pendingSavePack = null, _pendingUnbanSave = null, _unbanPreloadedNsb = null
+var _codesPack = null, _codesList = []
 var _unbanPlatform = 'android'
 var _lastEditedNsb = null // { folder, filename } — session-only, cleared on app restart
 
@@ -3164,6 +3247,7 @@ async function init() {
   _csr2OutputFolder = cfg.csr2OutputFolder || ''
   _csr2GrabFolder = cfg.csr2GrabFolder || ''
   _csr2UnbanFolder = cfg.csr2UnbanFolder || ''
+  _csr2AdminToken = cfg.csr2AdminToken || ''
   _dataHubAutoUpdate = !!cfg.autoUpdateData
   if (cfg.autoUpdateData) setTimeout(function(){ dhUpdate('cars', true); dhUpdate('fusions', true); dhUpdate('stage6', true) }, 15000)
   await fetchGames()
@@ -4132,6 +4216,7 @@ function renderPacks() {
     html += '<div class="card-thumb">' + thumb + '</div>'
     html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-corner-btns">'
+    html += '<button class="card-corner-btn ck-codes" data-pname="' + escH(p.name || '') + '" onclick="event.stopPropagation();openCodes(this.dataset.pname)">🎫</button>'
     html += '<button class="card-corner-btn ck-edit" data-pid="' + p.id + '" onclick="event.stopPropagation();openEditPack(this.dataset.pid)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'
     html += '<button class="card-corner-btn ck-del" data-pid="' + p.id + '" onclick="deletePack(event,this.dataset.pid)">✕</button>'
     html += '</div></div>'
@@ -7778,6 +7863,7 @@ function openCsr2Settings() {
   document.getElementById('csr2-folder-input').value = _csr2OutputFolder || ''
   document.getElementById('csr2-grab-folder-input').value = _csr2GrabFolder || ''
   document.getElementById('csr2-unban-folder-input').value = _csr2UnbanFolder || ''
+  document.getElementById('csr2-admin-token-input').value = _csr2AdminToken || ''
   hideNotice('csr2-settings-notice')
   showModal('csr2-settings-modal')
 }
@@ -7792,13 +7878,16 @@ async function saveCsr2Settings() {
   var folder = document.getElementById('csr2-folder-input').value.trim()
   var grabFolder = document.getElementById('csr2-grab-folder-input').value.trim()
   var unbanFolder = document.getElementById('csr2-unban-folder-input').value.trim()
+  var adminToken = document.getElementById('csr2-admin-token-input').value.trim()
   _csr2OutputFolder = folder
   _csr2GrabFolder = grabFolder
   _csr2UnbanFolder = unbanFolder
+  _csr2AdminToken = adminToken
   var cfg = await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} })
   cfg.csr2OutputFolder = folder
   cfg.csr2GrabFolder = grabFolder
   cfg.csr2UnbanFolder = unbanFolder
+  cfg.csr2AdminToken = adminToken
   await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) }).catch(function(){})
   showNotice('csr2-settings-notice', 'success', 'Saved!')
   setTimeout(function(){ hideModal('csr2-settings-modal') }, 700)
@@ -7884,6 +7973,122 @@ async function applySyncScb() {
   showApplyResult(true, 'SCB Synced!', 'The SCB file has been updated to match the NSB and downloaded.')
 }
 
+
+// ─── Codes Modal ──────────────────────────────────────────────────────────────
+
+var _codesFilter = 'all'
+
+function openCodes(packName) {
+  _codesPack = packName || ''
+  populateCodesPackSelect()
+  document.getElementById('codes-pack-select').value = _codesPack
+  document.getElementById('codes-gen-result').style.display = 'none'
+  hideNotice('codes-notice')
+  _codesFilter = 'all'
+  updateCodesFilterBtns()
+  showModal('codes-modal')
+  loadCodesList()
+}
+
+function populateCodesPackSelect() {
+  var sel = document.getElementById('codes-pack-select')
+  var html = '<option value="">All Packs</option>'
+  _packs.forEach(function(p) {
+    html += '<option value="' + escH(p.name) + '">' + escH(p.name) + '</option>'
+  })
+  sel.innerHTML = html
+}
+
+function onCodesPackChange() {
+  _codesPack = document.getElementById('codes-pack-select').value
+  document.getElementById('codes-gen-result').style.display = 'none'
+  loadCodesList()
+}
+
+async function generateCodes() {
+  var packName = document.getElementById('codes-pack-select').value
+  if (!packName) { showNotice('codes-notice', 'error', 'Pick a specific pack first — codes belong to exactly one pack.'); return }
+  var count = parseInt(document.getElementById('codes-gen-count').value, 10) || 1
+  var btn = document.getElementById('codes-gen-btn')
+  btn.disabled = true
+  hideNotice('codes-notice')
+  var res = await fetch('/csr2/codes', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ packName: packName, count: count })
+  }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  btn.disabled = false
+  if (res.error) { showNotice('codes-notice', 'error', res.error); return }
+  var html = '<div style="font-size:12px;color:var(--muted);margin-bottom:6px">Generated ' + res.codes.length + ' code' + (res.codes.length !== 1 ? 's' : '') + ' for <b style="color:var(--text)">' + escH(packName) + '</b>:</div>'
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
+  res.codes.forEach(function(c) {
+    html += '<code onclick="copyCodeText(' + JSON.stringify(c) + ', this)" title="Click to copy" style="background:var(--surf);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;cursor:pointer">' + escH(c) + '</code>'
+  })
+  html += '</div><button class="btn btn-secondary btn-sm" onclick="copyCodeText(' + JSON.stringify(res.codes.join('\\n')) + ', this)">Copy All</button>'
+  var resultEl = document.getElementById('codes-gen-result')
+  resultEl.innerHTML = html
+  resultEl.style.display = ''
+  loadCodesList()
+}
+
+function copyCodeText(text, btnEl) {
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function(){})
+  if (!btnEl) return
+  var orig = btnEl.textContent
+  btnEl.textContent = 'Copied!'
+  setTimeout(function(){ btnEl.textContent = orig }, 1200)
+}
+
+function setCodesFilter(f) {
+  _codesFilter = f
+  updateCodesFilterBtns()
+  renderCodesList()
+}
+
+function updateCodesFilterBtns() {
+  document.querySelectorAll('#codes-modal [data-filter]').forEach(function(b) {
+    var active = b.dataset.filter === _codesFilter
+    b.classList.toggle('btn-primary', active)
+    b.classList.toggle('btn-secondary', !active)
+  })
+}
+
+async function loadCodesList() {
+  document.getElementById('codes-list').innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Loading…</div>'
+  var qs = _codesPack ? ('?packName=' + encodeURIComponent(_codesPack)) : ''
+  var res = await fetch('/csr2/codes' + qs).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) {
+    document.getElementById('codes-list').innerHTML = ''
+    showNotice('codes-notice', 'error', res.error)
+    return
+  }
+  _codesList = res.codes || []
+  renderCodesList()
+}
+
+function renderCodesList() {
+  var list = _codesList.filter(function(c) {
+    if (_codesFilter === 'available') return !c.used_at
+    if (_codesFilter === 'used') return !!c.used_at
+    return true
+  })
+  var el = document.getElementById('codes-list')
+  if (!list.length) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No codes found.</div>'
+    return
+  }
+  el.innerHTML = list.map(function(c) {
+    var used = !!c.used_at
+    var dateStr = new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    var usedStr = used ? new Date(c.used_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border)">'
+      + '<code style="flex:1;font-size:13px;' + (used ? 'color:var(--muted);text-decoration:line-through' : 'color:var(--text)') + '">' + escH(c.plaintext_code || '—') + '</code>'
+      + (_codesPack ? '' : '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + escH(c.pack_name) + '</span>')
+      + '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + dateStr + '</span>'
+      + '<span style="font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:8px;' + (used ? 'background:rgba(224,82,82,.15);color:var(--red)' : 'background:rgba(76,175,80,.15);color:var(--green)') + '">' + (used ? 'Used ' + usedStr : 'Available') + '</span>'
+      + (used ? '' : '<button onclick="copyCodeText(' + JSON.stringify(c.plaintext_code || '') + ', this)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;flex-shrink:0;text-decoration:underline">Copy</button>')
+      + '</div>'
+  }).join('')
+}
 
 // ─── Unban Modal ──────────────────────────────────────────────────────────────
 
@@ -9025,6 +9230,34 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { scbResultBase64: scbOut.toString('base64'), verifyTable })
     } catch (e) {
       log('[csr2/sync-scb] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+
+  // CSR2 redeem codes — proxied through to the webapp with the admin token kept
+  // server-side (the browser-side JS never sees it). GET lists codes for a pack
+  // (or all packs); POST generates N new ones.
+  if (req.method === 'GET' && pathname === '/csr2/codes') {
+    try {
+      const cfg = loadConfig()
+      if (!cfg.csr2AdminToken) return json(res, 400, { error: 'No admin token configured — set it in CSR2 Settings.' })
+      const qs = new URL(req.url, 'http://localhost').search
+      const data = await fetchWebappApi('GET', '/api/csr2/codes' + qs, null, cfg.csr2AdminToken)
+      return json(res, 200, data)
+    } catch (e) {
+      log('[csr2/codes GET] Error: ' + e.message)
+      return json(res, 500, { error: e.message })
+    }
+  }
+  if (req.method === 'POST' && pathname === '/csr2/codes') {
+    const body = await readBody(req)
+    try {
+      const cfg = loadConfig()
+      if (!cfg.csr2AdminToken) return json(res, 400, { error: 'No admin token configured — set it in CSR2 Settings.' })
+      const data = await fetchWebappApi('POST', '/api/csr2/codes', body, cfg.csr2AdminToken)
+      return json(res, 200, data)
+    } catch (e) {
+      log('[csr2/codes POST] Error: ' + e.message)
       return json(res, 500, { error: e.message })
     }
   }
