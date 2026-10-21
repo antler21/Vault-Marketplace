@@ -64,6 +64,36 @@ PUT + DELETE for individual accounts. Standard Supabase update/delete.
 ### `public/aio-tool-v0.6.0.exe`
 - Latest compiled tool. Always copy here after building.
 
+### `app/csr2-redeem/page.js`
+- Customer-facing redeem flow (separate from the older order-ID-based `app/csr2/page.js`): code → pack preview → platform (iOS only; Android shows a disabled "WIP" badge) → email/password → polls job status.
+- Status→text mapping lives in `STATUS_TEXT`; `bad_password`/`awaiting_2fa`/`bad_code`/`done`/`error` get dedicated UI instead of a generic loading line.
+- Polls `GET /api/csr2/jobs/[id]` every 2.5s while `step === 'status'`; stops on `done`/`error`.
+- "Resend Code" currently only clears the input client-side — there's no backend resend trigger yet (the real 2FA resend happens on the device/account side, driven by the worker).
+
+### `app/api/csr2/redeem/route.js`
+- POST: hashes the submitted code, looks up `csr2_codes`, 404 if not found, 409 if `used_at` already set.
+- Claims the code via a single `UPDATE ... WHERE used_at IS NULL` (atomic — no separate transaction needed), then resolves and returns the pack from `csr2_packs` server-side. Client never picks the pack.
+- Rate-limited 5/min/IP via `csr2RateLimit.js` (backed by `csr2_redeem_attempts`, not in-memory, since Vercel instances don't share memory).
+
+### `app/api/csr2/jobs/route.js` + `app/api/csr2/jobs/[id]/route.js`
+- POST `/jobs`: creates a `csr2_jobs` row (`status: 'awaiting_credentials'`) from an already-redeemed `codeId`. One job per code — retrying returns the existing job id instead of creating a duplicate. Rejects any platform other than `'ios'` (Android is WIP).
+- GET `/jobs/[id]`: polled by the frontend. Only ever selects `id, platform, status, error_message, created_at, updated_at` — **never** `password_enc`/`twofa_code`, even encrypted.
+- PATCH `/jobs/[id]`: frontend submits `{ email, password }` (only while `status === 'awaiting_credentials'`) or `{ twofaCode }` (only while `status === 'awaiting_2fa'`). Encrypts via `csr2Crypto.js` before writing. Does **not** change `status` — status transitions belong exclusively to the worker.
+
+### `app/api/csr2/worker/claim/route.js` + `app/api/csr2/worker/jobs/[id]/route.js`
+- Bearer-token auth only (`CSR2_WORKER_TOKEN`), checked inside the route — deliberately not a Supabase session, so the customer's browser can never call these even though `/api/csr2` is a public middleware prefix.
+- GET `/claim`: returns the oldest job that's either `awaiting_credentials` with `password_enc` set, or `awaiting_2fa` with `twofa_code` set. Claiming the credentials case atomically flips `status → logging_in` and nulls `password_enc` in the same update (the row returned in the response still has the original encrypted value for the worker to decrypt). Claiming the 2FA case nulls `twofa_code` but leaves `status` alone — the worker reports the outcome itself.
+- PATCH `/jobs/[id]`: worker-driven status updates. Auto-nulls `password_enc` on entering `logging_in`, auto-nulls `twofa_code` on leaving `awaiting_2fa`, sets/clears `error_message`.
+
+### `app/api/csr2/codes/route.js`
+- POST: **admin-only** — checks the Supabase session itself via `app/lib/requireAdmin.js` (since `/api/csr2` is a public middleware prefix for the customer flow, this route can't rely on middleware). Body `{ packName, count }`, generates `count` Crockford-base32 codes (`app/lib/csr2Codes.js`), stores only the SHA-256 hash, returns the plaintext codes once.
+- No admin UI wired up yet — call it directly (e.g. from the browser console while logged in) until one's built.
+
+### `app/lib/csr2Crypto.js`
+- **Encrypt-only.** The webapp only ever holds `CSR2_CRED_PUBLIC_KEY` (an RSA public key) — it can lock credentials away but can never read them back. Only the local Python worker holds the matching private key and can decrypt.
+- Hybrid RSA-OAEP(SHA-256) + AES-256-GCM envelope: one-time AES key encrypts the plaintext, the AES key itself is sealed with RSA. Blob stored as JSON text: `{ v, ek, iv, tag, ct }`.
+- Keypair generated once via `scripts/csr2-gen-worker-keypair.js` — private key goes ONLY in the local worker's config, public key goes in Vercel's `CSR2_CRED_PUBLIC_KEY`.
+
 ---
 
 ## Tool UI (served at localhost:35199)
@@ -85,18 +115,30 @@ Dark-themed single-page app with:
 - `game_section_configs` — per-game config (custom fields, title templates, etc.)
 - `platforms` — platform definitions
 - `games` — game definitions
+- `csr2_codes` — redeemable codes. `id, code_hash (sha256, unique), pack_name (FK csr2_packs.name), created_at, used_at, used_by_job_id`. Plaintext code is never stored.
+- `csr2_jobs` — one per redeemed code. `id, code_id (FK), platform ('ios'|'android'), status (enum, see `app/api/csr2/worker/jobs/[id]/route.js` for the full list), email, password_enc, twofa_code, error_message, created_at, updated_at`. `password_enc`/`twofa_code` are encrypted blobs (see `app/lib/csr2Crypto.js`), nulled out once consumed.
+- `csr2_redeem_attempts` — rate-limit log for `/api/csr2/redeem`. `id, ip, attempted_at`.
 
 **Required migration (user must run if not done):**
 ```sql
 ALTER TABLE lol_skin_scans ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
 ALTER TABLE lol_skin_scans ADD COLUMN IF NOT EXISTS account_title TEXT;
 ```
+See `supabase/migrations/002_csr2_redeem.sql` for the `csr2_codes` / `csr2_jobs` / `csr2_redeem_attempts` migration — run it in the Supabase SQL editor.
 
 ---
 
 ## Preview URLs
 
 All preview links use `https://lolprev.site/preview/lol/{id}` — never `window.location.origin` or relative paths.
+
+---
+
+## CSR2 Redeem — Env Vars
+
+- `CSR2_CRED_PUBLIC_KEY` (Vercel env var) — RSA public key, PEM format. Generate the pair with `node scripts/csr2-gen-worker-keypair.js`; only the public half goes here.
+- `CSR2_WORKER_TOKEN` (Vercel env var) — static bearer token the local Python worker sends as `Authorization: Bearer <token>` to `/api/csr2/worker/*`. Not a Supabase session — just a shared secret.
+- The RSA **private** key (other half of `CSR2_CRED_PUBLIC_KEY`) is NOT a webapp env var at all — it lives only in the local worker's own config, on the PC that runs it.
 
 ---
 
@@ -126,3 +168,7 @@ Orders, Offers, Services, Tools are temporarily disabled in `app/components/Side
 - Do NOT remove `pendingScanDataRef` logic — it's how scan data survives the checker modal closing
 - Do NOT use `mapCheckerToFields()` or `CHECKER_KEY_MAP` — they are dead code, never called
 - Do NOT read from `game_configs` table — it doesn't exist, use `game_section_configs`
+- Do NOT add a decrypt function anywhere in the webapp for CSR2 job credentials — `app/lib/csr2Crypto.js` is encrypt-only by design; only the local Python worker (holding the RSA private key) decrypts
+- Do NOT select `password_enc` or `twofa_code` in any route the browser can poll (`GET /api/csr2/jobs/[id]`) — even the ciphertext should never reach the browser
+- Do NOT put `CSR2_CRED_PUBLIC_KEY`'s private half anywhere in this repo or in Vercel env vars — it lives only in the local worker's config
+- Do NOT name a new public CSR2 page/route starting with `/csr2` casually without checking `middleware.js` — `PUBLIC_PREFIXES` does prefix matching, so e.g. `/csr2-admin` is NOT covered by `/csr2` (good, stays behind login) but anything under `/csr2/...` or `/api/csr2/...` IS public by default
