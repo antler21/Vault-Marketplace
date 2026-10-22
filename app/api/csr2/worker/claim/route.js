@@ -85,5 +85,37 @@ export async function GET(request) {
     return Response.json({ job: { ...twofaReady, pack: await resolvePack(twofaReady.code_id) } })
   }
 
+  // Account-confirmation answers. This one happens mid-flight — the worker
+  // already owns this job (claimed it back at the credentials step) and is
+  // just polling claim() again for its own job's answer, same pattern as 2FA.
+  // account_confirmed is a boolean, so this MUST be `.not('account_confirmed', 'is', null)`,
+  // not a truthiness check — `false` (buyer says "not my account") is a real answer.
+  const { data: confirmReady, error: confirmErr } = await supabase
+    .from('csr2_jobs')
+    .select('*')
+    .eq('status', 'awaiting_account_confirm')
+    .not('account_confirmed', 'is', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (confirmErr) {
+    console.error('[csr2/worker/claim]', confirmErr.message)
+    return Response.json({ error: confirmErr.message }, { status: 500 })
+  }
+
+  if (confirmReady) {
+    const { error: claimErr } = await supabase
+      .from('csr2_jobs')
+      .update({ account_confirmed: null, updated_at: new Date().toISOString() })
+      .eq('id', confirmReady.id)
+      .eq('status', 'awaiting_account_confirm')
+    if (claimErr) {
+      console.error('[csr2/worker/claim]', claimErr.message)
+      return Response.json({ error: claimErr.message }, { status: 500 })
+    }
+    return Response.json({ job: { ...confirmReady, pack: await resolvePack(confirmReady.code_id) } })
+  }
+
   return Response.json({ job: null })
 }

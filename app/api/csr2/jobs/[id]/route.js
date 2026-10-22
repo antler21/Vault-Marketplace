@@ -2,8 +2,9 @@ import { supabase } from '../../../../lib/supabase'
 import { encryptForWorker } from '../../../../lib/csr2Crypto'
 
 // Never select password_enc/twofa_code here — the browser polls this route and
-// must never see even the encrypted blob, let alone plaintext.
-const SAFE_FIELDS = 'id, platform, status, error_message, created_at, updated_at'
+// must never see even the encrypted blob, let alone plaintext. account_confirm_data
+// is safe (just name/level/save-id, shown to the buyer to confirm it's their account).
+const SAFE_FIELDS = 'id, platform, status, error_message, account_confirm_data, created_at, updated_at'
 
 export async function GET(request, context) {
   const { id } = await context.params
@@ -47,6 +48,21 @@ export async function PATCH(request, context) {
       .eq('id', id)
     if (error) {
       console.error('[csr2/jobs PATCH 2fa]', error.message)
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+    return Response.json({ ok: true })
+  }
+
+  if (typeof body.confirmAccount === 'boolean') {
+    if (job.status !== 'awaiting_account_confirm') {
+      return Response.json({ error: 'Not awaiting an account confirmation right now' }, { status: 409 })
+    }
+    const { error } = await supabase
+      .from('csr2_jobs')
+      .update({ account_confirmed: body.confirmAccount, updated_at: new Date().toISOString() })
+      .eq('id', id)
+    if (error) {
+      console.error('[csr2/jobs PATCH confirm]', error.message)
       return Response.json({ error: error.message }, { status: 500 })
     }
     return Response.json({ ok: true })

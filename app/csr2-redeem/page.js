@@ -240,6 +240,10 @@ export default function Csr2RedeemPage() {
   const [submittingTwofa, setSubmittingTwofa] = useState(false)
   const [twofaError, setTwofaError] = useState('')
 
+  // Account confirmation
+  const [confirmingAccount, setConfirmingAccount] = useState(false)
+  const [confirmAccountError, setConfirmAccountError] = useState('')
+
   // Polling
   const [job, setJob] = useState(null)
   // True from the moment a credential/2FA submit succeeds until status actually
@@ -346,6 +350,28 @@ export default function Csr2RedeemPage() {
       setTwofaError('Something went wrong. Please try again.')
     } finally {
       setSubmittingTwofa(false)
+    }
+  }
+
+  async function handleConfirmAccount(confirmed) {
+    if (!jobId) return
+    setConfirmingAccount(true)
+    setConfirmAccountError('')
+    try {
+      const res = await fetch(`/api/csr2/jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmAccount: confirmed }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setConfirmAccountError(data.error || 'Could not submit — please try again.'); return }
+      preSubmitStatusRef.current = job?.status ?? null
+      setResubmitting(true)
+      pollJob()
+    } catch {
+      setConfirmAccountError('Something went wrong. Please try again.')
+    } finally {
+      setConfirmingAccount(false)
     }
   }
 
@@ -462,6 +488,7 @@ export default function Csr2RedeemPage() {
             email, setEmail, password, setPassword, credsError, setCredsError,
             submittingCreds, handleSubmitCredentials,
             twofaCode, setTwofaCode, twofaError, submittingTwofa, handleSubmitTwofa, handleResendCode,
+            confirmingAccount, confirmAccountError, handleConfirmAccount,
           })}
         </Modal>
       )}
@@ -489,6 +516,39 @@ function renderStatus(job, resubmitting, ctx) {
       <div style={{ textAlign: 'center', padding: '12px 0' }}>
         <Spinner />
         <div style={{ fontSize: 15, color: TEXT, fontWeight: 600 }}>Submitting…</div>
+      </div>
+    )
+  }
+
+  if (job.status === 'awaiting_account_confirm') {
+    const info = job.account_confirm_data || {}
+    return (
+      <div>
+        <ModalTitle>Confirm Your Account</ModalTitle>
+        <ModalSub>We found this account on the device — please confirm it&apos;s yours before we continue.</ModalSub>
+        <div style={{ background: SURF2, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px', marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+            <span style={{ color: MUTED, fontSize: 13 }}>Account Name</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>{info.name || '—'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+            <span style={{ color: MUTED, fontSize: 13 }}>Level</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>{info.pllv ?? '—'}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+            <span style={{ color: MUTED, fontSize: 13 }}>Save ID</span>
+            <span style={{ fontWeight: 600, fontSize: 13 }}>{info.folderId || '—'}</span>
+          </div>
+        </div>
+        <ErrorNote>{ctx.confirmAccountError}</ErrorNote>
+        <ModalActions>
+          <Btn variant="secondary" onClick={() => ctx.handleConfirmAccount(false)} disabled={ctx.confirmingAccount}>
+            Not My Account
+          </Btn>
+          <Btn onClick={() => ctx.handleConfirmAccount(true)} disabled={ctx.confirmingAccount}>
+            {ctx.confirmingAccount ? 'Submitting…' : 'Yes, This Is Mine'}
+          </Btn>
+        </ModalActions>
       </div>
     )
   }
