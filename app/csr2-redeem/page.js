@@ -569,6 +569,9 @@ function renderStatus(job, resubmitting, ctx) {
       <div style={{ fontSize: 15, color: TEXT, fontWeight: 600 }}>
         {STATUS_TEXT[job.status] || 'Loading Account...'}
       </div>
+      <div style={{ fontSize: 12, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
+        Please don&apos;t sign in or use this account on any other device while this is in progress.
+      </div>
     </div>
   )
 }
