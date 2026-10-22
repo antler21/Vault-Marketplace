@@ -400,8 +400,38 @@ export default function Csr2RedeemPage() {
     if (step !== 'status' || !jobId) return
     pollJob()
     pollRef.current = setInterval(pollJob, POLL_MS)
-    return () => clearInterval(pollRef.current)
+    // Some long waits (e.g. the save-load step) can run for many minutes with
+    // the tab backgrounded, and browsers throttle/freeze setInterval in
+    // inactive tabs — without this, the page can sit on a stale status
+    // indefinitely even once brought back into focus. Re-poll immediately
+    // the moment the tab becomes visible again, instead of waiting for the
+    // (possibly still-throttled) interval to eventually catch up.
+    const onVisible = () => { if (document.visibilityState === 'visible') pollJob() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(pollRef.current)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [step, jobId, pollJob])
+
+  // Keep the job id in the URL so reloading or reopening this tab resumes
+  // watching the same order instead of losing it back to the code-entry step.
+  useEffect(() => {
+    if (!jobId) return
+    const url = new URL(window.location.href)
+    url.searchParams.set('job', jobId)
+    window.history.replaceState(null, '', url.toString())
+  }, [jobId])
+
+  // On first load, resume an in-progress order from ?job=... instead of
+  // starting over at the code-entry step.
+  useEffect(() => {
+    const existing = new URLSearchParams(window.location.search).get('job')
+    if (existing) {
+      setJobId(existing)
+      setStep('status')
+    }
+  }, [])
 
   useEffect(() => {
     if (job && (job.status === 'done' || job.status === 'error')) {
