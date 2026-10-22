@@ -559,15 +559,15 @@ function renderStatus(job, resubmitting, ctx) {
         <div style={{ background: SURF2, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px', marginBottom: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
             <span style={{ color: MUTED, fontSize: 13 }}>Account Name</span>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>{info.name || '—'}</span>
+            <span style={{ color: TEXT, fontWeight: 600, fontSize: 13 }}>{info.name || '—'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
             <span style={{ color: MUTED, fontSize: 13 }}>Level</span>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>{info.pllv ?? '—'}</span>
+            <span style={{ color: TEXT, fontWeight: 600, fontSize: 13 }}>{info.pllv ?? '—'}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
             <span style={{ color: MUTED, fontSize: 13 }}>Save ID</span>
-            <span style={{ fontWeight: 600, fontSize: 13 }}>{info.folderId || '—'}</span>
+            <span style={{ color: TEXT, fontWeight: 600, fontSize: 13 }}>{info.folderId || '—'}</span>
           </div>
         </div>
         <ErrorNote>{ctx.confirmAccountError}</ErrorNote>
