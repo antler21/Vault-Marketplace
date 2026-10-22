@@ -5,7 +5,7 @@ const path = require('path')
 const os = require('os')
 const zlib = require('zlib')
 const crypto = require('crypto')
-const { exec } = require('child_process')
+const { exec, spawn } = require('child_process')
 
 const PORT = 35199
 const VERSION = '0.7.34'
@@ -1163,6 +1163,78 @@ function fetchWebappApi(method, apiPath, body, authToken) {
     req.end()
   })
 }
+
+// ─── CSR2 worker process management ───────────────────────────────────────────
+// The webapp runs on Vercel and has no way to reach into this PC, so "start the
+// worker automatically" has to be driven from something already running locally —
+// this tool. Checks the real Windows process list (not just our own tracked
+// child) before spawning, so a worker started manually in a terminal is detected
+// too and we never end up with two workers fighting over the same phone.
+
+let _workerChildProc = null
+
+function isWorkerProcessRunning(callback) {
+  exec('powershell -NoProfile -Command "(Get-CimInstance Win32_Process -Filter \\"Name=\'python.exe\'\\" | Where-Object { $_.CommandLine -match \'csr2_worker\\.py\' }).ProcessId"',
+    { windowsHide: true },
+    (err, stdout) => {
+      if (err) return callback(false)
+      const ids = stdout.split(/\s+/).map(s => s.trim()).filter(s => /^\d+$/.test(s))
+      callback(ids.length > 0, ids)
+    })
+}
+
+function spawnWorkerProcess() {
+  if (!_csr2Config().csr2WorkerPath) return
+  const scriptPath = _csr2Config().csr2WorkerPath
+  const cwd = path.dirname(scriptPath)
+  const logPath = path.join(cwd, 'csr2_worker.log')
+  let logFd
+  try { logFd = fs.openSync(logPath, 'a') } catch (e) { log('[worker] Could not open log file: ' + e.message); return }
+  const child = spawn('python', [scriptPath], { cwd, detached: true, windowsHide: true, stdio: ['ignore', logFd, logFd] })
+  child.on('error', (e) => log('[worker] Failed to start: ' + e.message))
+  child.on('exit', (code) => {
+    log('[worker] Process exited (code ' + code + ')')
+    if (_workerChildProc === child) _workerChildProc = null
+  })
+  child.unref()
+  _workerChildProc = child
+  log('[worker] Started csr2_worker.py (pid ' + child.pid + '), logging to ' + logPath)
+}
+
+function stopWorkerProcess(callback) {
+  exec('powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name=\'python.exe\'\\" | Where-Object { $_.CommandLine -match \'csr2_worker\\.py\' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"',
+    { windowsHide: true },
+    (err) => {
+      _workerChildProc = null
+      if (callback) callback(!err)
+    })
+}
+
+function _csr2Config() { return loadConfig() }
+
+// Checked periodically rather than tied to the redeem event itself (the webapp
+// has no channel to signal this tool in real time either) - cheap enough that
+// a short poll interval still picks up a new job within a few seconds.
+// Lazy, not "always on": only starts the worker when there's an actual
+// pending job (checked read-only against the webapp), and leaves it alone
+// otherwise — the worker shuts itself down after sitting idle for a while
+// (see IDLE_SHUTDOWN_TIMEOUT in csr2_worker.py), so this is what brings it
+// back when the next order comes in.
+setInterval(() => {
+  const cfg = _csr2Config()
+  if (!cfg.csr2WorkerAuto || !cfg.csr2WorkerPath || !cfg.csr2AdminToken) return
+  isWorkerProcessRunning((running) => {
+    if (running) return
+    fetchWebappApi('GET', '/api/csr2/worker/pending', null, cfg.csr2AdminToken)
+      .then((data) => {
+        if (data.pending) {
+          log('[worker] Auto-manage: a job is pending and the worker is not running - starting it')
+          spawnWorkerProcess()
+        }
+      })
+      .catch((e) => log('[worker] Auto-manage: could not check for pending jobs: ' + e.message))
+  })
+}, 20000)
 
 // Traverse 1.Cars/ level by level to avoid GitHub's 100K-item recursive tree limit.
 // Non-recursive down to star-type dirs (Gold Stars/Purple Stars/Legends), then recursive
@@ -2599,6 +2671,30 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <input type="password" id="csr2-admin-token-input" placeholder="Paste the webapp's CSR2_ADMIN_TOKEN">
     </div>
     <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Used to generate and view redeem codes from this tool. Matches the <code>CSR2_ADMIN_TOKEN</code> env var on the webapp.</div>
+    <div class="field" style="display:flex;gap:10px">
+      <div style="flex:1">
+        <label>iOS Version</label>
+        <input type="text" id="csr2-ios-version-input" placeholder="e.g. 6.3.0">
+      </div>
+      <div style="flex:1">
+        <label>Android Version</label>
+        <input type="text" id="csr2-android-version-input" placeholder="e.g. 6.3.0">
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:-8px;margin-bottom:14px">Applied automatically to the Unban flow's Save Version field and to the automated worker's pack-apply step (both already know the platform). Not used anywhere else.</div>
+    <div class="field">
+      <label>Worker Script Path</label>
+      <input type="text" id="csr2-worker-path-input" placeholder="e.g. C:\Users\You\Downloads\csr2_worker.py">
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="checkbox" id="csr2-worker-auto-input" style="width:auto">
+      <label style="margin-bottom:0">Auto-manage this worker (start it if it's not already running)</label>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span id="csr2-worker-status" style="font-size:12px;color:var(--muted)">Worker: checking…</span>
+      <button class="btn btn-secondary btn-sm" onclick="startWorkerManual()" style="font-size:11px;padding:3px 10px">Start</button>
+      <button class="btn btn-secondary btn-sm" onclick="stopWorkerManual()" style="font-size:11px;padding:3px 10px">Stop</button>
+    </div>
     <div id="csr2-settings-notice" style="display:none"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideModal('csr2-settings-modal')">Cancel</button>
@@ -3192,6 +3288,7 @@ var _pkDrag = null
 var _pkPend = null
 var _carFilter = { tier: null, brand: null, starType: null }
 var _csr2OutputFolder = '', _csr2GrabFolder = '', _csr2UnbanFolder = '', _csr2AdminToken = '', _ensbCurrent = {}, _pendingSavePack = null, _pendingUnbanSave = null, _unbanPreloadedNsb = null
+var _csr2IosVersion = '', _csr2AndroidVersion = '', _csr2WorkerPath = '', _csr2WorkerAuto = false
 var _codesPack = null, _codesList = []
 var _unbanPlatform = 'android'
 var _lastEditedNsb = null // { folder, filename } — session-only, cleared on app restart
@@ -3271,6 +3368,10 @@ async function init() {
   _csr2GrabFolder = cfg.csr2GrabFolder || ''
   _csr2UnbanFolder = cfg.csr2UnbanFolder || ''
   _csr2AdminToken = cfg.csr2AdminToken || ''
+  _csr2IosVersion = cfg.csr2IosVersion || ''
+  _csr2AndroidVersion = cfg.csr2AndroidVersion || ''
+  _csr2WorkerPath = cfg.csr2WorkerPath || ''
+  _csr2WorkerAuto = !!cfg.csr2WorkerAuto
   _dataHubAutoUpdate = !!cfg.autoUpdateData
   if (cfg.autoUpdateData) setTimeout(function(){ dhUpdate('cars', true); dhUpdate('fusions', true); dhUpdate('stage6', true) }, 15000)
   await fetchGames()
@@ -7887,8 +7988,40 @@ function openCsr2Settings() {
   document.getElementById('csr2-grab-folder-input').value = _csr2GrabFolder || ''
   document.getElementById('csr2-unban-folder-input').value = _csr2UnbanFolder || ''
   document.getElementById('csr2-admin-token-input').value = _csr2AdminToken || ''
+  document.getElementById('csr2-ios-version-input').value = _csr2IosVersion || ''
+  document.getElementById('csr2-android-version-input').value = _csr2AndroidVersion || ''
+  document.getElementById('csr2-worker-path-input').value = _csr2WorkerPath || ''
+  document.getElementById('csr2-worker-auto-input').checked = !!_csr2WorkerAuto
   hideNotice('csr2-settings-notice')
   showModal('csr2-settings-modal')
+  refreshWorkerStatus()
+}
+
+async function refreshWorkerStatus() {
+  var el = document.getElementById('csr2-worker-status')
+  if (!el) return
+  var res = await fetch('/csr2/worker-status').then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) { el.textContent = 'Worker: unknown (' + res.error + ')'; el.style.color = 'var(--muted)'; return }
+  if (res.running) {
+    el.textContent = 'Worker: Running' + (res.managedByTool ? ' (started by this tool)' : ' (started externally)')
+    el.style.color = 'var(--green)'
+  } else {
+    el.textContent = 'Worker: Not running'
+    el.style.color = 'var(--red)'
+  }
+}
+
+async function startWorkerManual() {
+  var el = document.getElementById('csr2-worker-status')
+  if (el) { el.textContent = 'Worker: starting…'; el.style.color = 'var(--muted)' }
+  var res = await fetch('/csr2/worker-start', { method: 'POST' }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+  if (res.error) showNotice('csr2-settings-notice', 'error', res.error)
+  setTimeout(refreshWorkerStatus, 1500)
+}
+
+async function stopWorkerManual() {
+  await fetch('/csr2/worker-stop', { method: 'POST' }).catch(function(){})
+  setTimeout(refreshWorkerStatus, 1000)
 }
 
 async function browseFolder(inputId) {
@@ -7902,18 +8035,31 @@ async function saveCsr2Settings() {
   var grabFolder = document.getElementById('csr2-grab-folder-input').value.trim()
   var unbanFolder = document.getElementById('csr2-unban-folder-input').value.trim()
   var adminToken = document.getElementById('csr2-admin-token-input').value.trim()
+  var iosVersion = document.getElementById('csr2-ios-version-input').value.trim()
+  var androidVersion = document.getElementById('csr2-android-version-input').value.trim()
+  var workerPath = document.getElementById('csr2-worker-path-input').value.trim()
+  var workerAuto = document.getElementById('csr2-worker-auto-input').checked
   _csr2OutputFolder = folder
   _csr2GrabFolder = grabFolder
   _csr2UnbanFolder = unbanFolder
   _csr2AdminToken = adminToken
+  _csr2IosVersion = iosVersion
+  _csr2AndroidVersion = androidVersion
+  _csr2WorkerPath = workerPath
+  _csr2WorkerAuto = workerAuto
   var cfg = await fetch('/local/config').then(function(r){ return r.json() }).catch(function(){ return {} })
   cfg.csr2OutputFolder = folder
   cfg.csr2GrabFolder = grabFolder
   cfg.csr2UnbanFolder = unbanFolder
   cfg.csr2AdminToken = adminToken
+  cfg.csr2IosVersion = iosVersion
+  cfg.csr2AndroidVersion = androidVersion
+  cfg.csr2WorkerPath = workerPath
+  cfg.csr2WorkerAuto = workerAuto
   await fetch('/local/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) }).catch(function(){})
   showNotice('csr2-settings-notice', 'success', 'Saved!')
   setTimeout(function(){ hideModal('csr2-settings-modal') }, 700)
+  refreshWorkerStatus()
 }
 
 function startUnbanFromEnsb() {
@@ -8197,7 +8343,7 @@ function selectUnbanPlatform(platform) {
   document.getElementById('unban-grab-nsb-picker').style.display = 'none'
   document.getElementById('unban-grab-scb-picker').style.display = 'none'
   document.getElementById('unban-apply-btn').disabled = true
-  document.getElementById('unban-version').value = ''
+  document.getElementById('unban-version').value = (platform === 'ios' ? _csr2IosVersion : _csr2AndroidVersion) || ''
   hideNotice('unban-notice')
   var isIos = platform === 'ios'
   document.getElementById('unban-scb-field').style.display = isIos ? '' : 'none'
@@ -9200,7 +9346,12 @@ const server = http.createServer(async (req, res) => {
           selectedS6Cars: body.selectedS6Cars || null,
         }
         const { note } = await csr2ApplyPack(data, pack, body.selectedCars || null, body.allowDuplicates || false, jobId, opts)
-        if (body.setPrvr) { const v = String(body.setPrvr); data.prvr = v; data.adpvr = v }
+        // Explicit setPrvr always wins; otherwise fall back to the platform's
+        // configured default version (set in CSR2 Settings), if any.
+        const cfg = loadConfig()
+        const platformDefault = body.platform === 'ios' ? cfg.csr2IosVersion : body.platform === 'android' ? cfg.csr2AndroidVersion : null
+        const effectiveVersion = body.setPrvr || platformDefault
+        if (effectiveVersion) { const v = String(effectiveVersion); data.prvr = v; data.adpvr = v }
         const out = csr2WriteSave(data)
         applyJobs.get(jobId).done = true
         applyJobs.get(jobId).result = { resultBase64: out.toString('base64'), note: note || null }
@@ -9366,6 +9517,31 @@ const server = http.createServer(async (req, res) => {
         return json(res, 500, { error: e.message })
       }
     }
+  }
+
+  // CSR2 worker process — status / manual start / manual stop
+  if (req.method === 'GET' && pathname === '/csr2/worker-status') {
+    return new Promise((resolve) => {
+      isWorkerProcessRunning((running) => {
+        resolve(json(res, 200, { running, managedByTool: running && !!_workerChildProc }))
+      })
+    })
+  }
+  if (req.method === 'POST' && pathname === '/csr2/worker-start') {
+    const cfg = loadConfig()
+    if (!cfg.csr2WorkerPath) return json(res, 400, { error: 'Set the Worker Script Path in CSR2 Settings first.' })
+    return new Promise((resolve) => {
+      isWorkerProcessRunning((running) => {
+        if (running) return resolve(json(res, 200, { ok: true, alreadyRunning: true }))
+        spawnWorkerProcess()
+        resolve(json(res, 200, { ok: true }))
+      })
+    })
+  }
+  if (req.method === 'POST' && pathname === '/csr2/worker-stop') {
+    return new Promise((resolve) => {
+      stopWorkerProcess((ok) => resolve(json(res, 200, { ok })))
+    })
   }
 
   // CSR2 car database — return stored list
