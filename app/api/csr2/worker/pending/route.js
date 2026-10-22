@@ -1,10 +1,14 @@
 import { supabase } from '../../../../lib/supabase'
 
-// Bearer-token auth only — same as claim/jobs.
+// Accepts either the worker token or the AIO Tool's admin token — this route
+// is read-only (no mutation, nothing sensitive beyond a boolean), and the tool
+// only has the admin token configured, not the worker token. Unlike claim()/
+// jobs PATCH, there's no meaningful extra capability being shared by accepting both here.
 function isWorkerAuthed(request) {
   const auth = request.headers.get('authorization') || ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  return !!process.env.CSR2_WORKER_TOKEN && token === process.env.CSR2_WORKER_TOKEN
+  if (!token) return false
+  return token === process.env.CSR2_WORKER_TOKEN || token === process.env.CSR2_ADMIN_TOKEN
 }
 
 // Read-only mirror of claim()'s two buckets — no .update(), so the AIO Tool can
