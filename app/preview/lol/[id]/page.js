@@ -13,12 +13,12 @@ function cdnUrl(p) {
 // tilePath follows the standard CDR naming: /v1/champion-tiles/{name}/{name}_{skinNum}.jpg
 // tilePath uses /assets/... prefix (not /lol-game-data/assets/...) so cdnUrl() passes it through correctly.
 const MISSING_SKINS_MAP = {
-  103085: { id: 103085, name: 'Risen Legend Ahri',          tilePath: '/assets/characters/ahri/skins/skin85/images/ahri_splash_tile_85.jpg' },
-  103086: { id: 103086, name: 'Immortalized Legend Ahri',   tilePath: '/assets/characters/ahri/skins/skin86/images/ahri_splash_tile_86.jpg' },
-  145070: { id: 145070, name: "Risen Legend Kai'Sa",        tilePath: '/assets/characters/kaisa/skins/skin70/images/kaisa_splash_tile_70.jpg' },
-  145071: { id: 145071, name: "Immortalized Legend Kai'Sa", tilePath: '/assets/characters/kaisa/skins/skin71/images/kaisa_splash_tile_71.jpg' },
-    7055: { id:   7055, name: 'Risen Legend LeBlanc',       tilePath: '/assets/characters/leblanc/skins/skin55/images/leblanc_splash_tile_55.jpg' },
-   67064: { id:  67064, name: 'Risen Legend Vayne',         tilePath: '/assets/characters/vayne/skins/skin64/images/vayne_splash_tile_64.jpg' },
+  103085: { id: 103085, name: 'Risen Legend Ahri',          rarity: 'kTranscendent', tilePath: '/assets/characters/ahri/skins/skin85/images/ahri_splash_tile_85.jpg' },
+  103086: { id: 103086, name: 'Immortalized Legend Ahri',   rarity: 'kTranscendent', tilePath: '/assets/characters/ahri/skins/skin86/images/ahri_splash_tile_86.jpg' },
+  145070: { id: 145070, name: "Risen Legend Kai'Sa",        rarity: 'kTranscendent', tilePath: '/assets/characters/kaisa/skins/skin70/images/kaisa_splash_tile_70.jpg' },
+  145071: { id: 145071, name: "Immortalized Legend Kai'Sa", rarity: 'kTranscendent', tilePath: '/assets/characters/kaisa/skins/skin71/images/kaisa_splash_tile_71.jpg' },
+    7055: { id:   7055, name: 'Risen Legend LeBlanc',       rarity: 'kTranscendent', tilePath: '/assets/characters/leblanc/skins/skin55/images/leblanc_splash_tile_55.jpg' },
+   67064: { id:  67064, name: 'Risen Legend Vayne',         rarity: 'kTranscendent', tilePath: '/assets/characters/vayne/skins/skin64/images/vayne_splash_tile_64.jpg' },
 }
 // Lower (base) quest-skin tier id -> higher tier id. These are stages of the SAME
 // skin (CommunityDragon nests them under questSkinInfo.tiers, not as separate top-
