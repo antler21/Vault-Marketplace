@@ -3,6 +3,17 @@ import { supabase } from '../../../../lib/supabase'
 
 const CDN = 'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default'
 const RARITY_ORDER = ['kTranscendent', 'kExalted', 'kUltimate', 'kMythic', 'kLegendary', 'kEpic', 'kRare', 'kNoRarity']
+
+// Quest-skin tiers CommunityDragon's skins.json only exposes nested under the base
+// tier's questSkinInfo.tiers — not as their own top-level entries. Keyed by the
+// stage-1 id, pointing at the fully-upgraded stage's id + display data.
+const MISSING_SKINS_MAP = {
+  103086: { id: 103086, name: 'Immortalized Legend Ahri',   rarity: 'kTranscendent', tilePath: '/assets/characters/ahri/skins/skin86/images/ahri_splash_tile_86.jpg' },
+  145071: { id: 145071, name: "Immortalized Legend Kai'Sa", rarity: 'kTranscendent', tilePath: '/assets/characters/kaisa/skins/skin71/images/kaisa_splash_tile_71.jpg' },
+}
+// Lower (base) tier id -> higher tier id. When the account owns the higher tier too,
+// the base tier is just that same skin's earlier stage and shouldn't show separately.
+const TIER_SUPERSEDES = { 103085: 103086, 145070: 145071 }
 const RANK_COLORS = {
   IRON: '#8b7355', BRONZE: '#a0522d', SILVER: '#c0c0c0', GOLD: '#ffd700',
   PLATINUM: '#00c8b4', EMERALD: '#50c878', DIAMOND: '#b9f2ff',
@@ -37,8 +48,11 @@ export async function GET(request, { params }) {
   let topSkins = []
   try {
     const skinsJson = await fetch(`${CDN}/v1/skins.json`).then(r => r.json())
+    const merged = { ...MISSING_SKINS_MAP, ...skinsJson }
     const ownedSet = new Set(scan.owned_skin_ids || [])
-    const owned = Object.values(skinsJson).filter(s => ownedSet.has(s.id) && !s.isBase)
+    const owned = Object.values(merged).filter(s =>
+      ownedSet.has(s.id) && !s.isBase && !(TIER_SUPERSEDES[s.id] && ownedSet.has(TIER_SUPERSEDES[s.id]))
+    )
     owned.sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity))
     topSkins = owned.slice(0, 6).map(s => ({
       name: s.name,

@@ -17,6 +17,11 @@ const MISSING_SKINS_MAP = {
     7055: { id:   7055, name: 'Risen Legend LeBlanc',       tilePath: '/assets/characters/leblanc/skins/skin55/images/leblanc_splash_tile_55.jpg' },
    67064: { id:  67064, name: 'Risen Legend Vayne',         tilePath: '/assets/characters/vayne/skins/skin64/images/vayne_splash_tile_64.jpg' },
 }
+// Lower (base) quest-skin tier id -> higher tier id. These are stages of the SAME
+// skin (CommunityDragon nests them under questSkinInfo.tiers, not as separate top-
+// level skins) — once the account owns the higher stage, the base stage shouldn't
+// also show as a distinct owned skin.
+const TIER_SUPERSEDES = { 103085: 103086, 145070: 145071 }
 function resolveUrl(p) {
   if (!p) return ''
   if (p.startsWith('http')) return p
@@ -600,7 +605,8 @@ function OverviewPageInner() {
   const ownedSkins = useMemo(() => {
     if (!catalogs.skins || !scan) return []
     const chromaIds = new Set(scan.owned_chroma_ids || [])
-    return [...new Set(scan.owned_skin_ids || [])].map(sid => catalogs.skins[sid]).filter(s => s && s.id % 1000 !== 0 && !chromaIds.has(s.id))
+    const ownedIds = new Set(scan.owned_skin_ids || [])
+    return [...ownedIds].map(sid => catalogs.skins[sid]).filter(s => s && s.id % 1000 !== 0 && !chromaIds.has(s.id) && !(TIER_SUPERSEDES[s.id] && ownedIds.has(TIER_SUPERSEDES[s.id])))
   }, [catalogs.skins, scan])
 
   const totalSkinsByChamp = useMemo(() => {
