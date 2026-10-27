@@ -103,11 +103,11 @@ export async function GET(request, { params }) {
         <div style={{ display: 'flex', alignItems: 'center', padding: '36px 48px 24px', gap: '32px' }}>
           {/* Profile icon */}
           {profileIconUrl && (
-            <div style={{ position: 'relative', flexShrink: 0 }}>
+            <div style={{ position: 'relative', display: 'flex', flexShrink: 0 }}>
               <img src={profileIconUrl} width={96} height={96} style={{ borderRadius: '50%', border: '2px solid #c89b3c' }} />
               {scan.summoner_level && (
-                <div style={{ position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', background: '#c89b3c', color: '#060c16', fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>
-                  Lv {scan.summoner_level}
+                <div style={{ position: 'absolute', bottom: -8, left: '50%', transform: 'translateX(-50%)', display: 'flex', background: '#c89b3c', color: '#060c16', fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>
+                  Lv {String(scan.summoner_level)}
                 </div>
               )}
             </div>
@@ -145,18 +145,18 @@ export async function GET(request, { params }) {
           {/* Stats pills */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <div style={{ background: '#111b2a', border: '1px solid #2a3a4a', borderRadius: 8, padding: '8px 16px', textAlign: 'center' }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#c89b3c' }}>{skinCount}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', background: '#111b2a', border: '1px solid #2a3a4a', borderRadius: 8, padding: '8px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#c89b3c' }}>{String(skinCount)}</div>
                 <div style={{ fontSize: 10, color: '#5b6a7e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Skins</div>
               </div>
               {scan.rp != null && (
-                <div style={{ background: '#111b2a', border: '1px solid #2a3a4a', borderRadius: 8, padding: '8px 16px', textAlign: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', background: '#111b2a', border: '1px solid #2a3a4a', borderRadius: 8, padding: '8px 16px', textAlign: 'center' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#e8a020' }}>{scan.rp.toLocaleString()}</div>
                   <div style={{ fontSize: 10, color: '#5b6a7e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>RP</div>
                 </div>
               )}
               {scan.be != null && (
-                <div style={{ background: '#111b2a', border: '1px solid #2a3a4a', borderRadius: 8, padding: '8px 16px', textAlign: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', background: '#111b2a', border: '1px solid #2a3a4a', borderRadius: 8, padding: '8px 16px', textAlign: 'center' }}>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#5b9bd5' }}>{scan.be.toLocaleString()}</div>
                   <div style={{ fontSize: 10, color: '#5b6a7e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>BE</div>
                 </div>
@@ -171,7 +171,7 @@ export async function GET(request, { params }) {
         {/* Skin grid */}
         <div style={{ display: 'flex', gap: '12px', padding: '24px 48px', flex: 1 }}>
           {topSkins.map((skin, i) => (
-            <div key={i} style={{ flex: 1, position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(200,155,60,0.15)' }}>
+            <div key={i} style={{ flex: 1, position: 'relative', display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(200,155,60,0.15)' }}>
               {skin.url && <img src={skin.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(6,12,22,0.9))', padding: '16px 8px 8px', display: 'flex', alignItems: 'flex-end' }}>
                 <span style={{ fontSize: 10, color: '#e8e0d0', fontWeight: 600, lineHeight: 1.2 }}>{skin.name}</span>
