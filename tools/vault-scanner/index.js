@@ -2294,36 +2294,54 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
         <label>Pack Title</label>
         <input type="text" id="cp-name" placeholder="e.g. Starter Pack">
       </div>
-      <div class="section-title" style="margin-bottom:10px">Pack Contents</div>
-      <div class="cp-toggle-grid">
-        <div class="cp-toggle-row">
-          <label class="toggle"><input type="checkbox" id="cp-toggle-currencies" onchange="cpOnToggle('currencies',this.checked)"><span class="tslider"></span></label>
-          <span>💰 Currencies</span>
-        </div>
-        <div class="cp-toggle-row">
-          <label class="toggle"><input type="checkbox" id="cp-toggle-cars" onchange="cpOnToggle('cars',this.checked)"><span class="tslider"></span></label>
-          <span>🚗 Cars</span>
-        </div>
-        <div class="cp-toggle-row">
-          <label class="toggle"><input type="checkbox" id="cp-toggle-legends" onchange="cpOnToggle('legends',this.checked)"><span class="tslider"></span></label>
-          <span>⭐ Legend Tokens</span>
-        </div>
-        <div class="cp-toggle-row">
-          <label class="toggle"><input type="checkbox" id="cp-toggle-fusions" onchange="cpOnToggle('fusions',this.checked)"><span class="tslider"></span></label>
-          <span>⚗️ Fusions</span>
-        </div>
-        <div class="cp-toggle-row">
-          <label class="toggle"><input type="checkbox" id="cp-toggle-stage6" onchange="cpOnToggle('stage6',this.checked)"><span class="tslider"></span></label>
-          <span>6️⃣ Stage 6</span>
+      <div class="field" style="margin-bottom:16px;padding:12px 14px;background:var(--surf2);border:1px solid var(--border);border-radius:8px">
+        <div class="allow-dup-row" style="align-items:flex-start;gap:10px">
+          <label class="toggle" style="flex-shrink:0;margin-top:1px"><input type="checkbox" id="cp-toggle-combo" onchange="cpOnComboToggle(this.checked)"><span class="tslider"></span></label>
+          <div>
+            <div style="font-size:13px;color:var(--text)">🧩 Combo Pack</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Applies 2+ existing packs in sequence (e.g. resources, then cars) via the automated worker — one login, one sign-out for the whole job, with a save-wait between each stage.</div>
+          </div>
         </div>
       </div>
-      <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
-        <div class="section-title" style="margin-bottom:8px">Fusions &amp; Stage 6 Options</div>
-        <div class="allow-dup-row" style="align-items:flex-start;gap:10px">
-          <label class="toggle" style="flex-shrink:0;margin-top:1px"><input type="checkbox" id="cp-fusion-s6-choose-one"><span class="tslider"></span></label>
-          <div>
-            <div style="font-size:13px;color:var(--text)">User picks Fusions <strong>or</strong> Stage 6 — not both</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px">Only applies when both are set to Customizable. User chooses one on the Pack Preview tab.</div>
+      <div id="cp-combo-section" style="display:none;margin-bottom:16px">
+        <div class="section-title" style="margin-bottom:8px">Combo Stages <span style="font-weight:400;color:var(--muted);font-size:11px">(applied in this order)</span></div>
+        <div id="cp-combo-stages-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+        <select id="cp-combo-add-select" onchange="cpAddComboStage(this.value)" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px">
+          <option value="">+ Add a pack to the sequence...</option>
+        </select>
+      </div>
+      <div id="cp-general-contents">
+        <div class="section-title" style="margin-bottom:10px">Pack Contents</div>
+        <div class="cp-toggle-grid">
+          <div class="cp-toggle-row">
+            <label class="toggle"><input type="checkbox" id="cp-toggle-currencies" onchange="cpOnToggle('currencies',this.checked)"><span class="tslider"></span></label>
+            <span>💰 Currencies</span>
+          </div>
+          <div class="cp-toggle-row">
+            <label class="toggle"><input type="checkbox" id="cp-toggle-cars" onchange="cpOnToggle('cars',this.checked)"><span class="tslider"></span></label>
+            <span>🚗 Cars</span>
+          </div>
+          <div class="cp-toggle-row">
+            <label class="toggle"><input type="checkbox" id="cp-toggle-legends" onchange="cpOnToggle('legends',this.checked)"><span class="tslider"></span></label>
+            <span>⭐ Legend Tokens</span>
+          </div>
+          <div class="cp-toggle-row">
+            <label class="toggle"><input type="checkbox" id="cp-toggle-fusions" onchange="cpOnToggle('fusions',this.checked)"><span class="tslider"></span></label>
+            <span>⚗️ Fusions</span>
+          </div>
+          <div class="cp-toggle-row">
+            <label class="toggle"><input type="checkbox" id="cp-toggle-stage6" onchange="cpOnToggle('stage6',this.checked)"><span class="tslider"></span></label>
+            <span>6️⃣ Stage 6</span>
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+          <div class="section-title" style="margin-bottom:8px">Fusions &amp; Stage 6 Options</div>
+          <div class="allow-dup-row" style="align-items:flex-start;gap:10px">
+            <label class="toggle" style="flex-shrink:0;margin-top:1px"><input type="checkbox" id="cp-fusion-s6-choose-one"><span class="tslider"></span></label>
+            <div>
+              <div style="font-size:13px;color:var(--text)">User picks Fusions <strong>or</strong> Stage 6 — not both</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Only applies when both are set to Customizable. User chooses one on the Pack Preview tab.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -4338,7 +4356,7 @@ function renderPacks() {
     var p = _packs[i]
     html += '<div class="card" id="pk-' + p.id + '" data-pid="' + p.id + '" onclick="openEditNsb(this.dataset.pid)" style="cursor:grab;view-transition-name:card-' + p.id + '">'
     html += '<div class="card-thumb">' + thumb + '</div>'
-    html += '<div class="card-body"><div class="card-name">' + escH(p.name || 'Unnamed Pack') + '</div></div>'
+    html += '<div class="card-body"><div class="card-name">' + (p.isCombo ? '🧩 ' : '') + escH(p.name || 'Unnamed Pack') + '</div></div>'
     html += '<div class="card-corner-btns">'
     html += '<button class="card-corner-btn ck-codes" data-pname="' + escH(p.name || '') + '" onclick="event.stopPropagation();openCodes(this.dataset.pname)">🎫</button>'
     html += '<button class="card-corner-btn ck-edit" data-pid="' + p.id + '" onclick="event.stopPropagation();openEditPack(this.dataset.pid)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>'
@@ -4586,6 +4604,85 @@ function cpOnToggle(tab, on) {
   if (!on && _cpCurrentTab === tab) cpSwitchTab('general')
 }
 
+// ─── Combo Pack (applies 2+ existing packs in sequence via the worker) ────────
+
+var _comboStageNames = []
+
+function cpOnComboToggle(on) {
+  document.getElementById('cp-combo-section').style.display = on ? '' : 'none'
+  document.getElementById('cp-general-contents').style.display = on ? 'none' : ''
+  if (on) {
+    // A combo pack has no currencies/cars/etc of its own — the tabs for
+    // those only exist to configure contents this pack type doesn't have.
+    var tabs = ['currencies', 'cars', 'legends', 'fusions', 'stage6']
+    for (var i = 0; i < tabs.length; i++) {
+      var btn = document.getElementById('cp-tab-' + tabs[i])
+      if (btn) btn.style.display = 'none'
+    }
+    if (_cpCurrentTab !== 'general') cpSwitchTab('general')
+    renderComboStagesList()
+    populateComboAddSelect()
+  }
+}
+
+function populateComboAddSelect() {
+  var sel = document.getElementById('cp-combo-add-select')
+  if (!sel) return
+  var html = '<option value="">+ Add a pack to the sequence...</option>'
+  for (var i = 0; i < _packs.length; i++) {
+    var p = _packs[i]
+    if (p.isCombo) continue               // no nested combos
+    if (p.id === _editingPackId) continue  // a pack can't combo itself
+    if (_comboStageNames.indexOf(p.name) !== -1) continue
+    html += '<option value="' + escH(p.name) + '">' + escH(p.name) + '</option>'
+  }
+  sel.innerHTML = html
+}
+
+function renderComboStagesList() {
+  var list = document.getElementById('cp-combo-stages-list')
+  if (!list) return
+  if (!_comboStageNames.length) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">No stages yet — add at least 2 packs below.</div>'
+    return
+  }
+  var html = ''
+  for (var i = 0; i < _comboStageNames.length; i++) {
+    var nm = _comboStageNames[i]
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:7px">'
+    html += '<span style="font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0">' + (i + 1) + '</span>'
+    html += '<span style="flex:1;font-size:13px">' + escH(nm) + '</span>'
+    html += '<div style="display:flex;gap:4px;flex-shrink:0">'
+    html += '<button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px" ' + (i === 0 ? 'disabled' : '') + ' onclick="cpMoveComboStage(' + i + ',-1)">↑</button>'
+    html += '<button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px" ' + (i === _comboStageNames.length - 1 ? 'disabled' : '') + ' onclick="cpMoveComboStage(' + i + ',1)">↓</button>'
+    html += '<button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px" onclick="cpRemoveComboStage(' + i + ')">✕</button>'
+    html += '</div></div>'
+  }
+  list.innerHTML = html
+}
+
+function cpAddComboStage(name) {
+  if (!name) return
+  if (_comboStageNames.indexOf(name) === -1) _comboStageNames.push(name)
+  renderComboStagesList()
+  populateComboAddSelect()
+}
+
+function cpRemoveComboStage(idx) {
+  _comboStageNames.splice(idx, 1)
+  renderComboStagesList()
+  populateComboAddSelect()
+}
+
+function cpMoveComboStage(idx, dir) {
+  var j = idx + dir
+  if (j < 0 || j >= _comboStageNames.length) return
+  var tmp = _comboStageNames[idx]
+  _comboStageNames[idx] = _comboStageNames[j]
+  _comboStageNames[j] = tmp
+  renderComboStagesList()
+}
+
 function fmtInput(el) {
   var raw = el.value.replace(/[^0-9]/g, '')
   if (!raw) { el.value = ''; return }
@@ -4615,6 +4712,10 @@ function forceClosePack() {
 function resetCpModal() {
   _editingPackId = null
   _selectedCarPackIds = new Set()
+  _comboStageNames = []
+  document.getElementById('cp-toggle-combo').checked = false
+  document.getElementById('cp-combo-section').style.display = 'none'
+  document.getElementById('cp-general-contents').style.display = ''
   document.getElementById('cp-name').value = ''
   document.getElementById('cp-fusion-s6-choose-one').checked = false
   cpClearCurrencies()
@@ -4925,6 +5026,13 @@ async function openEditPack(packId) {
   resetCpModal()
   _editingPackId = packId
   document.getElementById('cp-name').value = pack.name || ''
+  if (pack.isCombo) {
+    document.getElementById('cp-toggle-combo').checked = true
+    _comboStageNames = (pack.stages || []).slice()
+    cpOnComboToggle(true)
+    showModal('create-pack-modal')
+    return
+  }
   var c = pack.currencies || {}
   var hasCurr = !!(c.cash || c.gold || c.bronzeKeys || c.silverKeys || c.goldKeys || c.fuel || c.fusionGreen || c.fusionBlue || c.fusionRed || c.fusionYellow)
   if (hasCurr) {
@@ -5019,6 +5127,22 @@ async function openEditPack(packId) {
 async function savePack() {
   var name = document.getElementById('cp-name').value.trim()
   if (!name) { showNotice('cp-notice', 'error', 'Enter a pack name.'); return }
+  if (document.getElementById('cp-toggle-combo').checked) {
+    if (_comboStageNames.length < 2) { showNotice('cp-notice', 'error', 'Add at least 2 packs to combine.'); return }
+    var comboPack = { name: name, isCombo: true, stages: _comboStageNames.slice() }
+    var comboUrl = _editingPackId ? '/csr2/packs/' + _editingPackId : '/csr2/packs'
+    var comboMethod = _editingPackId ? 'PATCH' : 'POST'
+    var comboRes = await fetch(comboUrl, { method: comboMethod, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(comboPack) }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
+    if (comboRes.error) { showNotice('cp-notice', 'error', comboRes.error); return }
+    document.getElementById('cp-saved-name').textContent = name
+    document.getElementById('cp-saved-summary').innerHTML = '<div class="pack-sect"><div class="pack-sect-hdr">🧩 Combo</div><div style="font-size:13px">' + _comboStageNames.map(function(n){ return escH(n) }).join(' → ') + '</div></div>'
+    hideModal('create-pack-modal')
+    showModal('pack-saved-modal')
+    resetCpModal()
+    await reloadPacks()
+    renderPacks()
+    return
+  }
   var currencies = {}
   if (document.getElementById('cp-toggle-currencies').checked) {
     function rv(id) { return parseInt((document.getElementById(id).value || '').replace(/,/g, ''), 10) || 0 }

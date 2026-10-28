@@ -16,7 +16,18 @@ async function resolvePack(codeId) {
   const { data: codeRow } = await supabase.from('csr2_codes').select('pack_name').eq('id', codeId).maybeSingle()
   if (!codeRow) return null
   const { data: pack } = await supabase.from('csr2_packs').select('name, data').eq('name', codeRow.pack_name).maybeSingle()
-  return pack || null
+  if (!pack) return null
+
+  // Combo packs apply 2+ already-defined packs in sequence (resources, then
+  // cars, etc. — see csr2_worker.py) instead of their own currencies/cars/
+  // etc. Resolve every stage's full pack row here so the worker gets the
+  // whole chain in one claim() response rather than fetching packs itself.
+  if (pack.data?.isCombo && Array.isArray(pack.data.stages) && pack.data.stages.length) {
+    const { data: stagePacks } = await supabase.from('csr2_packs').select('name, data').in('name', pack.data.stages)
+    const byName = Object.fromEntries((stagePacks || []).map(p => [p.name, p]))
+    pack.stages = pack.data.stages.map(n => byName[n]).filter(Boolean)
+  }
+  return pack
 }
 
 export async function GET(request) {
