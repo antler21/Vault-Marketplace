@@ -1,5 +1,4 @@
 import { supabase } from '../../../../../lib/supabase'
-import { supabaseAdmin } from '../../../../../lib/supabaseAdmin'
 import { revertCodeStatus, ledgerExhausted } from '../../../../../lib/csr2Ledger'
 
 const VALID_STATUSES = [
@@ -22,21 +21,6 @@ function isWorkerAuthed(request) {
   return !!process.env.CSR2_WORKER_TOKEN && token === process.env.CSR2_WORKER_TOKEN
 }
 
-// Worker sends the raw screenshot bytes (base64) rather than uploading to Storage
-// itself — keeps CSR2_WORKER_TOKEN as its only credential instead of also handing
-// it a Supabase service key. Returns the public URL to store on the job row.
-async function uploadScreenshot(jobId, kind, base64, contentType) {
-  const buffer = Buffer.from(base64, 'base64')
-  const ext = contentType === 'image/png' ? 'png' : 'jpg'
-  const path = `${jobId}/${kind}-${Date.now()}.${ext}`
-  const { error } = await supabaseAdmin.storage
-    .from('csr2-screenshots')
-    .upload(path, buffer, { contentType: contentType || 'image/jpeg', upsert: true })
-  if (error) throw new Error('Screenshot upload failed: ' + error.message)
-  const { data } = supabaseAdmin.storage.from('csr2-screenshots').getPublicUrl(path)
-  return data.publicUrl
-}
-
 export async function PATCH(request, context) {
   if (!isWorkerAuthed(request)) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -46,7 +30,7 @@ export async function PATCH(request, context) {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { status, errorMessage, accountConfirmData, screenshotKind, screenshotBase64, screenshotContentType, deliveryResult } = body
+  const { status, errorMessage, accountConfirmData, screenshotKind, screenshotUrl, deliveryResult } = body
   if (!VALID_STATUSES.includes(status)) {
     return Response.json({ error: 'Invalid status: ' + status }, { status: 400 })
   }
@@ -68,15 +52,14 @@ export async function PATCH(request, context) {
   if (status === 'awaiting_account_confirm' && accountConfirmData) patch.account_confirm_data = accountConfirmData
   patch.error_message = status === 'error' ? (errorMessage || 'Unknown error') : null
 
-  if (screenshotKind && screenshotBase64) {
+  // The actual upload already happened client-side (worker/script PUT straight to
+  // Supabase Storage via a signed URL from POST .../screenshot-upload-url) — this
+  // just records the resulting small publicUrl string, never the image bytes
+  // themselves. Keeps this route's body tiny regardless of screenshot size.
+  if (screenshotKind && screenshotUrl) {
     const column = SCREENSHOT_COLUMNS[screenshotKind]
     if (!column) return Response.json({ error: 'Invalid screenshotKind' }, { status: 400 })
-    try {
-      patch[column] = await uploadScreenshot(id, screenshotKind, screenshotBase64, screenshotContentType)
-    } catch (e) {
-      console.error('[csr2/worker/jobs PATCH screenshot]', e.message)
-      return Response.json({ error: e.message }, { status: 500 })
-    }
+    patch[column] = screenshotUrl
   }
 
   const { error } = await supabase.from('csr2_jobs').update(patch).eq('id', id)

@@ -18,6 +18,29 @@ export async function GET(request, context) {
   return Response.json(data)
 }
 
+// Proxies to the real screenshot-upload-url route (keeps CSR2_WORKER_TOKEN
+// server-side) — the browser then PUTs the file straight to Supabase Storage
+// itself, same reasoning as the real worker: real screenshots are too big for
+// a JSON+base64 body through this app's own routes.
+export async function POST(request, context) {
+  const { id } = await context.params
+  if (!process.env.CSR2_WORKER_TOKEN) {
+    return Response.json({ error: 'CSR2_WORKER_TOKEN not set on this environment' }, { status: 500 })
+  }
+  let body
+  try { body = await request.json() } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+  const workerUrl = new URL('/api/csr2/worker/jobs/' + id + '/screenshot-upload-url', request.url)
+  const res = await fetch(workerUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.CSR2_WORKER_TOKEN },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json()
+  return Response.json(data, { status: res.status })
+}
+
 export async function PATCH(request, context) {
   const { id } = await context.params
   if (!process.env.CSR2_WORKER_TOKEN) {

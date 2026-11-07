@@ -35,8 +35,11 @@ function fmtN(n) {
   return Number(n).toLocaleString()
 }
 
-function PackContents({ data }) {
-  if (!data) return null
+// Builds the section list for ONE pack's data ({currencies, cars, legends,
+// fusions, stage6}) — shared by the single-pack and the per-stage combo-pack
+// rendering below, since a combo stage is just a normal pack's data shape.
+function buildPackSections(data, keyPrefix) {
+  if (!data) return []
   const { currencies, cars, legends, fusions, stage6 } = data
   const sections = []
 
@@ -45,7 +48,7 @@ function PackContents({ data }) {
     .sort((a, b) => CURR_ORDER.indexOf(a[0]) - CURR_ORDER.indexOf(b[0]))
   if (currEntries.length) {
     sections.push(
-      <div key="curr" style={{ marginBottom: 16 }}>
+      <div key={keyPrefix + 'curr'} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>💰 Currencies</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {currEntries.map(([k, v]) => {
@@ -70,7 +73,7 @@ function PackContents({ data }) {
       if (cars.partial) desc += ` (buyer picks ${fmtN(cars.partial.count)})`
     } else if (cars.carMode === 'specific') desc = 'Specific cars selected by operator'
     sections.push(
-      <div key="cars" style={{ marginBottom: 16 }}>
+      <div key={keyPrefix + 'cars'} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>🚗 Cars</div>
         <div style={{ fontSize: 13, color: TEXT }}>{desc}</div>
       </div>
@@ -82,7 +85,7 @@ function PackContents({ data }) {
       ? 'All 26 classic legend cars included'
       : `Buyer picks ${fmtN(legends.count)} classic legend car${legends.count !== 1 ? 's' : ''}`
     sections.push(
-      <div key="legends" style={{ marginBottom: 16 }}>
+      <div key={keyPrefix + 'legends'} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>⭐ Legend Tokens</div>
         <div style={{ fontSize: 13, color: TEXT }}>{desc}</div>
       </div>
@@ -94,7 +97,7 @@ function PackContents({ data }) {
       ? 'All fusions' + (fusions.amount ? ` · ${fmtN(fusions.amount)} per part` : ' · max per part')
       : `Customizable · ${fmtN(fusions.count)} parts · ${fmtN(fusions.brandAmount || 1)} brand(s) of choice`
     sections.push(
-      <div key="fusions" style={{ marginBottom: 16 }}>
+      <div key={keyPrefix + 'fusions'} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>⚗️ Fusions</div>
         <div style={{ fontSize: 13, color: TEXT }}>{desc}</div>
       </div>
@@ -106,13 +109,46 @@ function PackContents({ data }) {
       ? 'All Stage 6 parts' + (stage6.amount ? ` · ${fmtN(stage6.amount)} per part` : ' · max per part')
       : `Customizable · buyer picks up to ${fmtN(stage6.count)} car${stage6.count !== 1 ? 's' : ''}`
     sections.push(
-      <div key="s6" style={{ marginBottom: 16 }}>
+      <div key={keyPrefix + 's6'} style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: MUTED, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>6️⃣ Stage 6</div>
         <div style={{ fontSize: 13, color: TEXT }}>{desc}</div>
       </div>
     )
   }
 
+  return sections
+}
+
+// `stages` is the combo pack's resolved per-stage data (see app/lib/csr2Packs.js's
+// resolveComboStages, attached server-side by /api/csr2/redeem) — a combo pack's
+// OWN `data` has no currencies/cars/etc of its own, just {isCombo, stages: [name]},
+// so without this a combo pack showed as if it had nothing in it at all.
+function PackContents({ data, stages }) {
+  if (!data) return null
+
+  if (data.isCombo && stages?.length) {
+    const blocks = stages.map((stage, i) => {
+      const stageSections = buildPackSections(stage.data, 'stage' + i + '-')
+      if (!stageSections.length) return null
+      return (
+        <div key={'stage' + i} style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: GREEN, marginBottom: 10 }}>
+            {i + 1}. {stage.name}
+          </div>
+          {stageSections}
+        </div>
+      )
+    }).filter(Boolean)
+    if (!blocks.length) return null
+    return (
+      <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
+        <div style={{ fontSize: 12, color: MUTED, marginBottom: 14 }}>Your pack includes (applied in order):</div>
+        {blocks}
+      </div>
+    )
+  }
+
+  const sections = buildPackSections(data, '')
   if (!sections.length) return null
   return (
     <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${BORDER}` }}>
@@ -120,6 +156,19 @@ function PackContents({ data }) {
       {sections}
     </div>
   )
+}
+
+// A combo pack's own `data` has no cars/currencies of its own — look across its
+// resolved stages for the first one that does. Non-combo packs just use their
+// own data directly, same as before combo packs existed.
+function getEffectiveCarsSpec(pack) {
+  if (pack?.data?.cars) return pack.data.cars
+  return (pack?.stages || []).map(s => s.data?.cars).find(Boolean) || null
+}
+
+function hasAnyCurrencies(pack) {
+  if (Object.values(pack?.data?.currencies || {}).some(v => v > 0)) return true
+  return (pack?.stages || []).some(s => Object.values(s.data?.currencies || {}).some(v => v > 0))
 }
 
 // ─── Shared bits ────────────────────────────────────────────────────────────────
@@ -443,7 +492,7 @@ export default function Csr2RedeemPage() {
   // ── Confirm pack + platform -> cars (if any) or account mode ────────────
   function handleContinueFromConfirm() {
     if (platform !== 'ios') return
-    setStep(pack?.data?.cars ? 'cars' : 'accountMode')
+    setStep(getEffectiveCarsSpec(pack) ? 'cars' : 'accountMode')
   }
 
   useEffect(() => {
@@ -760,9 +809,9 @@ export default function Csr2RedeemPage() {
             <div style={{ fontSize: 11, color: GREEN, fontWeight: 700, letterSpacing: 0.5, marginBottom: 4 }}>PACK</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: TEXT }}>{pack?.name}</div>
           </div>
-          <PackContents data={pack?.data} />
+          <PackContents data={pack?.data} stages={pack?.stages} />
 
-          {Object.values(pack?.data?.currencies || {}).some(v => v > 0) && (
+          {hasAnyCurrencies(pack) && (
             <div style={{ marginTop: 16, padding: '12px 14px', background: SURF2, border: `1px solid ${BORDER}`, borderRadius: 10 }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                 <input type="checkbox" checked={safeMode} onChange={e => setSafeMode(e.target.checked)} style={{ marginTop: 2 }} />
@@ -798,7 +847,7 @@ export default function Csr2RedeemPage() {
           {carsLoading ? (
             <div style={{ textAlign: 'center', padding: '20px 0' }}><Spinner /></div>
           ) : (
-            <CarPicker carsSpec={pack?.data?.cars} carsList={carsList} value={carSelection} onChange={setCarSelection} />
+            <CarPicker carsSpec={getEffectiveCarsSpec(pack)} carsList={carsList} value={carSelection} onChange={setCarSelection} />
           )}
           <ModalActions>
             <Btn variant="secondary" onClick={() => setStep('confirm')}>Back</Btn>
@@ -818,7 +867,7 @@ export default function Csr2RedeemPage() {
           <ErrorNote>{accountModeError}</ErrorNote>
           {accountModeSubmitting && <div style={{ textAlign: 'center', padding: '8px 0' }}><Spinner /></div>}
           <ModalActions>
-            <Btn variant="secondary" onClick={() => setStep(pack?.data?.cars ? 'cars' : 'confirm')}>Back</Btn>
+            <Btn variant="secondary" onClick={() => setStep(getEffectiveCarsSpec(pack) ? 'cars' : 'confirm')}>Back</Btn>
           </ModalActions>
         </Modal>
       )}

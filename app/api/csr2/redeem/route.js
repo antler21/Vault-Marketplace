@@ -1,6 +1,7 @@
 import { supabase } from '../../../lib/supabase'
 import { hashCsr2Code } from '../../../lib/csr2Codes'
 import { checkRedeemRateLimit, recordRedeemAttempt, getClientIp } from '../../../lib/csr2RateLimit'
+import { resolveComboStages } from '../../../lib/csr2Packs'
 
 export async function POST(request) {
   const ip = getClientIp(request)
@@ -67,6 +68,10 @@ export async function POST(request) {
     await recordRedeemAttempt(ip, false)
     return Response.json({ error: 'Pack configuration missing — contact support' }, { status: 500 })
   }
+  // Combo packs only store stage NAMES in their own row — resolve the real
+  // per-stage currencies/cars so the confirm screen and car picker can show
+  // (and act on) actual contents instead of an empty-looking pack.
+  await resolveComboStages(pack)
 
   // If this is a remainder redemption, hand back the last ledger entry so the buyer
   // page can show "you're claiming the rest of this pack" context instead of the

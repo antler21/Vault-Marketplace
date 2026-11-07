@@ -17,13 +17,28 @@ function Field({ label, children }) {
 }
 const inputStyle = { width: '100%', boxSizing: 'border-box', background: SURF2, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '7px 10px', fontSize: 13, color: TEXT }
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result.split(',')[1])
-    reader.onerror = reject
-    reader.readAsDataURL(file)
+// Public anon key (same one baked into app/lib/supabase.js and shipped to every
+// browser) — needed alongside the signed upload URL below. Not a secret.
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNraXNkaWdoZHNhc3Buanl2bHNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU5MjMwNjYsImV4cCI6MjA5MTQ5OTA2Nn0.CwoBaPyLdJ3tZzp3ycDuJtSfWww6EUcUlOcouraSIYM'
+
+// Real screenshots run several MB — too big for a JSON body through this app's
+// own routes (Vercel's hard ~4.5MB function limit). Gets a signed Supabase
+// Storage upload URL (via the server-side proxy, keeping CSR2_WORKER_TOKEN out
+// of the browser) and PUTs the file straight there instead.
+async function uploadScreenshotFile(jobId, kind, file) {
+  const res = await fetch('/api/csr2-test/job/' + jobId, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ screenshotKind: kind, ext: file.type === 'image/png' ? 'png' : 'jpg' }),
   })
+  const info = await res.json()
+  if (!res.ok) throw new Error(info.error || 'Could not get an upload URL')
+  const putRes = await fetch(info.signedUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'image/png', apikey: SUPABASE_ANON_KEY, 'x-upsert': 'true' },
+    body: file,
+  })
+  if (!putRes.ok) throw new Error('Upload to storage failed (' + putRes.status + ')')
+  return info.publicUrl
 }
 
 export default function Csr2TestHarness() {
@@ -88,8 +103,7 @@ export default function Csr2TestHarness() {
       }
       if (screenshotFile) {
         body.screenshotKind = screenshotKind
-        body.screenshotBase64 = await fileToBase64(screenshotFile)
-        body.screenshotContentType = screenshotFile.type || 'image/png'
+        body.screenshotUrl = await uploadScreenshotFile(jobId, screenshotKind, screenshotFile)
       }
       const res = await fetch('/api/csr2-test/job/' + jobId, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },

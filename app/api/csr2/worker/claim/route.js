@@ -1,5 +1,6 @@
 import { supabase } from '../../../../lib/supabase'
 import { buildRiskPlan } from '../../../../lib/csr2RiskPlan'
+import { resolveComboStages } from '../../../../lib/csr2Packs'
 
 // Bearer-token auth only — deliberately NOT a Supabase session check, so the
 // customer's browser (which never has this token) can't reach it even though
@@ -18,17 +19,9 @@ async function resolvePack(codeId) {
   if (!codeRow) return null
   const { data: pack } = await supabase.from('csr2_packs').select('name, data').eq('name', codeRow.pack_name).maybeSingle()
   if (!pack) return null
-
   // Combo packs apply 2+ already-defined packs in sequence (resources, then
-  // cars, etc. — see csr2_worker.py) instead of their own currencies/cars/
-  // etc. Resolve every stage's full pack row here so the worker gets the
-  // whole chain in one claim() response rather than fetching packs itself.
-  if (pack.data?.isCombo && Array.isArray(pack.data.stages) && pack.data.stages.length) {
-    const { data: stagePacks } = await supabase.from('csr2_packs').select('name, data').in('name', pack.data.stages)
-    const byName = Object.fromEntries((stagePacks || []).map(p => [p.name, p]))
-    pack.stages = pack.data.stages.map(n => byName[n]).filter(Boolean)
-  }
-  return pack
+  // cars, etc. — see csr2_worker.py) instead of their own currencies/cars/etc.
+  return resolveComboStages(pack)
 }
 
 export async function GET(request) {
