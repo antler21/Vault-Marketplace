@@ -33,16 +33,22 @@ function CarSearchRow({ query, onQueryChange, carsList, onPick }) {
           {results.length === 0 && (
             <div style={{ padding: '8px 10px', fontSize: 12, color: MUTED }}>No matches</div>
           )}
-          {results.map(c => (
-            <div
-              key={c.brand + '|' + c.model}
-              onClick={() => onPick(c)}
-              style={{ padding: '7px 10px', fontSize: 12, color: TEXT, cursor: 'pointer', borderBottom: `1px solid ${BORDER}` }}
-              onMouseDown={e => e.preventDefault()} // keep the input from losing focus/blurring before the click registers
-            >
-              {carLabel(c)}
-            </div>
-          ))}
+          {results.map(c => {
+            const thumb = c.colors?.[0]?.photoUrl
+            return (
+              <div
+                key={c.brand + '|' + c.model}
+                onClick={() => onPick(c)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: 12, color: TEXT, cursor: 'pointer', borderBottom: `1px solid ${BORDER}` }}
+                onMouseDown={e => e.preventDefault()} // keep the input from losing focus/blurring before the click registers
+              >
+                {thumb
+                  ? <img src={thumb} alt="" style={{ width: 44, height: 30, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} loading="lazy" />
+                  : <div style={{ width: 44, height: 30, flexShrink: 0, borderRadius: 4, background: BORDER }} />}
+                <span>{carLabel(c)}</span>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -139,6 +145,13 @@ export default function CarPicker({ carsSpec, carsList, value, onChange }) {
                   />
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {(() => {
+                      const activeColor = chosen?.colors?.find(c => c.name === p.paintColor) || chosen?.colors?.[0]
+                      const thumb = activeColor?.photoUrl
+                      return thumb
+                        ? <img src={thumb} alt="" style={{ width: 44, height: 30, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} onError={e => { e.target.style.display = 'none' }} loading="lazy" />
+                        : null
+                    })()}
                     <div style={{ flex: 1, fontSize: 13, color: TEXT, fontWeight: 600 }}>{carLabel(chosen) || p.carKey}</div>
                     <button
                       onClick={() => updateRow(idx, { carKey: '', paintColor: '' })}
@@ -149,16 +162,27 @@ export default function CarPicker({ carsSpec, carsList, value, onChange }) {
                   </div>
                 )}
                 {chosen?.colors?.length > 0 && (
-                  <select
-                    value={p.paintColor}
-                    onChange={e => updateRow(idx, { paintColor: e.target.value })}
-                    style={{ ...inputStyle, marginTop: 6 }}
-                  >
-                    <option value="">Any paint color</option>
-                    {chosen.colors.map(col => (
-                      <option key={col.name} value={col.name}>{col.displayName}</option>
-                    ))}
-                  </select>
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 11, color: MUTED, marginBottom: 6 }}>Paint color</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {chosen.colors.map(col => {
+                        const selected = p.paintColor === col.name
+                        return (
+                          <div
+                            key={col.name}
+                            onClick={() => updateRow(idx, { paintColor: selected ? '' : col.name })}
+                            title={col.displayName}
+                            style={{ width: 56, cursor: 'pointer', border: `2px solid ${selected ? GREEN : BORDER}`, borderRadius: 6, padding: 3, background: SURF2 }}
+                          >
+                            {col.photoUrl
+                              ? <img src={col.photoUrl} alt="" style={{ width: '100%', height: 32, objectFit: 'cover', borderRadius: 4 }} onError={e => { e.target.style.display = 'none' }} loading="lazy" />
+                              : <div style={{ width: '100%', height: 32, borderRadius: 4, background: BORDER }} />}
+                            <div style={{ fontSize: 9, color: selected ? GREEN : MUTED, textAlign: 'center', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{col.displayName}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )}
                 {chosen && !presetCondition && (
                   <select
