@@ -23,7 +23,7 @@ export async function POST(request) {
   const codeHash = hashCsr2Code(code)
   const { data: codeRow, error: lookupErr } = await supabase
     .from('csr2_codes')
-    .select('id, pack_name, used_at')
+    .select('id, pack_name, status')
     .eq('code_hash', codeHash)
     .single()
 
@@ -31,24 +31,29 @@ export async function POST(request) {
     await recordRedeemAttempt(ip, false)
     return Response.json({ error: 'Invalid code' }, { status: 404 })
   }
-  if (codeRow.used_at) {
+  if (codeRow.status === 'used') {
     await recordRedeemAttempt(ip, false)
     return Response.json({ error: 'This code has already been used' }, { status: 409 })
   }
+  if (codeRow.status === 'in_progress') {
+    await recordRedeemAttempt(ip, false)
+    return Response.json({ error: 'This code is currently being redeemed on another device' }, { status: 409 })
+  }
 
-  // A single UPDATE...WHERE used_at IS NULL is atomic in Postgres — no separate
+  // A single UPDATE...WHERE status IN (...) is atomic in Postgres — no separate
   // transaction needed, and it closes the race if the same code is redeemed twice at once.
+  // 'partial' codes (safe-mode/free-unban/combo-refill remainder) are redeemable again.
   const { data: claimed, error: claimErr } = await supabase
     .from('csr2_codes')
-    .update({ used_at: new Date().toISOString() })
+    .update({ status: 'in_progress' })
     .eq('id', codeRow.id)
-    .is('used_at', null)
+    .in('status', ['unused', 'partial'])
     .select('id, pack_name')
     .single()
 
   if (claimErr || !claimed) {
     await recordRedeemAttempt(ip, false)
-    return Response.json({ error: 'This code has already been used' }, { status: 409 })
+    return Response.json({ error: 'This code is no longer available' }, { status: 409 })
   }
 
   const { data: pack, error: packErr } = await supabase
@@ -63,6 +68,21 @@ export async function POST(request) {
     return Response.json({ error: 'Pack configuration missing — contact support' }, { status: 500 })
   }
 
+  // If this is a remainder redemption, hand back the last ledger entry so the buyer
+  // page can show "you're claiming the rest of this pack" context instead of the
+  // full-pack confirmation.
+  let priorLedger = null
+  if (codeRow.status === 'partial') {
+    const { data: lastEntry } = await supabase
+      .from('csr2_code_redemptions')
+      .select('platform, account_last4, kind, remaining_currencies, redeemed_at')
+      .eq('code_id', claimed.id)
+      .order('redeemed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    priorLedger = lastEntry || null
+  }
+
   await recordRedeemAttempt(ip, true)
-  return Response.json({ ok: true, codeId: claimed.id, pack })
+  return Response.json({ ok: true, codeId: claimed.id, pack, partial: codeRow.status === 'partial', priorLedger })
 }

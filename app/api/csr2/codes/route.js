@@ -9,12 +9,15 @@ import { generateCsr2Code, hashCsr2Code } from '../../../lib/csr2Codes'
 export async function GET(request) {
   if (!(await isAdminAuthed(request))) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const packName = new URL(request.url).searchParams.get('packName')
+  const url = new URL(request.url)
+  const packName = url.searchParams.get('packName')
+  const status = url.searchParams.get('status') // optional: unused/in_progress/partial/used — backs the AIO Tool's Partial tab
   let query = supabase
     .from('csr2_codes')
-    .select('id, pack_name, plaintext_code, created_at, used_at')
+    .select('id, pack_name, plaintext_code, created_at, used_at, status, platform_tag')
     .order('created_at', { ascending: false })
   if (packName) query = query.eq('pack_name', packName)
+  if (status) query = query.eq('status', status)
 
   const { data, error } = await query
   if (error) {
@@ -32,7 +35,7 @@ export async function POST(request) {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { packName, count } = body
+  const { packName, count, platformTag } = body
   if (!packName) return Response.json({ error: 'Missing packName' }, { status: 400 })
   const n = Number(count) || 1
   if (n < 1 || n > 500) return Response.json({ error: 'count must be between 1 and 500' }, { status: 400 })
@@ -55,7 +58,7 @@ export async function POST(request) {
       const code = generateCsr2Code()
       const { error } = await supabase
         .from('csr2_codes')
-        .insert({ code_hash: hashCsr2Code(code), plaintext_code: code, pack_name: packName })
+        .insert({ code_hash: hashCsr2Code(code), plaintext_code: code, pack_name: packName, platform_tag: platformTag || null })
       if (!error) { codes.push(code); inserted = true }
       else if (error.code !== '23505') { // not a unique-violation — a real failure
         console.error('[csr2/codes POST]', error.message)

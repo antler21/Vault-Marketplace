@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 
-const PUBLIC_PREFIXES = ['/login', '/preview', '/overview', '/buy', '/csr2', '/csr2-redeem', '/api/lol-skins', '/api/border-skins', '/api/lol-checker', '/api/og', '/api/games', '/api/csr2']
+// /api/csr2-test/code and /api/csr2-test/claim are called by the standalone
+// csr2_fake_worker.py script (no browser session) — gated by CSR2_WORKER_TOKEN
+// inside the route itself, same as /api/csr2/worker/*. Listed explicitly rather
+// than adding a blanket "/api/csr2-test" prefix, so /api/csr2-test/job and the
+// /csr2-test page (the browser-based harness) stay behind the normal login wall.
+const PUBLIC_PREFIXES = ['/login', '/preview', '/overview', '/buy', '/csr2', '/csr2-redeem', '/api/lol-skins', '/api/border-skins', '/api/lol-checker', '/api/og', '/api/games', '/api/csr2', '/api/csr2-test/code', '/api/csr2-test/claim']
 
 const TOOL_CORS = {
   'Access-Control-Allow-Origin': 'http://localhost:35199',

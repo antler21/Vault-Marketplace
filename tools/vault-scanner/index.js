@@ -2811,9 +2811,13 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
     </div>
 
     <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-shrink:0">
-      <div style="flex:1">
+      <div style="flex:0 0 90px">
         <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Count</label>
         <input type="number" id="codes-gen-count" value="1" min="1" max="500" style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px">Platform (optional, e.g. PlayerAuctions)</label>
+        <input type="text" id="codes-gen-platform-tag" placeholder="PlayerAuctions, U7BUY, ..." style="width:100%;box-sizing:border-box;background:var(--surf2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 10px;font-size:13px">
       </div>
       <button class="btn btn-primary" id="codes-gen-btn" onclick="generateCodes()">Generate</button>
     </div>
@@ -2827,6 +2831,7 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
       <div style="display:flex;gap:6px">
         <button class="btn btn-secondary btn-sm" data-filter="all" onclick="setCodesFilter('all')" style="padding:3px 10px;font-size:11px">All</button>
         <button class="btn btn-secondary btn-sm" data-filter="available" onclick="setCodesFilter('available')" style="padding:3px 10px;font-size:11px">Available</button>
+        <button class="btn btn-secondary btn-sm" data-filter="partial" onclick="setCodesFilter('partial')" style="padding:3px 10px;font-size:11px">Partial</button>
         <button class="btn btn-secondary btn-sm" data-filter="used" onclick="setCodesFilter('used')" style="padding:3px 10px;font-size:11px">Used</button>
       </div>
     </div>
@@ -8304,12 +8309,13 @@ async function generateCodes() {
   var packName = document.getElementById('codes-pack-select').value
   if (!packName) { showNotice('codes-notice', 'error', 'Pick a specific pack first — codes belong to exactly one pack.'); return }
   var count = parseInt(document.getElementById('codes-gen-count').value, 10) || 1
+  var platformTag = document.getElementById('codes-gen-platform-tag').value.trim()
   var btn = document.getElementById('codes-gen-btn')
   btn.disabled = true
   hideNotice('codes-notice')
   var res = await fetch('/csr2/codes', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ packName: packName, count: count })
+    body: JSON.stringify({ packName: packName, count: count, platformTag: platformTag || null })
   }).then(function(r){ return r.json() }).catch(function(e){ return { error: e.message } })
   btn.disabled = false
   if (res.error) { showNotice('codes-notice', 'error', res.error); return }
@@ -8360,11 +8366,23 @@ async function loadCodesList() {
 var COPY_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
 var EYE_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
 
+// status is one of unused/in_progress/partial/used (see migration 006/007) —
+// older codes rows predating that column still default to 'unused' server-side,
+// so this always has a value to switch on.
+var CODE_STATUS_STYLE = {
+  unused:      { label: 'Available',   bg: 'rgba(76,175,80,.15)',  color: 'var(--green)' },
+  in_progress: { label: 'In Progress', bg: 'rgba(200,155,60,.18)', color: '#c89b3c' },
+  partial:     { label: 'Partial',     bg: 'rgba(100,140,230,.18)', color: '#6c8ce6' },
+  used:        { label: 'Used',        bg: 'rgba(224,82,82,.15)',  color: 'var(--red)' },
+}
+
 function renderCodesList() {
   var list = _codesList.filter(function(c) {
     if (_codesPack && c.pack_name !== _codesPack) return false
-    if (_codesFilter === 'available') return !c.used_at
-    if (_codesFilter === 'used') return !!c.used_at
+    var status = c.status || 'unused'
+    if (_codesFilter === 'available') return status === 'unused'
+    if (_codesFilter === 'partial') return status === 'partial'
+    if (_codesFilter === 'used') return status === 'used'
     return true
   })
   var el = document.getElementById('codes-list')
@@ -8373,15 +8391,25 @@ function renderCodesList() {
     return
   }
   el.innerHTML = list.map(function(c) {
-    var used = !!c.used_at
+    var status = c.status || 'unused'
+    var style = CODE_STATUS_STYLE[status] || CODE_STATUS_STYLE.unused
+    var struck = status === 'used'
+    var canRedeem = status === 'unused' || status === 'partial'
     var dateStr = new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    var usedStr = used ? new Date(c.used_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+    var usedStr = c.used_at ? new Date(c.used_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+    var badgeLabel = status === 'used' && usedStr ? ('Used ' + usedStr) : style.label
+    // Only unused/used toggle via the badge click — in_progress/partial are left
+    // alone here (nothing to flip to a clean boolean); the detail view is where
+    // a partial code's ledger actually gets reviewed.
+    var toggleable = status === 'unused' || status === 'used'
     return '<div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border)">'
-      + '<code style="flex:1;font-size:13px;' + (used ? 'color:var(--muted);text-decoration:line-through' : 'color:var(--text)') + '">' + escH(c.plaintext_code || '—') + '</code>'
+      + '<code style="flex:1;font-size:13px;' + (struck ? 'color:var(--muted);text-decoration:line-through' : 'color:var(--text)') + '">' + escH(c.plaintext_code || '—') + '</code>'
+      + (c.platform_tag ? '<span style="font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:1px 6px;flex-shrink:0">' + escH(c.platform_tag) + '</span>' : '')
       + (_codesPack ? '' : '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + escH(c.pack_name) + '</span>')
       + '<span style="font-size:11px;color:var(--muted);flex-shrink:0">' + dateStr + '</span>'
-      + '<span data-id="' + escH(c.id) + '" onclick="openCodeToggleConfirm(this.dataset.id)" title="Click to toggle" style="cursor:pointer;font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:8px;' + (used ? 'background:rgba(224,82,82,.15);color:var(--red)' : 'background:rgba(76,175,80,.15);color:var(--green)') + '">' + (used ? 'Used ' + usedStr : 'Available') + '</span>'
-      + '<button data-id="' + escH(c.id) + '" data-code="' + escH(c.plaintext_code || '') + '" onclick="' + (used ? 'openCodeDetail(this.dataset.id)' : 'copyCodeText(this.dataset.code, this)') + '" title="' + (used ? 'View detail' : 'Copy code') + '" style="background:none;border:none;color:var(--muted);cursor:pointer;flex-shrink:0;display:flex;align-items:center;padding:2px">' + (used ? EYE_ICON_SVG : COPY_ICON_SVG) + '</button>'
+      + '<span data-id="' + escH(c.id) + '"' + (toggleable ? ' onclick="openCodeToggleConfirm(this.dataset.id)" title="Click to toggle"' : '') + ' style="' + (toggleable ? 'cursor:pointer;' : '') + 'font-size:11px;flex-shrink:0;padding:2px 7px;border-radius:8px;background:' + style.bg + ';color:' + style.color + '">' + badgeLabel + '</span>'
+      + '<button data-id="' + escH(c.id) + '" data-code="' + escH(c.plaintext_code || '') + '" onclick="' + (canRedeem ? 'copyCodeText(this.dataset.code, this)' : 'openCodeDetail(this.dataset.id)') + '" title="' + (canRedeem ? 'Copy code' : 'View detail') + '" style="background:none;border:none;color:var(--muted);cursor:pointer;flex-shrink:0;display:flex;align-items:center;padding:2px">' + (canRedeem ? COPY_ICON_SVG : EYE_ICON_SVG) + '</button>'
+      + (status === 'partial' ? '<button data-id="' + escH(c.id) + '" onclick="openCodeDetail(this.dataset.id)" title="View detail" style="background:none;border:none;color:var(--muted);cursor:pointer;flex-shrink:0;display:flex;align-items:center;padding:2px">' + EYE_ICON_SVG + '</button>' : '')
       + '</div>'
   }).join('')
 }
@@ -8391,7 +8419,7 @@ var _pendingToggleCode = null
 function openCodeToggleConfirm(id) {
   var c = _codesList.find(function(x){ return x.id === id })
   if (!c) return
-  var used = !!c.used_at
+  var used = c.status === 'used'
   _pendingToggleCode = { id: id, nextUsed: !used }
   document.getElementById('code-toggle-confirm-desc').textContent = used
     ? 'Mark code "' + (c.plaintext_code || '') + '" as available again? This clears its used/redeemed record.'
@@ -8412,7 +8440,7 @@ async function confirmToggleCodeStatus() {
   // Patch the one row in local state and re-render from memory — no refetch,
   // so this is instant instead of a full list reload against the webapp.
   var c = _codesList.find(function(x){ return x.id === p.id })
-  if (c && res.code) c.used_at = res.code.used_at
+  if (c && res.code) { c.used_at = res.code.used_at; c.status = res.code.status }
   renderCodesList()
 }
 
@@ -8426,18 +8454,47 @@ async function openCodeDetail(id) {
   }
   var c = res.code
   var fmt = function(iso) { return iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—' }
-  var rows = [['Code', c.plaintext_code || '—'], ['Pack', c.pack_name], ['Created', fmt(c.created_at)], ['Used At', fmt(c.used_at)]]
+  var fmtDuration = function(ms) {
+    var mins = Math.round(ms / 60000)
+    if (mins < 60) return mins + 'm'
+    return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm'
+  }
+  var status = c.status || 'unused'
+  var rows = [
+    ['Code', c.plaintext_code || '—'], ['Pack', c.pack_name],
+    ['Status', (CODE_STATUS_STYLE[status] || {}).label || status],
+  ]
+  if (c.platform_tag) rows.push(['Source Platform', c.platform_tag])
+  rows.push(['Created', fmt(c.created_at)], ['Last Claimed', fmt(c.used_at)])
   if (c.job) {
-    rows.push(['Redeemed By', 'Customer'])
     rows.push(['Redeemed Email', c.job.email || '—'])
-    rows.push(['Platform', c.job.platform || '—'])
+    rows.push(['Device Platform', c.job.platform || '—'])
     rows.push(['Job Status', c.job.status || '—'])
+    if (c.job.status === 'done' && c.job.created_at && c.job.updated_at) {
+      rows.push(['Modding Duration', fmtDuration(new Date(c.job.updated_at) - new Date(c.job.created_at))])
+    }
   } else if (c.used_at) {
     rows.push(['Redeemed By', 'Manually marked (no customer redemption)'])
   }
-  document.getElementById('code-detail-body').innerHTML = rows.map(function(r) {
+  var html = rows.map(function(r) {
     return '<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted)">' + escH(r[0]) + '</span><span style="font-weight:500;text-align:right">' + escH(String(r[1])) + '</span></div>'
   }).join('')
+
+  // Redemption ledger — spec §13 "stats per redemption" + the Partial tab's
+  // "who/when claimed the other half" context (spec §8/§11/§12).
+  if (c.redemptions && c.redemptions.length) {
+    html += '<div style="margin-top:14px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Redemption History</div>'
+    html += c.redemptions.map(function(r) {
+      var kindLabel = { full: 'Full delivery', safe_half: 'Safe-mode half', unban_only: 'Unban only', refill: 'Currency refill' }[r.kind] || r.kind
+      var sub = (r.platform || '—') + ' · ' + kindLabel + (r.account_last4 ? (' · ****' + escH(r.account_last4)) : '')
+      return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">'
+        + '<div style="display:flex;justify-content:space-between"><span>' + escH(sub) + '</span><span style="color:var(--muted)">' + fmt(r.redeemed_at) + '</span></div>'
+        + (r.remaining_currencies && Object.keys(r.remaining_currencies).length ? '<div style="color:var(--muted);margin-top:2px">Remaining: ' + escH(JSON.stringify(r.remaining_currencies)) + '</div>' : '')
+        + '</div>'
+    }).join('')
+  }
+
+  document.getElementById('code-detail-body').innerHTML = html
 }
 
 // ─── Unban Modal ──────────────────────────────────────────────────────────────

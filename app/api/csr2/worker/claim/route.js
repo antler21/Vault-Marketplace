@@ -1,4 +1,5 @@
 import { supabase } from '../../../../lib/supabase'
+import { buildRiskPlan } from '../../../../lib/csr2RiskPlan'
 
 // Bearer-token auth only — deliberately NOT a Supabase session check, so the
 // customer's browser (which never has this token) can't reach it even though
@@ -43,6 +44,7 @@ export async function GET(request) {
     .select('*')
     .in('status', ['awaiting_credentials', 'bad_password'])
     .not('password_enc', 'is', null)
+    .eq('is_test', false) // the fake-worker test harness has its own claim route
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
@@ -74,6 +76,7 @@ export async function GET(request) {
     .select('*')
     .in('status', ['awaiting_2fa', 'bad_code'])
     .not('twofa_code', 'is', null)
+    .eq('is_test', false)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
@@ -106,6 +109,7 @@ export async function GET(request) {
     .select('*')
     .eq('status', 'awaiting_account_confirm')
     .not('account_confirmed', 'is', null)
+    .eq('is_test', false)
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle()
@@ -126,6 +130,64 @@ export async function GET(request) {
       return Response.json({ error: claimErr.message }, { status: 500 })
     }
     return Response.json({ job: { ...confirmReady, pack: await resolvePack(confirmReady.code_id) } })
+  }
+
+  // GameCenter (iOS) / sign-in-approval (Android) screenshot confirmations — same
+  // mid-flight pattern as account-confirm above.
+  const { data: gcReady, error: gcErr } = await supabase
+    .from('csr2_jobs')
+    .select('*')
+    .eq('status', 'awaiting_gamecenter_confirm')
+    .not('gamecenter_confirmed', 'is', null)
+    .eq('is_test', false)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (gcErr) {
+    console.error('[csr2/worker/claim]', gcErr.message)
+    return Response.json({ error: gcErr.message }, { status: 500 })
+  }
+  if (gcReady) {
+    const { error: claimErr } = await supabase
+      .from('csr2_jobs')
+      .update({ gamecenter_confirmed: null, updated_at: new Date().toISOString() })
+      .eq('id', gcReady.id)
+      .eq('status', 'awaiting_gamecenter_confirm')
+    if (claimErr) return Response.json({ error: claimErr.message }, { status: 500 })
+    return Response.json({ job: { ...gcReady, pack: await resolvePack(gcReady.code_id) } })
+  }
+
+  // NOTE: 'awaiting_signin_approval' (Android) has no buyer-side claim bucket — unlike
+  // GameCenter confirm, the buyer approves on their own device, not on this site. The
+  // worker just polls the phone itself and PATCHes the status forward once approved.
+
+  // Risk-decision answers — same pattern, boolean-shaped field (risk_decision is a
+  // string, so NOT NULL is the right "has the buyer answered yet" check here).
+  const { data: riskReady, error: riskErr } = await supabase
+    .from('csr2_jobs')
+    .select('*')
+    .eq('status', 'awaiting_risk_decision')
+    .not('risk_decision', 'is', null)
+    .eq('is_test', false)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (riskErr) {
+    console.error('[csr2/worker/claim]', riskErr.message)
+    return Response.json({ error: riskErr.message }, { status: 500 })
+  }
+  if (riskReady) {
+    const { error: claimErr } = await supabase
+      .from('csr2_jobs')
+      .update({ updated_at: new Date().toISOString() }) // risk_decision stays — worker reads it, doesn't clear it
+      .eq('id', riskReady.id)
+      .eq('status', 'awaiting_risk_decision')
+    if (claimErr) return Response.json({ error: claimErr.message }, { status: 500 })
+    // Same sizing the buyer saw on the risk-decision screen — the worker needs
+    // these exact numbers (not just the "accept"/"override" string) to build the
+    // apply-nsb currencyOverride.
+    const riskPlan = await buildRiskPlan(riskReady)
+    return Response.json({ job: { ...riskReady, pack: await resolvePack(riskReady.code_id), riskPlan } })
   }
 
   return Response.json({ job: null })
