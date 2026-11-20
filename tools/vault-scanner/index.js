@@ -1392,6 +1392,46 @@ function headEtagCheck(url) {
 
 // ─── CSR2 Save Editor ────────────────────────────────────────────────────────
 
+// CSR2 save files store some fields (e.g. gfsi) as 64-bit integers that exceed
+// JS's safe integer range (±2^53 — Number.MAX_SAFE_INTEGER). Plain JSON.parse/
+// JSON.stringify silently round these to the nearest representable double and
+// print that back using whatever decimal happens to be its shortest round-trip
+// form — which is often NOT the original digit string (e.g. -9223372036854775808,
+// exactly INT64_MIN, round-trips to -9223372036854776000). That mismatch was
+// enough to make the game reject an edited save. BigInt preserves the exact
+// value through parse -> edit -> stringify instead.
+var CSR2_BIGINT_MARKER = '\uE000CSR2BIGINT\uE000' // Unicode Private Use Area — valid unescaped in a JSON string, never real save data
+// Matches a whole JSON string literal OR a whole JSON number literal, so a
+// digit sequence inside an existing quoted string is never mistaken for one.
+var CSR2_TOKEN_RE = /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
+
+function csr2IsSafeIntegerLiteral(token) {
+  try {
+    var n = BigInt(token)
+    return n <= BigInt(Number.MAX_SAFE_INTEGER) && n >= BigInt(Number.MIN_SAFE_INTEGER)
+  } catch (e) { return true } // not a plain integer (shouldn't happen here) — leave it alone
+}
+
+function csr2ProtectBigInts(jsonStr) {
+  return jsonStr.replace(CSR2_TOKEN_RE, function (token) {
+    if (token[0] === '"') return token // a string literal — don't touch its contents
+    if (/[.eE]/.test(token)) return token // float/exponent — within double precision anyway
+    return csr2IsSafeIntegerLiteral(token) ? token : '"' + CSR2_BIGINT_MARKER + token + '"'
+  })
+}
+
+function csr2ReviveBigInts(value) {
+  if (Array.isArray(value)) return value.map(csr2ReviveBigInts)
+  if (value && typeof value === 'object') {
+    for (var k in value) value[k] = csr2ReviveBigInts(value[k])
+    return value
+  }
+  if (typeof value === 'string' && value.indexOf(CSR2_BIGINT_MARKER) === 0) {
+    return BigInt(value.slice(CSR2_BIGINT_MARKER.length))
+  }
+  return value
+}
+
 function csr2ReadSave(buf) {
   let dec
   try { dec = zlib.gunzipSync(buf) } catch (e) { throw new Error('Decompress failed: ' + e.message) }
@@ -1399,7 +1439,7 @@ function csr2ReadSave(buf) {
   const end   = dec.lastIndexOf(0x7D)
   if (start === -1 || end <= start) throw new Error('No JSON found in save file (start=' + start + ' end=' + end + ')')
   const jsonStr = dec.slice(start, end + 1).toString('utf8')
-  try { return JSON.parse(jsonStr) } catch (e) {
+  try { return csr2ReviveBigInts(JSON.parse(csr2ProtectBigInts(jsonStr))) } catch (e) {
     const m = e.message.match(/position (\d+)/)
     if (m) {
       const p = +m[1], ctx = JSON.stringify(jsonStr.slice(Math.max(0,p-15), p+15))
@@ -1410,7 +1450,10 @@ function csr2ReadSave(buf) {
 }
 
 function csr2WriteSave(data) {
-  const jsonStr = JSON.stringify(data)
+  var jsonStr = JSON.stringify(data, function (key, value) {
+    return typeof value === 'bigint' ? CSR2_BIGINT_MARKER + value.toString() : value
+  })
+  jsonStr = jsonStr.replace(new RegExp('"' + CSR2_BIGINT_MARKER + '(-?\\d+)"', 'g'), '$1')
   const hash = crypto.createHash('sha1').update(jsonStr, 'utf8').digest('hex')
   return zlib.gzipSync(Buffer.from(hash + '\n' + jsonStr, 'utf8'))
 }
