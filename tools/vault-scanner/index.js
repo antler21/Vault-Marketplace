@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec, spawn } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.34'
+const VERSION = '0.7.35'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
