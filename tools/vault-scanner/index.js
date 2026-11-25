@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec, spawn } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.37'
+const VERSION = '0.7.38'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1437,6 +1437,18 @@ function csr2ReviveBigInts(value) {
 
 function csr2ParseJson(str) { return csr2ReviveBigInts(JSON.parse(csr2ProtectBigInts(str))) }
 
+// cgpi is the garage order: car unids, ending in -1. New unids go before that -1, existing order is kept.
+function csr2UpdateCgpi(data, added, removed) {
+  if (!Array.isArray(data.cgpi)) { data.cgpi = [0, ...data.caow.map(c => c.unid), -1]; return }
+  const gone = new Set(removed)
+  const list = data.cgpi.filter(u => !gone.has(u))
+  let end = list.length
+  while (end > 0 && list[end - 1] === -1) end--
+  const present = new Set(list)
+  list.splice(end, 0, ...added.filter(u => !present.has(u)))
+  data.cgpi = list
+}
+
 function csr2ReadSave(buf) {
   let dec
   try { dec = zlib.gunzipSync(buf) } catch (e) { throw new Error('Decompress failed: ' + e.message) }
@@ -1536,6 +1548,7 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, o
 
     if (needsCars) {
       if (!Array.isArray(data.caow)) data.caow = []
+      const carsBefore = data.caow.length
       if (typeof data.ncui !== 'number' || data.ncui < data.caow.length) data.ncui = data.caow.length
 
       const ownedCrdbs = new Set(data.caow.map(c => c.crdb).filter(Boolean))
@@ -1668,8 +1681,8 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, o
         }
       }
 
-      // Rebuild garage position index — must always be [0..ncui-1, -1]
-      data.cgpi = [...Array(data.ncui).keys(), -1]
+      // Register the new cars in the garage order
+      csr2UpdateCgpi(data, data.caow.slice(carsBefore).map(c => c.unid), [])
 
       const expected = carMode === 'all' ? toAdd.length : (carConfig.count || toAdd.length)
       const remaining = expected - added
@@ -9401,7 +9414,7 @@ const server = http.createServer(async (req, res) => {
         if (Array.isArray(body.garageDeleted) && body.garageDeleted.length > 0 && Array.isArray(data.caow)) {
           const toDelete = new Set(body.garageDeleted.map(d => d.unid))
           data.caow = data.caow.filter(car => !toDelete.has(car.unid))
-          data.cgpi = [...Array(data.caow.length).keys(), -1]
+          csr2UpdateCgpi(data, [], [...toDelete])
         }
         // Garage — max out cars (set upst by unid)
         if (body.garageMaxout && typeof body.garageMaxout === 'object' && Array.isArray(data.caow)) {
@@ -9421,6 +9434,7 @@ const server = http.createServer(async (req, res) => {
           const carsDb = loadCsr2Cars()
           const dbMap = {}; for (const car of carsDb) { if (car.crdb) dbMap[car.crdb] = car }
           const setProgress = msg => { const job = applyJobs.get(jobId); if (job) job.progress = msg }
+          const addedUnids = []
           const toAdd = garageQueue.filter(q => q.crdb && !ownedCrdbs.has(q.crdb))
           let added = 0, failed = 0
           for (let i = 0; i < toAdd.length; i++) {
@@ -9437,11 +9451,12 @@ const server = http.createServer(async (req, res) => {
               const carJson = csr2ParseJson(txt)
               carJson.unid = data.ncui++
               data.caow.push(carJson)
+              addedUnids.push(carJson.unid)
               ownedCrdbs.add(q.crdb)
               added++
             } catch { failed++ }
           }
-          data.cgpi = [...Array(data.caow.length).keys(), -1]
+          csr2UpdateCgpi(data, addedUnids, [])
           if (added > 0 || failed > 0) note = added + ' car(s) added' + (failed > 0 ? ', ' + failed + ' failed' : '') + '.'
         }
         const out = csr2WriteSave(data)
