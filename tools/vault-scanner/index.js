@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec, spawn } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.36'
+const VERSION = '0.7.37'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1403,6 +1403,7 @@ function headEtagCheck(url) {
 var CSR2_BIGINT_MARKER = '\uE000CSR2BIGINT\uE000' // Unicode Private Use Area — valid unescaped in a JSON string, never real save data
 // Matches a whole JSON string literal OR a whole JSON number literal, so a
 // digit sequence inside an existing quoted string is never mistaken for one.
+var CSR2_NUMKEY_MARKER = '\uE001' // JS objects reorder integer-like keys; prefixing them keeps the game's order
 var CSR2_TOKEN_RE = /"(?:\\.|[^"\\])*"|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g
 
 function csr2IsSafeIntegerLiteral(token) {
@@ -1413,24 +1414,28 @@ function csr2IsSafeIntegerLiteral(token) {
 }
 
 function csr2ProtectBigInts(jsonStr) {
-  return jsonStr.replace(CSR2_TOKEN_RE, function (token) {
-    if (token[0] === '"') return token // a string literal — don't touch its contents
-    if (/[.eE]/.test(token)) return token // float/exponent — within double precision anyway
+  return jsonStr.replace(CSR2_TOKEN_RE, function (token, offset) {
+    if (token[0] === '"') return /^"\d+"$/.test(token) && jsonStr[offset + token.length] === ':' ? '"' + CSR2_NUMKEY_MARKER + token.slice(1) : token
+    if (/[.eE]/.test(token)) return Number.isInteger(Number(token)) ? '"' + CSR2_BIGINT_MARKER + token + '"' : token
     return csr2IsSafeIntegerLiteral(token) ? token : '"' + CSR2_BIGINT_MARKER + token + '"'
   })
 }
 
 function csr2ReviveBigInts(value) {
   if (Array.isArray(value)) return value.map(csr2ReviveBigInts)
-  if (value && typeof value === 'object') {
+  if (value && typeof value === 'object' && !(value instanceof Number)) {
     for (var k in value) value[k] = csr2ReviveBigInts(value[k])
     return value
   }
-  if (typeof value === 'string' && value.indexOf(CSR2_BIGINT_MARKER) === 0) {
-    return BigInt(value.slice(CSR2_BIGINT_MARKER.length))
+  if (typeof value === 'string' && value.startsWith(CSR2_BIGINT_MARKER)) {
+    const raw = value.slice(CSR2_BIGINT_MARKER.length)
+    // Boxed so a whole-valued decimal (0.0) is not mistaken for an int on write; still works in arithmetic.
+    return /[.eE]/.test(raw) ? new Number(raw) : BigInt(raw)
   }
   return value
 }
+
+function csr2ParseJson(str) { return csr2ReviveBigInts(JSON.parse(csr2ProtectBigInts(str))) }
 
 function csr2ReadSave(buf) {
   let dec
@@ -1449,15 +1454,31 @@ function csr2ReadSave(buf) {
   }
 }
 
+// Mirrors CSRPacker's (Newtonsoft) double formatting.
+function csr2FormatFloat(n) {
+  const abs = Math.abs(n)
+  if (n !== 0 && (abs >= 1e15 || abs < 1e-4)) {
+    const [m, exp] = n.toExponential().split('e')
+    return m + 'E' + exp[0] + exp.slice(1).padStart(2, '0')
+  }
+  return Number.isInteger(n) ? n + '.0' : String(n)
+}
+
 function csr2WriteSave(data) {
-  var jsonStr = JSON.stringify(data, function (key, value) {
-    return typeof value === 'bigint' ? CSR2_BIGINT_MARKER + value.toString() : value
+  let jsonStr = JSON.stringify(data, (_key, value) => {
+    if (typeof value === 'bigint') return CSR2_BIGINT_MARKER + value
+    if (value instanceof Number) return CSR2_BIGINT_MARKER + csr2FormatFloat(Number(value))
+    if (typeof value === 'number' && !Number.isInteger(value)) return CSR2_BIGINT_MARKER + csr2FormatFloat(value)
+    return value
   })
-  jsonStr = jsonStr.replace(new RegExp('"' + CSR2_BIGINT_MARKER + '(-?\\d+)"', 'g'), '$1')
-  jsonStr = jsonStr.replace(/[\u0080-\uffff]/g, ch => '\\u' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0'))
+  jsonStr = jsonStr.replace(new RegExp('"' + CSR2_BIGINT_MARKER + '(-?[0-9.E+-]+)"', 'g'), '$1')
+  jsonStr = jsonStr.replaceAll('"' + CSR2_NUMKEY_MARKER, '"')
   // Un-prefixed save header = HMAC-SHA1 of the JSON body; a plain SHA-1 never validates.
   const hash = crypto.createHmac('sha1', '4cPw3ZyC').update(jsonStr, 'utf8').digest('hex')
-  return zlib.gzipSync(Buffer.from(hash + '\n' + jsonStr, 'utf8'))
+  const out = zlib.gzipSync(Buffer.from(hash + '\n' + jsonStr, 'utf8'), { level: 6 })
+  out[8] = 4 // XFL/OS header bytes as written by CSRPacker
+  out[9] = 0
+  return out
 }
 
 function csr2ReadSaveStats(buf) {
@@ -1601,7 +1622,7 @@ async function csr2ApplyPack(data, pack, selectedCars, allowDuplicates, jobId, o
               const txtUrl = maxed ? (car.maxedTxtUrl || car.stockTxtUrl) : car.stockTxtUrl
               if (!txtUrl) throw new Error('no txtUrl')
               const txt = await fetchRawGithub(txtUrl)
-              return { ok: true, carJson: JSON.parse(txt), crdb: car.crdb }
+              return { ok: true, carJson: csr2ParseJson(txt), crdb: car.crdb }
             } catch (e) {
               return { ok: false, crdb: car.crdb, car }
             }
@@ -9413,7 +9434,7 @@ const server = http.createServer(async (req, res) => {
               const txtUrl = q.maxed ? (col.maxedTxtUrl || col.stockTxtUrl) : col.stockTxtUrl
               if (!txtUrl) { failed++; continue }
               const txt = await fetchRawGithub(txtUrl)
-              const carJson = JSON.parse(txt)
+              const carJson = csr2ParseJson(txt)
               carJson.unid = data.ncui++
               data.caow.push(carJson)
               ownedCrdbs.add(q.crdb)

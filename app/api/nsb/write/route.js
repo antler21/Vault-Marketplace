@@ -182,7 +182,7 @@ export async function POST(request) {
         const paid = typeof item === 'object' && item.paid != null ? item.paid : undefined
         const unid = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8)
         if (template) {
-          const clone = JSON.parse(JSON.stringify(template))
+          const clone = structuredClone(template)
           clone.crdb = crdb
           clone.unid = unid
           if (paid !== undefined) clone.paid = paid

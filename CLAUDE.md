@@ -15,7 +15,7 @@ Next.js webapp for managing League of Legends accounts for resale. Deployed on V
 ### `app/components/Accounts.js`
 The main and most complex component. Contains:
 - **Checker flow** (steps 0–5): ping → game select → scan → results → save → success
-- `EXPECTED_SCANNER_VERSION = '0.7.36'` — blocks scan if tool version doesn't match
+- `EXPECTED_SCANNER_VERSION = '0.7.37'` — blocks scan if tool version doesn't match
 - `handleScan`: version check, retry loop (5s gaps, 60s max, cancel after 20s)
 - `handleOpenAdd(prefillFields, prefillSoldFor, prefillSoldForCurrency)`: closes checker modal, opens account form
 - `pendingScanDataRef`: ref that snapshots scanData before checker modal closes, used in handleSave
@@ -23,7 +23,7 @@ The main and most complex component. Contains:
 - Step 5: success state showing Preview Link (Open/Copy) + Owner Link (Open/Copy with warning modal)
 - Account cards: Copy Link button (top-right of image) when `account.fields._scanId` exists
 - Account detail view (eye button): Preview Link row appears at TOP of scrollable section (before custom fields), highlighted in amber
-- Download link: `/aio-tool-v0.7.36.exe`
+- Download link: `/aio-tool-v0.7.37.exe`
 
 ### `app/api/accounts/[id]/route.js`
 PUT + DELETE for individual accounts. Standard Supabase update/delete.
@@ -49,7 +49,7 @@ PUT + DELETE for individual accounts. Standard Supabase update/delete.
 - `addAccount` returns the saved account object (needed for post-save scan linking)
 
 ### `tools/vault-scanner/index.js`
-- VERSION = `'0.7.36'`
+- VERSION = `'0.7.37'`
 - Serves HTTP on port 35199
 - `/scan` endpoint: scans LoL account via LCU API
 - `/local/accounts` GET/POST: local account CRUD (stored in %APPDATA%/aio-tool/accounts.json)
@@ -59,9 +59,9 @@ PUT + DELETE for individual accounts. Standard Supabase update/delete.
 - On startup: launches `msedge --app="http://localhost:35199"` for native-looking window (falls back to default browser)
 
 ### `tools/vault-scanner/package.json`
-- Build output: `aio-tool-v0.7.36.exe`
+- Build output: `aio-tool-v0.7.37.exe`
 
-### `public/aio-tool-v0.7.36.exe`
+### `public/aio-tool-v0.7.37.exe`
 - Latest compiled tool. Always copy here after building.
 
 ### `app/csr2-redeem/page.js`
