@@ -8,7 +8,7 @@ const crypto = require('crypto')
 const { exec, spawn } = require('child_process')
 
 const PORT = 35199
-const VERSION = '0.7.35'
+const VERSION = '0.7.36'
 
 // ─── Local Storage ────────────────────────────────────────────────────────────
 
@@ -1454,7 +1454,9 @@ function csr2WriteSave(data) {
     return typeof value === 'bigint' ? CSR2_BIGINT_MARKER + value.toString() : value
   })
   jsonStr = jsonStr.replace(new RegExp('"' + CSR2_BIGINT_MARKER + '(-?\\d+)"', 'g'), '$1')
-  const hash = crypto.createHash('sha1').update(jsonStr, 'utf8').digest('hex')
+  jsonStr = jsonStr.replace(/[\u0080-\uffff]/g, ch => '\\u' + ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0'))
+  // Un-prefixed save header = HMAC-SHA1 of the JSON body; a plain SHA-1 never validates.
+  const hash = crypto.createHmac('sha1', '4cPw3ZyC').update(jsonStr, 'utf8').digest('hex')
   return zlib.gzipSync(Buffer.from(hash + '\n' + jsonStr, 'utf8'))
 }
 
